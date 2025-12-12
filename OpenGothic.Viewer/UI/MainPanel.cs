@@ -3,13 +3,35 @@ using Nursia;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using ZenKit;
 
 namespace OpenGothic.Viewer.UI;
 
 public partial class MainPanel
 {
-	private readonly List<string> _allRecords = new List<string>();
+	private class RecordInfo
+	{
+		public string VfsName { get; }
+		public Vfs Vfs { get; }
+		public VfsNode Node { get; }
+		public string Name => Node.Name;
+
+		public RecordInfo(string vfsName, Vfs vfs, VfsNode node)
+		{
+			VfsName = vfsName;
+			Vfs = vfs ?? throw new ArgumentNullException(nameof(vfs));
+			Node = node ?? throw new ArgumentNullException(nameof(node));
+		}
+	}
+
+	private readonly Dictionary<string, List<RecordInfo>> _allRecords = new Dictionary<string, List<RecordInfo>>();
+	private readonly string[] IgnoredExtensions = new[]
+	{
+		".WAV",
+		".TEX",
+		".TGA"
+	};
 
 	public MainPanel()
 	{
@@ -18,22 +40,28 @@ public partial class MainPanel
 		_textBoxFilter.TextChanged += (s, a) => RebuildList();
 	}
 
-	private void AddRecordsRecursively(VfsNode vfsRoot)
+	private void AddRecordsRecursively(string vfsName, Vfs vfs, VfsNode vfsRoot)
 	{
 		if (vfsRoot.Name.Contains("."))
 		{
-			if (_allRecords.Contains(vfsRoot.Name))
+			List<RecordInfo> existingRecords;
+			if (!_allRecords.TryGetValue(vfsRoot.Name, out existingRecords))
 			{
-				var k = 5;
+				existingRecords = new List<RecordInfo>();
+				_allRecords[vfsRoot.Name] = existingRecords;
+			}
+			else
+			{
+				Nrs.LogInfo($"Record '{vfsRoot.Name}' is already in the list. Previous vfs: {Path.GetFileName(existingRecords[0].VfsName)}");
 			}
 
-
-			_allRecords.Add(vfsRoot.Name);
+			var record = new RecordInfo(vfsName, vfs, vfsRoot);
+			existingRecords.Add(record);
 		}
 
 		foreach (var child in vfsRoot.Children)
 		{
-			AddRecordsRecursively(child);
+			AddRecordsRecursively(vfsName, vfs, child);
 		}
 	}
 
@@ -41,17 +69,30 @@ public partial class MainPanel
 	{
 		_listItems.Widgets.Clear();
 
-		foreach (var record in _allRecords)
+		var keys = (from k in _allRecords.Keys orderby k select k).ToList();
+		foreach (var key in keys)
 		{
-			if (!string.IsNullOrEmpty(_textBoxFilter.Text) && !record.Contains(_textBoxFilter.Text, StringComparison.InvariantCultureIgnoreCase))
+			var ext = Path.GetExtension(key);
+
+			var isIgnored = (from i in IgnoredExtensions where i.Equals(ext, StringComparison.OrdinalIgnoreCase) select i).Any();
+			if (isIgnored)
+			{
+				continue;
+			}
+
+			if (!string.IsNullOrEmpty(_textBoxFilter.Text) && !key.Contains(_textBoxFilter.Text, StringComparison.InvariantCultureIgnoreCase))
 			{
 				// Apply filter
 				continue;
 			}
 
+			var records = _allRecords[key];
+			var record = records[records.Count - 1];
+
 			_listItems.Widgets.Add(new Label
 			{
-				Text = record
+				Text = key,
+				Tag = record
 			});
 		}
 	}
@@ -63,15 +104,15 @@ public partial class MainPanel
 		var dataFolder = Path.Combine(Configuration.GamePath, "Data");
 
 		var vdfs = Directory.GetFiles(dataFolder, "*.vdf", SearchOption.AllDirectories);
-		foreach (var vdf in vdfs)
+		foreach (var vfsName in vdfs)
 		{
-			Nrs.LogInfo($"Processing file {vdf}");
+			Nrs.LogInfo($"Processing file {vfsName}");
 
 			var vfs = new Vfs();
 
-			vfs.MountDisk(vdf, VfsOverwriteBehavior.Older);
+			vfs.MountDisk(vfsName, VfsOverwriteBehavior.Older);
 
-			AddRecordsRecursively(vfs.Root);
+			AddRecordsRecursively(vfsName, vfs, vfs.Root);
 		}
 
 		// Now update the ui
