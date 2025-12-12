@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <Authors>OpenGothicTeam</Authors>
+    <Product>OpenGothic</Product>
+    <PackageLicenseExpression>GPL</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/rds1983/OpenGothic</PackageProjectUrl>
+    <Description>nsane attempt to rewrite Gothic in C#</Description>
+    <RootNamespace>OpenGothic</RootNamespace>
+    <MonoGameTargetFramework>net8.0</MonoGameTargetFramework>
+    <FNATargetFramework>net8.0</FNATargetFramework>
+    <Version>0.1.0</Version>
+    <MonoGameVersion>3.8.4.1</MonoGameVersion>
+    <MyraVersion>1.5.10</MyraVersion>
+    <NursiaVersion>0.6.0</NursiaVersion>
+    <ZenKitVersion>0.1.13</ZenKitVersion>
+  </PropertyGroup>
+</Project>
