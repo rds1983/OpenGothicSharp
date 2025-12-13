@@ -8,4 +8,7 @@
   <ItemGroup>
     <PackageReference Include="ZenKit" Version="$(ZenKitVersion)" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\DigitalRiseModel\Source\DigitalRiseModel.FNA.Core.csproj" />
+  </ItemGroup>
 </Project>

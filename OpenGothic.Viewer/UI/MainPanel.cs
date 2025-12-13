@@ -24,6 +24,9 @@ public partial class MainPanel
 
 	private void _listItems_SelectedIndexChanged(object sender, EventArgs e)
 	{
+		var label = (Label)_listItems.SelectedItem;
+
+		var model = _assets.GetModel(Nrs.GraphicsDevice, label.Text);
 	}
 
 	private void RebuildList()
