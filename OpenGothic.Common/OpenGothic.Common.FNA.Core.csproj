@@ -9,6 +9,9 @@
     <PackageReference Include="ZenKit" Version="$(ZenKitVersion)" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\DigitalRiseModel\Source\DigitalRiseModel.FNA.Core.csproj" />
+    <EmbeddedResource Include="Effects\FNA\bin\*.*" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Nursia\Nursia\Nursia.FNA.Core.csproj" />
+  </ItemGroup>  
 </Project>

@@ -5,10 +5,12 @@ using Myra.Graphics2D;
 using Myra.Graphics2D.UI;
 using Nursia;
 using Nursia.Env;
+using Nursia.Materials;
 using Nursia.Rendering;
 using Nursia.SceneGraph;
 using Nursia.SceneGraph.Lights;
 using Nursia.Utilities;
+using OpenGothic.Materials;
 using System;
 
 namespace OpenGothic.Viewer.UI
@@ -31,7 +33,35 @@ namespace OpenGothic.Viewer.UI
 
 			set
 			{
-				_modelNode.Model = value;
+				_modelNode.SetModel(value, false);
+
+				if (value != null)
+				{
+					// Set materials
+					_modelNode.Materials = new IMaterial[Model.Meshes.Length][];
+
+					for (var i = 0; i < Model.Meshes.Length; ++i)
+					{
+						var mesh = Model.Meshes[i];
+
+						_modelNode.Materials[i] = new IMaterial[mesh.MeshParts.Count];
+						for (var j = 0; j < mesh.MeshParts.Count; ++j)
+						{
+							var meshPart = mesh.MeshParts[j];
+							if (meshPart.Material == null)
+							{
+								continue;
+							}
+
+							_modelNode.Materials[i][j] = new DefaultMaterial
+							{
+								DiffuseColor = meshPart.Material.DiffuseColor,
+								DiffuseTexture = meshPart.Material.DiffuseTexture,
+								NormalTexture = meshPart.Material.NormalTexture
+							};
+						}
+					}
+				}
 
 				// Reset camera
 				var camera = _controller.Camera;

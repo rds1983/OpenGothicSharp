@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework.Graphics;
+using Nursia;
 using OpenGothic.Utility;
 using System;
 using System.Collections.Generic;
@@ -58,7 +59,7 @@ public partial class Assets
 			}
 			else
 			{
-				OG.LogInfo($"Record '{vfsRoot.Name}' is already in the list. Previous vfs: {Path.GetFileName(existingRecords[0].VfsName)}");
+				Nrs.LogInfo($"Record '{vfsRoot.Name}' is already in the list. Previous vfs: {Path.GetFileName(existingRecords[0].VfsName)}");
 			}
 
 			var record = new RecordInfo(vfsName, vfs, vfsRoot);
@@ -73,14 +74,14 @@ public partial class Assets
 
 	private void Load()
 	{
-		OG.LogInfo($"Gothic Path: {Folder}");
+		Nrs.LogInfo($"Gothic Path: {Folder}");
 
 		var dataFolder = Path.Combine(Folder, "Data");
 
 		var vdfs = Directory.GetFiles(dataFolder, "*.vdf", SearchOption.AllDirectories);
 		foreach (var vfsName in vdfs)
 		{
-			OG.LogInfo($"Processing file {vfsName}");
+			Nrs.LogInfo($"Processing file {vfsName}");
 
 			var vfs = new Vfs();
 
@@ -98,7 +99,7 @@ public partial class Assets
 			return (T)obj;
 		}
 
-		OG.LogInfo($"Quering {typeof(T).Name} '{name}'");
+		Nrs.LogInfo($"Quering {typeof(T).Name} '{name}'");
 
 		var result = loader(device, name);
 		_cache[name] = result;

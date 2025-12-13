@@ -47,6 +47,16 @@ partial class Assets
 				vertices.Add(vertex);
 			}
 
+			// Set indices/weights
+			for(var i = 0; i < zkSkinnedMesh.Weights.Count; ++i)
+			{
+				var weights = zkSkinnedMesh.Weights[i];
+				for(var j = 0; j < weights.Count; ++j)
+				{
+					var weight = weights[j];
+				}
+			}
+
 			vertexBuffer = vertices.CreateVertexBuffer(device);
 			boundingBox = vertices.BuildBoundingBox();
 		}
