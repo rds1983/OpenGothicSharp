@@ -2,8 +2,6 @@ using Myra.Graphics2D.UI;
 using Nursia;
 using System;
 using System.IO;
-using System.Linq;
-using ZenKit;
 
 namespace OpenGothic.Viewer.UI;
 
@@ -14,6 +12,8 @@ public partial class MainPanel
 	public MainPanel()
 	{
 		BuildUI();
+
+		_topSplitPane.SetSplitterPosition(0, 0.3f);
 
 		_textBoxFilter.TextChanged += (s, a) => RebuildList();
 		_listItems.SelectedIndexChanged += _listItems_SelectedIndexChanged;
