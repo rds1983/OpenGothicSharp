@@ -101,11 +101,6 @@ public partial class ModelViewerPanel
 			Nrs.DebugSettings.DrawBoundingBoxes = _checkDrawBoundingBoxes.IsChecked;
 		};
 
-		_checkDisableNormalMapping.IsCheckedChanged += (s, a) =>
-		{
-			Nrs.DebugSettings.DisableNormalMap = _checkDisableNormalMapping.IsChecked;
-		};
-
 		_viewerWidget.TimeChanged += (s, a) =>
 		{
 			var player = _viewerWidget.Player;

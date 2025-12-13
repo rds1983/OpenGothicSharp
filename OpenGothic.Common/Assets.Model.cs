@@ -1,4 +1,5 @@
 ﻿using DigitalRiseModel;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using OpenGothic.Utility;
 using System;
@@ -9,7 +10,7 @@ namespace OpenGothic;
 
 partial class Assets
 {
-	public DrMeshPart CreatePart(GraphicsDevice device, IMultiResolutionMesh zkMesh, IMultiResolutionSubMesh zkSubMesh)
+	private static DrMeshPart CreatePart(GraphicsDevice device, IMultiResolutionMesh zkMesh, IMultiResolutionSubMesh zkSubMesh)
 	{
 		var builder = new MeshBuilder();
 
@@ -35,6 +36,34 @@ partial class Assets
 		return builder.CreateMeshPart(device, false);
 	}
 
+	private DrMesh CreateMesh(GraphicsDevice device, IMultiResolutionMesh zkMesh)
+	{
+		var mesh = new DrMesh();
+		foreach (var submesh in zkMesh.SubMeshes)
+		{
+			var meshPart = CreatePart(device, zkMesh, submesh);
+
+			if (submesh.Material != null)
+			{
+				var material = new DrMaterial
+				{
+					DiffuseColor = Color.White
+				};
+
+				if (!string.IsNullOrEmpty(submesh.Material.Texture))
+				{
+					material.DiffuseTexture = GetTexture(device, submesh.Material.Texture);
+				}
+
+				meshPart.Material = material;
+			}
+
+			mesh.MeshParts.Add(meshPart);
+		}
+
+		return mesh;
+	}
+
 	private DrModel LoadModel(GraphicsDevice device, string name)
 	{
 		var records = _allRecords[name];
@@ -46,36 +75,14 @@ partial class Assets
 		var meshes = new Dictionary<string, DrMesh>();
 		foreach (var pair in zkModel.Mesh.Attachments)
 		{
-			var attachment = pair.Value;
-
-			var mesh = new DrMesh();
-			foreach (var submesh in attachment.SubMeshes)
-			{
-				var meshPart = CreatePart(device, attachment, submesh);
-
-				if (submesh.Material != null)
-				{
-					var material = new DrMaterial
-					{
-						DiffuseColor = submesh.Material.Color.ToXna()
-					};
-					if (!string.IsNullOrEmpty(submesh.Material.Texture))
-					{
-						material.DiffuseTexture = GetTexture(device, submesh.Material.Texture);
-					}
-
-					meshPart.Material = material;
-				}
-
-				mesh.MeshParts.Add(meshPart);
-			}
+			var mesh = CreateMesh(device, pair.Value);
 
 			meshes[pair.Key] = mesh;
 		}
 
 		// Load nodes
 		var nodesData = new List<Tuple<DrModelBone, int?>>();
-		for(var i = 0; i < zkModel.Hierarchy.Nodes.Count; ++i)
+		for (var i = 0; i < zkModel.Hierarchy.Nodes.Count; ++i)
 		{
 			var node = zkModel.Hierarchy.Nodes[i];
 
@@ -96,10 +103,10 @@ partial class Assets
 		}
 
 		// Set children
-		for(var i = 0; i < nodesData.Count; ++i)
+		for (var i = 0; i < nodesData.Count; ++i)
 		{
 			var children = new List<DrModelBone>();
-			for(var j = 0; j < nodesData.Count; ++j)
+			for (var j = 0; j < nodesData.Count; ++j)
 			{
 				if (i == j)
 				{
@@ -118,7 +125,31 @@ partial class Assets
 			}
 		}
 
-		return new DrModel(nodesData[0].Item1);
+		var root = nodesData[0].Item1;
+
+		if (zkModel.Mesh.Meshes.Count > 0)
+		{
+			// Create new root
+			root = new DrModelBone("_ROOT");
+
+			var children = new List<DrModelBone>();
+
+			// Load animated meshes
+			for (var i = 0; i < zkModel.Mesh.Meshes.Count; ++i)
+			{
+				var zkAnimatedMesh = zkModel.Mesh.Meshes[i];
+				var mesh = CreateMesh(device, zkAnimatedMesh.Mesh);
+
+				var meshNode = new DrModelBone($"_MESH{i}", mesh);
+				children.Add(meshNode);
+			}
+
+			children.Add(nodesData[0].Item1);
+
+			root.Children = children.ToArray();
+		}
+
+		return new DrModel(root);
 	}
 
 	public DrModel GetModel(GraphicsDevice device, string name) => Get(device, name, LoadModel);

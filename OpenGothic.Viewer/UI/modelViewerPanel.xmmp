@@ -42,9 +42,6 @@
         <CheckButton CheckContentSpacing="8" Id="_checkDrawBoundingBoxes">
           <Label Text="Draw Bounding Boxes" />
         </CheckButton>
-        <CheckButton CheckContentSpacing="8" Id="_checkDisableNormalMapping">
-          <Label Text="Disable Normal Mapping" />
-        </CheckButton>
       </HorizontalStackPanel>
     </VerticalStackPanel>
     <Grid ColumnSpacing="8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Left="-4" Id="_panelStatistics">

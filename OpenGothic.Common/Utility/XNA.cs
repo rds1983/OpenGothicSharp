@@ -36,6 +36,9 @@ namespace OpenGothic.Utility
 			{
 				case ZenKit.TextureFormat.Dxt1:
 					return SurfaceFormat.Dxt1;
+
+				case ZenKit.TextureFormat.Dxt3:
+					return SurfaceFormat.Dxt3;
 			}
 
 			throw new NotSupportedException($"Format {textureFormat} is not supported.");
