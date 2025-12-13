@@ -64,7 +64,12 @@ public partial class ModelViewerPanel
 	{
 		BuildUI();
 
-		_viewerWidget = new ModelViewerWidget();
+		_viewerWidget = new ModelViewerWidget
+		{
+			HorizontalAlignment = HorizontalAlignment.Stretch,
+			VerticalAlignment = VerticalAlignment.Stretch
+		};
+		
 		_panelModelViewer.Widgets.Add(_viewerWidget);
 
 		_comboAnimations.Widgets.Clear();

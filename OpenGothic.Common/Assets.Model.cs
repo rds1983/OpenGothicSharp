@@ -90,6 +90,8 @@ partial class Assets
 				bone = new DrModelBone(node.Name);
 			}
 
+			bone.DefaultPose = new SrtTransform(node.Transform.ToXna());
+
 			nodesData.Add(new Tuple<DrModelBone, int?>(bone, node.ParentIndex == -1 ? null : node.ParentIndex));
 		}
 

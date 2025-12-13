@@ -27,6 +27,14 @@ public partial class MainPanel
 		var label = (Label)_listItems.SelectedItem;
 
 		var model = _assets.GetModel(Nrs.GraphicsDevice, label.Text);
+
+		var modelViewerPanel = new ModelViewerPanel
+		{
+			Model = model
+		};
+
+		_panelViewer.Widgets.Clear();
+		_panelViewer.Widgets.Add(modelViewerPanel);
 	}
 
 	private void RebuildList()

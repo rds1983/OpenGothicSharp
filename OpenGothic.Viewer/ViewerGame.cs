@@ -46,6 +46,8 @@ public class ViewerGame : Game
 
 		Nrs.Game = this;
 
+		GraphicsDevice.PresentationParameters.RenderTargetUsage = RenderTargetUsage.PreserveContents;
+
 		// DebugSettings.DrawLights = true;
 	}
 

@@ -3,6 +3,8 @@ using DigitalRiseModel.Animation;
 using Microsoft.Xna.Framework;
 using Myra.Graphics2D;
 using Myra.Graphics2D.UI;
+using Nursia;
+using Nursia.Env;
 using Nursia.Rendering;
 using Nursia.SceneGraph;
 using Nursia.SceneGraph.Lights;
@@ -87,7 +89,28 @@ namespace OpenGothic.Viewer.UI
 
 			if (_modelNode.Model != null && IsAnimating)
 			{
-//				Player.Update(gameTime.ElapsedGameTime);
+				//				Player.Update(gameTime.ElapsedGameTime);
+			}
+
+			var bounds = ActualBounds;
+
+			var p = ToGlobal(bounds.Location);
+			bounds.X = p.X;
+			bounds.Y = p.Y;
+
+			// Save scissor as it would be destroyed on exception
+			var device = Nrs.GraphicsDevice;
+			var scissor = device.ScissorRectangle;
+
+			try
+			{
+				var target = _renderer.RenderToTarget(_scene, _controller.Camera, RenderEnvironment.Default, bounds.Width, bounds.Height);
+
+				context.Draw(target, ActualBounds, Color.White);
+			}
+			catch (Exception)
+			{
+				Nrs.GraphicsDevice.ScissorRectangle = scissor;
 			}
 
 			// _renderer.Render(_scene, _controller.Camera);
