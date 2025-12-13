@@ -1,7 +1,9 @@
 ﻿using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Graphics.PackedVector;
 using OpenGothic.Utility;
+using OpenGothic.Vertices;
 using System;
 using System.Collections.Generic;
 using ZenKit;
@@ -10,54 +12,83 @@ namespace OpenGothic;
 
 partial class Assets
 {
-	private static DrMeshPart CreatePart(GraphicsDevice device, IMultiResolutionMesh zkMesh, IMultiResolutionSubMesh zkSubMesh)
+	private DrMeshPart CreatePart(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, IMultiResolutionSubMesh zkSubMesh)
 	{
-		var builder = new MeshBuilder();
+		VertexBuffer vertexBuffer;
+		BoundingBox boundingBox;
 
-		for (var i = 0; i < zkSubMesh.Wedges.Count; ++i)
+		if (zkSkinnedMesh == null)
 		{
-			var wedge = zkSubMesh.Wedges[i];
-			var pos = zkMesh.Positions[wedge.Index];
+			var vertices = new List<VertexPositionNormalTexture>();
+			for (var i = 0; i < zkSubMesh.Wedges.Count; ++i)
+			{
+				var wedge = zkSubMesh.Wedges[i];
+				var pos = zkMesh.Positions[wedge.Index];
 
-			var vertex = new VertexPositionNormalTexture(pos.ToXna(), wedge.Normal.ToXna(), wedge.Texture.ToXna());
+				var vertex = new VertexPositionNormalTexture(pos.ToXna(), wedge.Normal.ToXna(), wedge.Texture.ToXna());
 
-			builder.Vertices.Add(vertex);
+				vertices.Add(vertex);
+			}
+
+			vertexBuffer = vertices.CreateVertexBuffer(device);
+			boundingBox = vertices.BuildBoundingBox();
+		}
+		else
+		{
+			var vertices = new List<VertexSkinned>();
+
+			for (var i = 0; i < zkSubMesh.Wedges.Count; ++i)
+			{
+				var wedge = zkSubMesh.Wedges[i];
+				var pos = zkMesh.Positions[wedge.Index];
+
+				var vertex = new VertexSkinned(pos.ToXna(), wedge.Normal.ToXna(), wedge.Texture.ToXna(), new Byte4(), Vector4.Zero);
+
+				vertices.Add(vertex);
+			}
+
+			vertexBuffer = vertices.CreateVertexBuffer(device);
+			boundingBox = vertices.BuildBoundingBox();
 		}
 
+		var indices = new List<ushort>();
 		for (var i = 0; i < zkSubMesh.Triangles.Count; ++i)
 		{
 			var triangle = zkSubMesh.Triangles[i];
 
-			builder.AddIndex(triangle.Wedge0);
-			builder.AddIndex(triangle.Wedge1);
-			builder.AddIndex(triangle.Wedge2);
+			indices.Add(triangle.Wedge0);
+			indices.Add(triangle.Wedge1);
+			indices.Add(triangle.Wedge2);
 		}
 
-		return builder.CreateMeshPart(device, false);
+		var indexBuffer = indices.CreateIndexBuffer(device);
+
+		DrMaterial material = null;
+		if (zkSubMesh.Material != null)
+		{
+			material = new DrMaterial
+			{
+				DiffuseColor = Color.White
+			};
+
+			if (!string.IsNullOrEmpty(zkSubMesh.Material.Texture))
+			{
+				material.DiffuseTexture = GetTexture(device, zkSubMesh.Material.Texture);
+			}
+		}
+
+		return new DrMeshPart(vertexBuffer, indexBuffer, boundingBox)
+		{
+			Material = material
+		};
 	}
 
-	private DrMesh CreateMesh(GraphicsDevice device, IMultiResolutionMesh zkMesh)
+	private DrMesh CreateMesh(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh)
 	{
 		var mesh = new DrMesh();
 		foreach (var submesh in zkMesh.SubMeshes)
 		{
-			var meshPart = CreatePart(device, zkMesh, submesh);
-
-			if (submesh.Material != null)
-			{
-				var material = new DrMaterial
-				{
-					DiffuseColor = Color.White
-				};
-
-				if (!string.IsNullOrEmpty(submesh.Material.Texture))
-				{
-					material.DiffuseTexture = GetTexture(device, submesh.Material.Texture);
-				}
-
-				meshPart.Material = material;
-			}
-
+			var meshPart = CreatePart(device, zkSkinnedMesh, zkMesh, submesh);
 			mesh.MeshParts.Add(meshPart);
 		}
 
@@ -75,7 +106,7 @@ partial class Assets
 		var meshes = new Dictionary<string, DrMesh>();
 		foreach (var pair in zkModel.Mesh.Attachments)
 		{
-			var mesh = CreateMesh(device, pair.Value);
+			var mesh = CreateMesh(device, null, pair.Value);
 
 			meshes[pair.Key] = mesh;
 		}
@@ -137,8 +168,8 @@ partial class Assets
 			// Load animated meshes
 			for (var i = 0; i < zkModel.Mesh.Meshes.Count; ++i)
 			{
-				var zkAnimatedMesh = zkModel.Mesh.Meshes[i];
-				var mesh = CreateMesh(device, zkAnimatedMesh.Mesh);
+				var zkSkinnedMesh = zkModel.Mesh.Meshes[i];
+				var mesh = CreateMesh(device, zkSkinnedMesh, zkSkinnedMesh.Mesh);
 
 				var meshNode = new DrModelBone($"_MESH{i}", mesh);
 				children.Add(meshNode);
