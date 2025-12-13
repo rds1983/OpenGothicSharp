@@ -44,7 +44,18 @@ namespace OpenGothic.Utility
 		public static Color ToXna(this System.Drawing.Color color) => new Color(color.R, color.G, color.B, color.A);
 
 		public static IEnumerable<Vector3> GetPositions(this IEnumerable<VertexPositionNormalTexture> vertices) => (from v in vertices select v.Position);
-		public static IEnumerable<Vector3> GetPositions(this IEnumerable<VertexSkinned> vertices) => (from v in vertices select v.Position);
+		public static IEnumerable<Vector3> GetPositions(this IEnumerable<VertexSkinned> vertices)
+		{
+			foreach(var v in vertices)
+			{
+				yield return v.Position0;
+				yield return v.Position1;
+				yield return v.Position2;
+				yield return v.Position3;
+			}
+
+			yield break;
+		}
 
 		public static BoundingBox BuildBoundingBox(this IEnumerable<VertexPositionNormalTexture> vertices) => BoundingBox.CreateFromPoints(vertices.GetPositions());
 		public static BoundingBox BuildBoundingBox(this IEnumerable<VertexSkinned> vertices) => BoundingBox.CreateFromPoints(vertices.GetPositions());

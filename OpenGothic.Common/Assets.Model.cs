@@ -35,23 +35,66 @@ partial class Assets
 		}
 		else
 		{
-			var vertices = new List<VertexSkinned>();
+			var skinMap = new Dictionary<int, int>();
+			for (var i = 0; i < zkSkinnedMesh.Nodes.Count; ++i)
+			{
+				skinMap[zkSkinnedMesh.Nodes[i]] = i;
+			}
 
+			var vertices = new List<VertexSkinned>();
 			for (var i = 0; i < zkSubMesh.Wedges.Count; ++i)
 			{
 				var wedge = zkSubMesh.Wedges[i];
-				var pos = zkMesh.Positions[wedge.Index];
 
-				var vertex = new VertexSkinned(pos.ToXna(), wedge.Normal.ToXna(), wedge.Texture.ToXna(), new Byte4(), Vector4.Zero);
+				var blendIndices = Vector4.Zero;
+				var blendWeights = Vector4.Zero;
+				var pos0 = Vector3.Zero;
+				var pos1 = Vector3.Zero;
+				var pos2 = Vector3.Zero;
+				var pos3 = Vector3.Zero;
+
+				var weight = zkSkinnedMesh.Weights[wedge.Index];
+				pos0 = weight[0].Position.ToXna();
+				blendIndices.X = skinMap[weight[0].NodeIndex];
+				blendWeights.X = weight[0].Weight;
+
+				if (weight.Count > 1)
+				{
+					pos1 = weight[1].Position.ToXna();
+					blendIndices.Y = skinMap[weight[1].NodeIndex];
+					blendWeights.Y = weight[1].Weight;
+				}
+
+				if (weight.Count > 2)
+				{
+					pos2 = weight[2].Position.ToXna();
+					blendIndices.Z = skinMap[weight[2].NodeIndex];
+					blendWeights.Z = weight[2].Weight;
+				}
+
+				if (weight.Count > 3)
+				{
+					pos3 = weight[3].Position.ToXna();
+					blendIndices.W = skinMap[weight[3].NodeIndex];
+					blendWeights.W = weight[3].Weight;
+				}
+
+				var sum = blendWeights.X + blendWeights.Y + blendWeights.Z + blendWeights.W;
+				blendWeights.X /= sum;
+				blendWeights.Y /= sum;
+				blendWeights.Z /= sum;
+				blendWeights.W /= sum;
+
+				var vertex = new VertexSkinned(pos0, pos1, pos2, pos3, wedge.Normal.ToXna(), wedge.Texture.ToXna(), new Byte4(blendIndices), blendWeights);
 
 				vertices.Add(vertex);
 			}
 
 			// Set indices/weights
-			for(var i = 0; i < zkSkinnedMesh.Weights.Count; ++i)
+			for (var i = 0; i < zkSkinnedMesh.Weights.Count; ++i)
 			{
 				var weights = zkSkinnedMesh.Weights[i];
-				for(var j = 0; j < weights.Count; ++j)
+				for (var j = 0; j < weights.Count; ++j)
 				{
 					var weight = weights[j];
 				}
@@ -138,7 +181,11 @@ partial class Assets
 				bone = new DrModelBone(node.Name);
 			}
 
-			bone.DefaultPose = new SrtTransform(node.Transform.ToXna());
+			var transform = node.Transform.ToXna();
+
+			// Transpose is required
+			transform = Matrix.Transpose(transform);
+			bone.DefaultPose = new SrtTransform(transform);
 
 			nodesData.Add(new Tuple<DrModelBone, int?>(bone, node.ParentIndex == -1 ? null : node.ParentIndex));
 		}
@@ -181,6 +228,14 @@ partial class Assets
 				var zkSkinnedMesh = zkModel.Mesh.Meshes[i];
 				var mesh = CreateMesh(device, zkSkinnedMesh, zkSkinnedMesh.Mesh);
 
+				// Store joint bones
+				var joints = new List<DrModelBone>();
+				for (var j = 0; j < zkSkinnedMesh.Nodes.Count; ++j)
+				{
+					joints.Add(nodesData[zkSkinnedMesh.Nodes[j]].Item1);
+				}
+				mesh.Tag = joints;
+
 				var meshNode = new DrModelBone($"_MESH{i}", mesh);
 				children.Add(meshNode);
 			}
@@ -190,7 +245,40 @@ partial class Assets
 			root.Children = children.ToArray();
 		}
 
-		return new DrModel(root);
+		var result = new DrModel(root);
+
+		// Finally update the skins
+		if (zkModel.Mesh.Meshes.Count > 0)
+		{
+			var boneTransforms = new Matrix[result.Bones.Length];
+			result.CopyAbsoluteBoneTransformsTo(boneTransforms);
+			for (var i = 0; i < result.Meshes.Length; ++i)
+			{
+				var mesh = result.Meshes[i];
+
+				if (mesh.Tag != null)
+				{
+					var joints = (List<DrModelBone>)mesh.Tag;
+
+					var jointsData = new List<DrSkinJoint>();
+					for (var j = 0; j < joints.Count; ++j)
+					{
+						var joint = new DrSkinJoint(joints[j], Matrix.Identity);
+						jointsData.Add(joint);
+					}
+
+					var skin = new DrSkin(i, jointsData.ToArray());
+					for (var j = 0; j < mesh.MeshParts.Count; ++j)
+					{
+						mesh.MeshParts[j].Skin = skin;
+					}
+
+					mesh.Tag = null;
+				}
+			}
+		}
+
+		return result;
 	}
 
 	public DrModel GetModel(GraphicsDevice device, string name) => Get(device, name, LoadModel);
