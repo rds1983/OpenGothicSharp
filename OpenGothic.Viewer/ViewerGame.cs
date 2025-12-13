@@ -53,7 +53,6 @@ public class ViewerGame : Game
 	{
 		try
 		{
-			_mainPanel.Reload();
 			// reader.TryGetFolder(path, out IArchiveFolder f);
 
 /*			if (!string.IsNullOrEmpty(file))

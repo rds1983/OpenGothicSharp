@@ -12,5 +12,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Myra\src\Myra\Myra.FNA.Core.csproj" />
     <ProjectReference Include="..\..\Nursia\Nursia\Nursia.FNA.Core.csproj" />
+    <ProjectReference Include="..\OpenGothic.Common\OpenGothic.Common.FNA.Core.csproj" />
   </ItemGroup>
 </Project>

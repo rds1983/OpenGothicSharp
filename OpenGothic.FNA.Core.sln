@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DigitalRiseModel.FNA.Core",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nursia.FNA.Core", "..\Nursia\Nursia\Nursia.FNA.Core.csproj", "{207BC1AE-0822-5FAF-0D3A-FE26ADCBC844}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenGothic.Common.FNA.Core", "OpenGothic.Common\OpenGothic.Common.FNA.Core.csproj", "{6704D89B-3D38-4236-FBB7-14B485675B6F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -59,6 +61,10 @@ Global
 		{207BC1AE-0822-5FAF-0D3A-FE26ADCBC844}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{207BC1AE-0822-5FAF-0D3A-FE26ADCBC844}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{207BC1AE-0822-5FAF-0D3A-FE26ADCBC844}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6704D89B-3D38-4236-FBB7-14B485675B6F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6704D89B-3D38-4236-FBB7-14B485675B6F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6704D89B-3D38-4236-FBB7-14B485675B6F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6704D89B-3D38-4236-FBB7-14B485675B6F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

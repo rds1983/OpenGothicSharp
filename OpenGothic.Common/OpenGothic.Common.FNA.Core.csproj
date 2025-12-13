@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(FNATargetFramework)</TargetFramework>
+    <RootNamespace>OpenGothic</RootNamespace>
+    <OutputPath>bin\FNA\$(Configuration)</OutputPath>
+    <DefineConstants>$(DefineConstants);FNA</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ZenKit" Version="$(ZenKitVersion)" />
+  </ItemGroup>
+</Project>
