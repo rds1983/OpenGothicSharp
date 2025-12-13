@@ -1,6 +1,7 @@
 ﻿using DigitalRiseModel;
 using Microsoft.Xna.Framework.Graphics;
 using OpenGothic.Utility;
+using System;
 using System.Collections.Generic;
 using ZenKit;
 
@@ -41,8 +42,8 @@ partial class Assets
 
 		var zkModel = new ZenKit.Model(record.Node.Buffer);
 
+		// Load meshes
 		var meshes = new Dictionary<string, DrMesh>();
-
 		foreach (var pair in zkModel.Mesh.Attachments)
 		{
 			var attachment = pair.Value;
@@ -54,8 +55,10 @@ partial class Assets
 
 				if (submesh.Material != null)
 				{
-					var material = new DrMaterial();
-					material.DiffuseColor = submesh.Material.Color.ToXna();
+					var material = new DrMaterial
+					{
+						DiffuseColor = submesh.Material.Color.ToXna()
+					};
 					if (!string.IsNullOrEmpty(submesh.Material.Texture))
 					{
 						material.DiffuseTexture = GetTexture(device, submesh.Material.Texture);
@@ -70,7 +73,50 @@ partial class Assets
 			meshes[pair.Key] = mesh;
 		}
 
-		return null;
+		// Load nodes
+		var nodesData = new List<Tuple<DrModelBone, int?>>();
+		for(var i = 0; i < zkModel.Hierarchy.Nodes.Count; ++i)
+		{
+			var node = zkModel.Hierarchy.Nodes[i];
+
+			DrMesh mesh = null;
+			DrModelBone bone;
+			if (meshes.TryGetValue(node.Name, out mesh))
+			{
+				bone = new DrModelBone(node.Name, mesh);
+			}
+			else
+			{
+				bone = new DrModelBone(node.Name);
+			}
+
+			nodesData.Add(new Tuple<DrModelBone, int?>(bone, node.ParentIndex == -1 ? null : node.ParentIndex));
+		}
+
+		// Set children
+		for(var i = 0; i < nodesData.Count; ++i)
+		{
+			var children = new List<DrModelBone>();
+			for(var j = 0; j < nodesData.Count; ++j)
+			{
+				if (i == j)
+				{
+					continue;
+				}
+
+				if (nodesData[j].Item2 == i)
+				{
+					children.Add(nodesData[j].Item1);
+				}
+			}
+
+			if (children.Count > 0)
+			{
+				nodesData[i].Item1.Children = children.ToArray();
+			}
+		}
+
+		return new DrModel(nodesData[0].Item1);
 	}
 
 	public DrModel GetModel(GraphicsDevice device, string name) => Get(device, name, LoadModel);
