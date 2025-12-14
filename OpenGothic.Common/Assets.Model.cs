@@ -192,10 +192,12 @@ partial class Assets
 			}
 
 			var transform = node.Transform.ToXna();
-
-			// Transpose is required
-			transform = Matrix.Transpose(transform);
 			bone.DefaultPose = new SrtTransform(transform);
+
+			if (i == 0)
+			{
+				bone.DefaultPose.Translation += zkHierarchy.RootTranslation.ToXna();
+			}
 
 			nodesData.Add(new Tuple<DrModelBone, int?>(bone, node.ParentIndex == -1 ? null : node.ParentIndex));
 		}
@@ -319,18 +321,22 @@ partial class Assets
 
 			var zkAnimation = new ModelAnimation(GetLastRecord(animationName).Node.Buffer);
 
+			var timeStep = TimeSpan.FromSeconds(1.0f / animation.Fps);
+
 			var channels = new List<AnimationChannel>();
 			for (var k = 0; k < zkAnimation.NodeIndices.Count; ++k)
 			{
 				var bone = result.OriginalBones[zkAnimation.NodeIndices[k]];
 
 				var keyframes = new List<AnimationChannelKeyframe>();
+				var time = TimeSpan.Zero;
 				for (var j = 0; j < zkAnimation.FrameCount; ++j)
 				{
 					var pos = k + j * zkAnimation.NodeIndices.Count;
 					var sample = zkAnimation.Samples[pos];
 
-					var keyframe = new AnimationChannelKeyframe(TimeSpan.FromMilliseconds(100), new SrtTransform(sample.Position.ToXna(), sample.Rotation.ToXna(), Vector3.One));
+					time += timeStep;
+					var keyframe = new AnimationChannelKeyframe(time, new SrtTransform(sample.Position.ToXna(), sample.Rotation.ToXna(), bone.DefaultPose.Scale));
 
 					keyframes.Add(keyframe);
 				}
@@ -339,7 +345,7 @@ partial class Assets
 				channels.Add(channel);
 			}
 
-			var clip = new AnimationClip(animation.Name, zkAnimation.FrameCount * TimeSpan.FromMilliseconds(100), channels.ToArray());
+			var clip = new AnimationClip(animation.Name, zkAnimation.FrameCount * timeStep, channels.ToArray());
 			result.Model.Animations[clip.Name] = clip;
 		}
 
