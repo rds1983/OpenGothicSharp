@@ -107,6 +107,13 @@ public partial class Assets
 		return result;
 	}
 
+	private RecordInfo GetLastRecord(string name)
+	{
+		var records = _allRecords[name];
+
+		return records[records.Count - 1];
+	}
+
 	private Texture2D LoadTexture(GraphicsDevice device, string name)
 	{
 		List<RecordInfo> records;

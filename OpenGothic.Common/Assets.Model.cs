@@ -1,4 +1,5 @@
 ﻿using DigitalRiseModel;
+using DigitalRiseModel.Animation;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Graphics.PackedVector;
@@ -6,12 +7,26 @@ using OpenGothic.Utility;
 using OpenGothic.Vertices;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using ZenKit;
 
 namespace OpenGothic;
 
 partial class Assets
 {
+	private class ModelResult
+	{
+		public DrModel Model { get; }
+		public DrModelBone[] OriginalBones { get; }
+
+		public ModelResult(DrModel model, DrModelBone[] originalBones)
+		{
+			Model = model ?? throw new ArgumentNullException(nameof(model));
+			OriginalBones = originalBones;
+		}
+	}
+
 	private DrMeshPart CreatePart(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, IMultiResolutionSubMesh zkSubMesh)
 	{
 		VertexBuffer vertexBuffer;
@@ -148,16 +163,11 @@ partial class Assets
 		return mesh;
 	}
 
-	private DrModel LoadModel(GraphicsDevice device, string name)
+	private ModelResult LoadModel(GraphicsDevice device, IModelHierarchy zkHierarchy, IModelMesh zkMesh)
 	{
-		var records = _allRecords[name];
-		var record = records[records.Count - 1];
-
-		var zkModel = new ZenKit.Model(record.Node.Buffer);
-
 		// Load meshes
 		var meshes = new Dictionary<string, DrMesh>();
-		foreach (var pair in zkModel.Mesh.Attachments)
+		foreach (var pair in zkMesh.Attachments)
 		{
 			var mesh = CreateMesh(device, null, pair.Value);
 
@@ -166,9 +176,9 @@ partial class Assets
 
 		// Load nodes
 		var nodesData = new List<Tuple<DrModelBone, int?>>();
-		for (var i = 0; i < zkModel.Hierarchy.Nodes.Count; ++i)
+		for (var i = 0; i < zkHierarchy.Nodes.Count; ++i)
 		{
-			var node = zkModel.Hierarchy.Nodes[i];
+			var node = zkHierarchy.Nodes[i];
 
 			DrMesh mesh = null;
 			DrModelBone bone;
@@ -213,9 +223,10 @@ partial class Assets
 			}
 		}
 
-		var root = nodesData[0].Item1;
+		var originalBones = (from nd in nodesData select nd.Item1).ToArray();
 
-		if (zkModel.Mesh.Meshes.Count > 0)
+		var root = originalBones[0];
+		if (zkMesh.Meshes.Count > 0)
 		{
 			// Create new root
 			root = new DrModelBone("_ROOT");
@@ -223,16 +234,16 @@ partial class Assets
 			var children = new List<DrModelBone>();
 
 			// Load animated meshes
-			for (var i = 0; i < zkModel.Mesh.Meshes.Count; ++i)
+			for (var i = 0; i < zkMesh.Meshes.Count; ++i)
 			{
-				var zkSkinnedMesh = zkModel.Mesh.Meshes[i];
+				var zkSkinnedMesh = zkMesh.Meshes[i];
 				var mesh = CreateMesh(device, zkSkinnedMesh, zkSkinnedMesh.Mesh);
 
 				// Store joint bones
 				var joints = new List<DrModelBone>();
 				for (var j = 0; j < zkSkinnedMesh.Nodes.Count; ++j)
 				{
-					joints.Add(nodesData[zkSkinnedMesh.Nodes[j]].Item1);
+					joints.Add(originalBones[zkSkinnedMesh.Nodes[j]]);
 				}
 				mesh.Tag = joints;
 
@@ -240,7 +251,7 @@ partial class Assets
 				children.Add(meshNode);
 			}
 
-			children.Add(nodesData[0].Item1);
+			children.Add(originalBones[0]);
 
 			root.Children = children.ToArray();
 		}
@@ -248,7 +259,7 @@ partial class Assets
 		var result = new DrModel(root);
 
 		// Finally update the skins
-		if (zkModel.Mesh.Meshes.Count > 0)
+		if (zkMesh.Meshes.Count > 0)
 		{
 			var boneTransforms = new Matrix[result.Bones.Length];
 			result.CopyAbsoluteBoneTransformsTo(boneTransforms);
@@ -264,6 +275,7 @@ partial class Assets
 					for (var j = 0; j < joints.Count; ++j)
 					{
 						var joint = new DrSkinJoint(joints[j], Matrix.Identity);
+						// var joint = new DrSkinJoint(joints[j], Matrix.Invert(boneTransforms[joints[j].Index]));
 						jointsData.Add(joint);
 					}
 
@@ -278,9 +290,62 @@ partial class Assets
 			}
 		}
 
-		return result;
+		return new ModelResult(result, originalBones);
+	}
+
+	private DrModel LoadModel(GraphicsDevice device, string name)
+	{
+		var records = _allRecords[name];
+		var record = records[records.Count - 1];
+
+		var zkScript = new ModelScript(record.Node.Buffer);
+
+		var hierarchyName = Path.ChangeExtension(name, "MDH");
+		var zkHierarchy = new ModelHierarchy(GetLastRecord(hierarchyName).Node.Buffer);
+
+		var meshName = Path.ChangeExtension(zkScript.SkeletonName, "MDM");
+		var zkMesh = new ZenKit.ModelMesh(GetLastRecord(meshName).Node.Buffer);
+
+		var result = LoadModel(device, zkHierarchy, zkMesh);
+
+		var nameNoExt = Path.GetFileNameWithoutExtension(name);
+
+		result.Model.Animations = new Dictionary<string, AnimationClip>();
+		for (var i = 0; i < zkScript.Animations.Count; ++i)
+		{
+			var animation = zkScript.Animations[i];
+
+			var animationName = nameNoExt + "-" + animation.Name + ".MAN";
+
+			var zkAnimation = new ModelAnimation(GetLastRecord(animationName).Node.Buffer);
+
+			var channels = new List<AnimationChannel>();
+			for (var k = 0; k < zkAnimation.NodeIndices.Count; ++k)
+			{
+				var bone = result.OriginalBones[zkAnimation.NodeIndices[k]];
+
+				var keyframes = new List<AnimationChannelKeyframe>();
+				for (var j = 0; j < zkAnimation.FrameCount; ++j)
+				{
+					var pos = k + j * zkAnimation.NodeIndices.Count;
+					var sample = zkAnimation.Samples[pos];
+
+					var keyframe = new AnimationChannelKeyframe(TimeSpan.FromMilliseconds(100), new SrtTransform(sample.Position.ToXna(), sample.Rotation.ToXna(), Vector3.One));
+
+					keyframes.Add(keyframe);
+				}
+
+				var channel = new AnimationChannel(bone.Index, keyframes.ToArray());
+				channels.Add(channel);
+			}
+
+			var clip = new AnimationClip(animation.Name, zkAnimation.FrameCount * TimeSpan.FromMilliseconds(100), channels.ToArray());
+			result.Model.Animations[clip.Name] = clip;
+		}
+
+		return result.Model;
+
 	}
 
 	public DrModel GetModel(GraphicsDevice device, string name) => Get(device, name, LoadModel);
-
 }

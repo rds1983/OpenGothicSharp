@@ -75,6 +75,8 @@ namespace OpenGothic.Utility
 
 		public static Vector3 ToXna(this System.Numerics.Vector3 v) => new Vector3(v.X, v.Y, v.Z);
 
+		public static Quaternion ToXna(this System.Numerics.Quaternion v) => new Quaternion(v.X, v.Y, v.Z, v.W);
+
 		public static Matrix ToXna(this System.Numerics.Matrix4x4 m) =>
 			new Matrix(m.M11, m.M12, m.M13, m.M14,
 				m.M21, m.M22, m.M23, m.M24,

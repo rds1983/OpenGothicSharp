@@ -44,8 +44,7 @@ public partial class MainPanel
 		foreach (var key in _assets.Keys)
 		{
 			var ext = Path.GetExtension(key);
-
-			if (ext != ".MDL")
+			if (ext != ".MSB")
 			{
 				continue;
 			}

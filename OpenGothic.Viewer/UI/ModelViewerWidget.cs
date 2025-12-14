@@ -119,7 +119,7 @@ namespace OpenGothic.Viewer.UI
 
 			if (_modelNode.Model != null && IsAnimating)
 			{
-				//				Player.Update(gameTime.ElapsedGameTime);
+				Player.Update(ViewerGame.LastGameTime.ElapsedGameTime);
 			}
 
 			var bounds = ActualBounds;
@@ -142,8 +142,6 @@ namespace OpenGothic.Viewer.UI
 			{
 				Nrs.GraphicsDevice.ScissorRectangle = scissor;
 			}
-
-			// _renderer.Render(_scene, _controller.Camera);
 		}
 	}
 }

@@ -15,6 +15,8 @@ public class ViewerGame : Game
 	private readonly FramesPerSecondCounter _fpsCounter = new FramesPerSecondCounter();
 	private string _path;
 
+	public static GameTime LastGameTime { get; private set;  }
+
 	public ViewerGame(string path)
 	{
 		_path = path;
@@ -49,6 +51,13 @@ public class ViewerGame : Game
 		GraphicsDevice.PresentationParameters.RenderTargetUsage = RenderTargetUsage.PreserveContents;
 
 		// DebugSettings.DrawLights = true;
+	}
+
+	protected override void Update(GameTime gameTime)
+	{
+		base.Update(gameTime);
+
+		LastGameTime = gameTime;
 	}
 
 
