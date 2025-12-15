@@ -26,15 +26,36 @@ public partial class MainPanel
 	{
 		var label = (Label)_listItems.SelectedItem;
 
-		var model = _assets.GetModel(Nrs.GraphicsDevice, label.Text);
-
-		var modelViewerPanel = new ModelViewerPanel
+		Widget widget;
+		if (label.Text.EndsWith(".MSB"))
 		{
-			Model = model
-		};
+			var model = _assets.GetModel(Nrs.GraphicsDevice, label.Text);
+
+			var modelViewerPanel = new ModelViewerPanel
+			{
+				Model = model
+			};
+
+			widget = modelViewerPanel;
+		}
+		else
+		{
+			var world = _assets.GetWorld(Nrs.GraphicsDevice, label.Text);
+
+			var worldViewer = new WorldViewerWidget
+			{
+				World = world
+			};
+
+			widget = worldViewer;
+		}
 
 		_panelViewer.Widgets.Clear();
-		_panelViewer.Widgets.Add(modelViewerPanel);
+
+		widget.HorizontalAlignment = HorizontalAlignment.Stretch;
+		widget.VerticalAlignment = VerticalAlignment.Stretch;
+		_panelViewer.Widgets.Add(widget);
+
 	}
 
 	private void RebuildList()
@@ -44,7 +65,7 @@ public partial class MainPanel
 		foreach (var key in _assets.Keys)
 		{
 			var ext = Path.GetExtension(key);
-			if (ext != ".MSB")
+			if (ext != ".MSB" && ext != ".ZEN")
 			{
 				continue;
 			}

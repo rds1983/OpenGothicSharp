@@ -55,7 +55,7 @@ public partial class Assets
 			if (!_allRecords.TryGetValue(vfsRoot.Name, out existingRecords))
 			{
 				existingRecords = new List<RecordInfo>();
-				_allRecords[vfsRoot.Name.ToLower()] = existingRecords;
+				_allRecords[vfsRoot.Name.ToUpper()] = existingRecords;
 			}
 			else
 			{
@@ -109,7 +109,7 @@ public partial class Assets
 
 	private RecordInfo GetLastRecord(string name)
 	{
-		var records = _allRecords[name.ToLower()];
+		var records = _allRecords[name.ToUpper()];
 
 		return records[records.Count - 1];
 	}
@@ -118,6 +118,7 @@ public partial class Assets
 	{
 		List<RecordInfo> records;
 
+		name = name.ToUpper();
 		if (!_allRecords.TryGetValue(name, out records))
 		{
 			// Add '-C' and .TEX ext

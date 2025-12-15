@@ -18,6 +18,14 @@ namespace OpenGothic.Utility
 			return result;
 		}
 
+		public static IndexBuffer CreateIndexBuffer(this int[] indices, GraphicsDevice device)
+		{
+			var result = new IndexBuffer(device, IndexElementSize.ThirtyTwoBits, indices.Length, BufferUsage.WriteOnly);
+			result.SetData(indices);
+
+			return result;
+		}
+
 		public static VertexBuffer CreateVertexBuffer<T>(this ICollection<T> vertices, GraphicsDevice device) where T : struct, IVertexType
 		{
 			var data = vertices.ToArray();

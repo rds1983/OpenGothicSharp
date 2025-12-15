@@ -34,6 +34,9 @@ public class MainGame : Game
 
 		_spriteBatch = new SpriteBatch(GraphicsDevice);
 
+		var assets = new Assets(_path);
+		var world = assets.GetWorld(GraphicsDevice, "newworld.zen");
+
 		// UI
 		MyraEnvironment.Game = this;
 		Nrs.Game = this;
