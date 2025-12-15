@@ -55,7 +55,7 @@ public partial class Assets
 			if (!_allRecords.TryGetValue(vfsRoot.Name, out existingRecords))
 			{
 				existingRecords = new List<RecordInfo>();
-				_allRecords[vfsRoot.Name] = existingRecords;
+				_allRecords[vfsRoot.Name.ToLower()] = existingRecords;
 			}
 			else
 			{
@@ -109,7 +109,7 @@ public partial class Assets
 
 	private RecordInfo GetLastRecord(string name)
 	{
-		var records = _allRecords[name];
+		var records = _allRecords[name.ToLower()];
 
 		return records[records.Count - 1];
 	}

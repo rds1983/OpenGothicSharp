@@ -129,6 +129,14 @@ partial class Assets
 			indices.Add(triangle.Wedge2);
 		}
 
+		// Unwind indices, since we need to convert left-handed to right-handed
+/*		for (var i = 0; i < indices.Count; i += 3)
+		{
+			var temp = indices[i];
+			indices[i] = indices[i + 2];
+			indices[i + 2] = temp;
+		}*/
+
 		var indexBuffer = indices.CreateIndexBuffer(device);
 
 		DrMaterial material = null;

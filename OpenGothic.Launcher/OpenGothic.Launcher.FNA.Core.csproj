@@ -2,12 +2,11 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>$(FNATargetFramework)</TargetFramework>
-    <RootNamespace>OpenGothic.Viewer</RootNamespace>
+    <RootNamespace>OpenGothic.Launcher</RootNamespace>
     <OutputPath>bin\FNA\$(Configuration)</OutputPath>
     <DefineConstants>$(DefineConstants);FNA</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\Myra\src\Myra\Myra.FNA.Core.csproj" />
-    <ProjectReference Include="..\OpenGothic.Common\OpenGothic.Common.FNA.Core.csproj" />
+    <ProjectReference Include="..\OpenGothic\OpenGothic.FNA.Core.csproj" />
   </ItemGroup>
 </Project>

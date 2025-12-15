@@ -73,6 +73,12 @@ namespace OpenGothic.Utility
 
 		public static Vector2 ToXna(this System.Numerics.Vector2 v) => new Vector2(v.X, v.Y);
 
+		/// <summary>
+		/// Gothic uses left-handed coordinate system, all below transforms transforms it to right-handed
+		/// That's why Z coordinate is negated, matrix is transposed and quaternion is conjugated
+		/// </summary>
+		/// <param name="v"></param>
+		/// <returns></returns>
 		public static Vector3 ToXna(this System.Numerics.Vector3 v) => new Vector3(v.X, v.Y, v.Z);
 
 		public static Quaternion ToXna(this System.Numerics.Quaternion v)
