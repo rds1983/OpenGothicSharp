@@ -43,11 +43,8 @@ namespace OpenGothic.Viewer.UI
 		{
 			_renderer = new ForwardRenderer();
 
-			// Front light
-			_root.Children.Add(new DirectLight { Rotation = new Vector3(45, 45, 0), CastsShadow = false });
-
-			// Back light
-			_root.Children.Add(new DirectLight { Rotation = new Vector3(225, 45, 0), CastsShadow = false });
+			// Light
+			_root.Children.Add(new DirectLight { Rotation = new Vector3(225, 45, 0), CastsShadow = true });
 
 			_root.Children.Add(_worldRoot);
 

@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework.Graphics;
+using Nursia.Materials;
 using Nursia.SceneGraph;
 using OpenGothic.Materials;
 using OpenGothic.Utility;
@@ -39,6 +40,18 @@ namespace OpenGothic
 					{
 						DiffuseTexture = texture
 					};
+
+					switch(zkMaterial.AlphaFunction)
+					{
+						case AlphaFunction.None:
+							break;
+						case AlphaFunction.Blend:
+							mat.BlendState = BlendState.AlphaBlend;
+							break;
+
+						default:
+							break;
+					}
 
 					p = new Tuple<DefaultMaterial, List<IPolygon>>(mat, new List<IPolygon>());
 					groupedPolygons[polygon.MaterialIndex] = p;

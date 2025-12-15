@@ -31,7 +31,12 @@ namespace OpenGothic.Materials
 
 		[Browsable(false)]
 		[JsonIgnore]
-		public MaterialFlags Flags => _flags;
+		public MaterialFlags Flags
+		{
+			get => _flags;
+
+			set => _flags = value;
+		}
 
 		[Category("Behavior")]
 		[DefaultValue(true)]

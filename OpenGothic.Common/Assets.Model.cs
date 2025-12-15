@@ -35,10 +35,12 @@ partial class Assets
 		if (zkSkinnedMesh == null)
 		{
 			var vertices = new List<VertexPositionNormalTexture>();
-			for (var i = 0; i < zkSubMesh.Wedges.Count; ++i)
+			var wedges = zkSubMesh.Wedges;
+			var positions = zkMesh.Positions;
+			for (var i = 0; i < wedges.Count; ++i)
 			{
-				var wedge = zkSubMesh.Wedges[i];
-				var pos = zkMesh.Positions[wedge.Index];
+				var wedge = wedges[i];
+				var pos = positions[wedge.Index];
 
 				var vertex = new VertexPositionNormalTexture(pos.ToXna(), wedge.Normal.ToXna(), wedge.Texture.ToXna());
 
@@ -51,15 +53,20 @@ partial class Assets
 		else
 		{
 			var skinMap = new Dictionary<int, int>();
-			for (var i = 0; i < zkSkinnedMesh.Nodes.Count; ++i)
+
+			var nodes = zkSkinnedMesh.Nodes;
+			for (var i = 0; i < nodes.Count; ++i)
 			{
-				skinMap[zkSkinnedMesh.Nodes[i]] = i;
+				skinMap[nodes[i]] = i;
 			}
 
 			var vertices = new List<VertexSkinned>();
-			for (var i = 0; i < zkSubMesh.Wedges.Count; ++i)
+
+			var wedges = zkSubMesh.Wedges;
+			var zkWeights = zkSkinnedMesh.Weights;
+			for (var i = 0; i < wedges.Count; ++i)
 			{
-				var wedge = zkSubMesh.Wedges[i];
+				var wedge = wedges[i];
 
 				var blendIndices = Vector4.Zero;
 				var blendWeights = Vector4.Zero;
@@ -68,7 +75,8 @@ partial class Assets
 				var pos2 = Vector3.Zero;
 				var pos3 = Vector3.Zero;
 
-				var weight = zkSkinnedMesh.Weights[wedge.Index];
+				var weight = zkWeights[wedge.Index];
+				
 				pos0 = weight[0].Position.ToXna();
 				blendIndices.X = skinMap[weight[0].NodeIndex];
 				blendWeights.X = weight[0].Weight;
@@ -106,9 +114,9 @@ partial class Assets
 			}
 
 			// Set indices/weights
-			for (var i = 0; i < zkSkinnedMesh.Weights.Count; ++i)
+			for (var i = 0; i < zkWeights.Count; ++i)
 			{
-				var weights = zkSkinnedMesh.Weights[i];
+				var weights = zkWeights[i];
 				for (var j = 0; j < weights.Count; ++j)
 				{
 					var weight = weights[j];
@@ -120,9 +128,11 @@ partial class Assets
 		}
 
 		var indices = new List<ushort>();
-		for (var i = 0; i < zkSubMesh.Triangles.Count; ++i)
+
+		var triangles = zkSubMesh.Triangles;
+		for (var i = 0; i < triangles.Count; ++i)
 		{
-			var triangle = zkSubMesh.Triangles[i];
+			var triangle = triangles[i];
 
 			indices.Add(triangle.Wedge0);
 			indices.Add(triangle.Wedge1);
@@ -175,7 +185,9 @@ partial class Assets
 	{
 		// Load meshes
 		var meshes = new Dictionary<string, DrMesh>();
-		foreach (var pair in zkMesh.Attachments)
+
+		var attachments = zkMesh.Attachments;
+		foreach (var pair in attachments)
 		{
 			var mesh = CreateMesh(device, null, pair.Value);
 
@@ -184,9 +196,11 @@ partial class Assets
 
 		// Load nodes
 		var nodesData = new List<Tuple<DrModelBone, int?>>();
-		for (var i = 0; i < zkHierarchy.Nodes.Count; ++i)
+
+		var nodes = zkHierarchy.Nodes;
+		for (var i = 0; i < nodes.Count; ++i)
 		{
-			var node = zkHierarchy.Nodes[i];
+			var node = nodes[i];
 
 			DrMesh mesh = null;
 			DrModelBone bone;
@@ -236,7 +250,9 @@ partial class Assets
 		var originalBones = (from nd in nodesData select nd.Item1).ToArray();
 
 		var root = originalBones[0];
-		if (zkMesh.Meshes.Count > 0)
+
+		var zkMeshes = zkMesh.Meshes;
+		if (zkMeshes.Count > 0)
 		{
 			// Create new root
 			root = new DrModelBone("_ROOT");
@@ -244,16 +260,18 @@ partial class Assets
 			var children = new List<DrModelBone>();
 
 			// Load animated meshes
-			for (var i = 0; i < zkMesh.Meshes.Count; ++i)
+			for (var i = 0; i < zkMeshes.Count; ++i)
 			{
-				var zkSkinnedMesh = zkMesh.Meshes[i];
+				var zkSkinnedMesh = zkMeshes[i];
 				var mesh = CreateMesh(device, zkSkinnedMesh, zkSkinnedMesh.Mesh);
 
 				// Store joint bones
 				var joints = new List<DrModelBone>();
-				for (var j = 0; j < zkSkinnedMesh.Nodes.Count; ++j)
+
+				var zkMeshNodes = zkSkinnedMesh.Nodes;
+				for (var j = 0; j < zkMeshNodes.Count; ++j)
 				{
-					joints.Add(originalBones[zkSkinnedMesh.Nodes[j]]);
+					joints.Add(originalBones[zkMeshNodes[j]]);
 				}
 				mesh.Tag = joints;
 
@@ -269,7 +287,7 @@ partial class Assets
 		var result = new DrModel(root);
 
 		// Finally update the skins
-		if (zkMesh.Meshes.Count > 0)
+		if (zkMeshes.Count > 0)
 		{
 			var boneTransforms = new Matrix[result.Bones.Length];
 			result.CopyAbsoluteBoneTransformsTo(boneTransforms);
@@ -321,9 +339,11 @@ partial class Assets
 		var nameNoExt = Path.GetFileNameWithoutExtension(name);
 
 		result.Model.Animations = new Dictionary<string, AnimationClip>();
-		for (var i = 0; i < zkScript.Animations.Count; ++i)
+
+		var zkAnimations = zkScript.Animations;
+		for (var i = 0; i < zkAnimations.Count; ++i)
 		{
-			var animation = zkScript.Animations[i];
+			var animation = zkAnimations[i];
 
 			var animationName = nameNoExt + "-" + animation.Name + ".MAN";
 
@@ -332,16 +352,20 @@ partial class Assets
 			var timeStep = TimeSpan.FromSeconds(1.0f / animation.Fps);
 
 			var channels = new List<AnimationChannel>();
-			for (var k = 0; k < zkAnimation.NodeIndices.Count; ++k)
+
+			var zkAnimationNodeIndices = zkAnimation.NodeIndices;
+
+			var samples = zkAnimation.Samples;
+			for (var k = 0; k < zkAnimationNodeIndices.Count; ++k)
 			{
-				var bone = result.OriginalBones[zkAnimation.NodeIndices[k]];
+				var bone = result.OriginalBones[zkAnimationNodeIndices[k]];
 
 				var keyframes = new List<AnimationChannelKeyframe>();
 				var time = TimeSpan.Zero;
 				for (var j = 0; j < zkAnimation.FrameCount; ++j)
 				{
-					var pos = k + j * zkAnimation.NodeIndices.Count;
-					var sample = zkAnimation.Samples[pos];
+					var pos = k + j * zkAnimationNodeIndices.Count;
+					var sample = samples[pos];
 
 					time += timeStep;
 					var keyframe = new AnimationChannelKeyframe(time, new SrtTransform(sample.Position.ToXna(), sample.Rotation.ToXna(), bone.DefaultPose.Scale));
