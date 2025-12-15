@@ -1,0 +1,16 @@
+<Project>
+  <Project.ExportOptions Namespace="OpenGothic.UI" Class="OptionsWindow" OutputPath="D:\Projects\Nursia.OpenGothic\OpenGothic\UI" />
+  <Window Title="Options" Left="464" Top="78" Width="600" Height="500">
+    <TabControl HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+      <TabItem Text="Graphics">
+        <PropertyGrid Id="_propertiesGraphics" />
+      </TabItem>
+      <TabItem Text="Debug">
+        <PropertyGrid Id="_propertiesDebug" />
+      </TabItem>
+      <TabItem Text="Environment">
+        <PropertyGrid Id="_propertiesEnvironment" />
+      </TabItem>
+    </TabControl>
+  </Window>
+</Project>

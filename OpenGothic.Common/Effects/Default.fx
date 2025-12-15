@@ -133,10 +133,8 @@ float4 PS(VSOutput input): OUTCOLOR0
 
 	// Get material diffuse albedo
 	float4 diffInput = Sample2D(DiffMap, input.TexCoord.xy);
-	#ifdef ALPHAMASK
-		if (diffInput.a < 0.5)
-			discard;
-	#endif
+	if (diffInput.a < 0.5)
+		discard;
 	float4 diffColor = cMatDiffColor * diffInput;
 
 	// Get material specular albedo
@@ -177,7 +175,7 @@ float4 PS(VSOutput input): OUTCOLOR0
 
 	finalColor += GetAmbientColor() * diffColor.rgb;
 	finalColor += cMatEmissiveColor;
-	float4 oColor = float4(GetFog(finalColor, fogFactor), 1.0);
+	float4 oColor = float4(GetFog(finalColor, fogFactor), diffColor.a);
 
 /*	#if defined(DIRLIGHT) && defined(SHADOW)
 		int res = GetShadowSplit(input.WorldPos.w);

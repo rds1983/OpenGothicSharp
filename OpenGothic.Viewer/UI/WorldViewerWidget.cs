@@ -58,6 +58,9 @@ public class WorldViewerWidget : Widget, IViewerWidget
 		{
 			SpeedBoost = 500.0f
 		};
+
+		Nrs.GraphicsSettings.MaxShadowDistance = 20000.0f;
+		Nrs.GraphicsSettings.ShadowBias = 0.0001f;
 	}
 
 	public override void InternalRender(RenderContext context)
@@ -78,7 +81,7 @@ public class WorldViewerWidget : Widget, IViewerWidget
 
 		try
 		{
-			var target = _renderer.RenderToTarget(_root, _controller.Camera, RenderEnvironment.Default, bounds.Width, bounds.Height);
+			var target = _renderer.RenderToTarget(_root, _controller.Camera, Configuration.RenderEnvironment, bounds.Width, bounds.Height);
 
 			context.Draw(target, ActualBounds, Color.White);
 		}

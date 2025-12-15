@@ -10,6 +10,9 @@
       <Panel>
         <Panel Id="_panelViewer" />
         <Label Text="FPS:" Left="-4" HorizontalAlignment="Right" Id="_labelFPS" />
+        <Button VerticalAlignment="Bottom" Id="_buttonOptions">
+          <Label Text="/c[red]O/cdptions" />
+        </Button>
       </Panel>
     </HorizontalSplitPane>
     <Grid ColumnSpacing="8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Left="-4" Id="_panelStatistics">

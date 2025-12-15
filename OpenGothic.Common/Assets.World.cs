@@ -34,6 +34,9 @@ namespace OpenGothic
 					if (!string.IsNullOrEmpty(zkMaterial.Texture))
 					{
 						texture = GetTexture(device, zkMaterial.Texture);
+					} else
+					{
+						continue;
 					}
 
 					var mat = new DefaultMaterial

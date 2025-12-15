@@ -1,6 +1,7 @@
 using Myra.Graphics2D;
 using Myra.Graphics2D.UI;
 using Nursia;
+using OpenGothic.UI;
 using System;
 using System.IO;
 
@@ -19,6 +20,12 @@ public partial class MainPanel
 
 		_textBoxFilter.TextChanged += (s, a) => RebuildList();
 		_listItems.SelectedIndexChanged += _listItems_SelectedIndexChanged;
+		_buttonOptions.Click += (s, a) =>
+		{
+			var optionsWindow = new OptionsWindow();
+
+			optionsWindow.Show(Desktop);
+		};
 
 		_assets = new Assets(Configuration.GamePath);
 		RebuildList();
