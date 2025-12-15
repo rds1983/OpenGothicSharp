@@ -57,7 +57,7 @@ namespace OpenGothic
 						case AlphaFunction.None:
 							break;
 						case AlphaFunction.Blend:
-							mat.BlendState = BlendState.AlphaBlend;
+							// mat.AlphaMask = true;
 							break;
 
 						default:
@@ -133,8 +133,7 @@ namespace OpenGothic
 					}
 				}
 
-				var meshPart = meshBuilder.CreateMeshPart(device, false);
-
+				var meshPart = meshBuilder.CreateMeshPart(device, true);
 				var meshNode = new MeshNode
 				{
 					Mesh = meshPart,

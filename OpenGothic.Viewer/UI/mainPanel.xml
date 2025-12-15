@@ -4,6 +4,14 @@
     <HorizontalSplitPane Id="_topSplitPane">
       <VerticalStackPanel>
         <TextBox HintText="Filter" Id="_textBoxFilter" />
+        <HorizontalStackPanel Spacing="8">
+          <CheckButton IsChecked="True" CheckContentSpacing="4" Id="_checkMsbFilter">
+            <Label Text="*.MSB" />
+          </CheckButton>
+          <CheckButton IsChecked="True" CheckContentSpacing="4" Id="_checkZenFilter">
+            <Label Text="*.ZEN" />
+          </CheckButton>
+        </HorizontalStackPanel>
         <HorizontalSeparator IsAnisotropicFiltering="False" />
         <ListView HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Id="_listItems" StackPanel.ProportionType="Fill" />
       </VerticalStackPanel>

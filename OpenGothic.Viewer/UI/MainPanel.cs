@@ -19,6 +19,9 @@ public partial class MainPanel
 		_topSplitPane.SetSplitterPosition(0, 0.3f);
 
 		_textBoxFilter.TextChanged += (s, a) => RebuildList();
+		_checkMsbFilter.IsCheckedChanged += (s, a) => RebuildList();
+		_checkZenFilter.IsCheckedChanged += (s, a) => RebuildList();
+
 		_listItems.SelectedIndexChanged += _listItems_SelectedIndexChanged;
 		_buttonOptions.Click += (s, a) =>
 		{
@@ -75,8 +78,13 @@ public partial class MainPanel
 
 		foreach (var key in _assets.Keys)
 		{
-			var ext = Path.GetExtension(key);
-			if (ext != ".MSB" && ext != ".ZEN")
+			var ext = Path.GetExtension(key).ToUpper();
+
+			if ((ext == ".MSB" && _checkMsbFilter.IsChecked) ||
+				(ext == ".ZEN" && _checkZenFilter.IsChecked))
+			{
+			}
+			else
 			{
 				continue;
 			}

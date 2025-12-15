@@ -91,7 +91,7 @@ public partial class Assets
 		}
 	}
 
-	private T Get<T>(GraphicsDevice device, string name, Func<GraphicsDevice, string, T> loader) where T: class
+	private T Get<T>(GraphicsDevice device, string name, Func<GraphicsDevice, string, T> loader) where T : class
 	{
 		object obj;
 		if (_cache.TryGetValue(name, out obj))
@@ -125,7 +125,7 @@ public partial class Assets
 			var newName = Path.GetFileNameWithoutExtension(name);
 			newName += "-C";
 			newName = Path.ChangeExtension(newName, "TEX");
-			if(!_allRecords.TryGetValue(newName, out records))
+			if (!_allRecords.TryGetValue(newName, out records))
 			{
 				throw new Exception($"Unable to find texture '{name}'");
 			}
@@ -135,11 +135,13 @@ public partial class Assets
 
 		var texture = new ZenKit.Texture(record.Node.Buffer);
 
-		var result = new Texture2D(device, texture.Width, texture.Height, texture.MipmapCount > 1, texture.Format.ToXNA());
+		var mipmapCount = texture.MipmapCount;
+		var result = new Texture2D(device, texture.Width, texture.Height, mipmapCount > 1, texture.Format.ToXNA());
 
-		for(var i = 0; i < texture.MipmapCount; ++i)
+		var allMipmapsRaw = texture.AllMipmapsRaw;
+		for (var i = 0; i < mipmapCount; ++i)
 		{
-			result.SetData(i, null, texture.AllMipmapsRaw[i], 0, texture.AllMipmapsRaw[i].Length);
+			result.SetData(i, null, allMipmapsRaw[i], 0, allMipmapsRaw[i].Length);
 		}
 
 		return result;

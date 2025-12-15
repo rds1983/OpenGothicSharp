@@ -13,7 +13,7 @@ namespace OpenGothic.Materials
 {
 	public class DefaultMaterial : BaseMaterial
 	{
-		private static readonly EffectBinding[] _shadowBindings = new EffectBinding[4];
+		private static readonly EffectBinding[] _shadowBindings = new EffectBinding[2];
 		private static readonly EffectBinding[] _colorBindings = new EffectBinding[64];
 
 		private MaterialFlags _flags = MaterialFlags.AcceptsLight | MaterialFlags.CastsShadows | MaterialFlags.AcceptsShadows;
@@ -72,12 +72,6 @@ namespace OpenGothic.Materials
 		public Color DiffuseColor { get; set; } = Color.White;
 
 		[Category("Appearance")]
-		public Color SpecularColor { get; set; } = Color.Black;
-
-		[Category("Appearance")]
-		public float SpecularPower { get; set; } = 250.0f;
-
-		[Category("Appearance")]
 		public Color EmissiveColor { get; set; } = Color.Black;
 
 		[Category("Appearance")]
@@ -87,35 +81,11 @@ namespace OpenGothic.Materials
 		[Browsable(false)]
 		public string DiffuseTexturePath { get; set; }
 
-		[Category("Appearance")]
-		[JsonIgnore]
-		public Texture2D SpecularTexture { get; set; }
-
-		[Browsable(false)]
-		public string SpecularTexturePath { get; set; }
-
-		[Category("Appearance")]
-		[JsonIgnore]
-		public Texture2D NormalTexture { get; set; }
-
-		[Browsable(false)]
-		public string NormalTexturePath { get; set; }
-
 		public void Load(AssetManager assetManager)
 		{
 			if (!string.IsNullOrEmpty(DiffuseTexturePath))
 			{
 				DiffuseTexture = assetManager.LoadTexture2D(Nrs.GraphicsDevice, DiffuseTexturePath);
-			}
-
-			if (!string.IsNullOrEmpty(SpecularTexturePath))
-			{
-				SpecularTexture = assetManager.LoadTexture2D(Nrs.GraphicsDevice, SpecularTexturePath);
-			}
-
-			if (!string.IsNullOrEmpty(NormalTexturePath))
-			{
-				NormalTexture = assetManager.LoadTexture2D(Nrs.GraphicsDevice, NormalTexturePath);
 			}
 		}
 
@@ -131,14 +101,9 @@ namespace OpenGothic.Materials
 				AcceptsShadows = AcceptsShadows,
 				AmbientColor = AmbientColor,
 				DiffuseColor = DiffuseColor,
-				SpecularColor = SpecularColor,
 				EmissiveColor = EmissiveColor,
 				DiffuseTexture = DiffuseTexture,
-				DiffuseTexturePath = DiffuseTexturePath,
-				SpecularTexture = SpecularTexture,
-				SpecularTexturePath = SpecularTexturePath,
-				NormalTexture = NormalTexture,
-				NormalTexturePath = NormalTexturePath
+				DiffuseTexturePath = DiffuseTexturePath
 			};
 		}
 
@@ -186,7 +151,6 @@ namespace OpenGothic.Materials
 			}
 
 			var defines = new Dictionary<string, string>();
-
 			switch (lightTechnique)
 			{
 				case LightTechnique.Point:
@@ -229,13 +193,9 @@ namespace OpenGothic.Materials
 
 			binding.AddMaterialLevelSetter<DefaultMaterial>("cMatAmbientColor", (m, p) => p.SetValue(m.AmbientColor.ToVector3()));
 			binding.AddMaterialLevelSetter<DefaultMaterial>("cMatDiffColor", (m, p) => p.SetValue(m.DiffuseColor.ToVector4()));
-			binding.AddMaterialLevelSetter<DefaultMaterial>("cMatSpecColor", (m, p) => p.SetValue(m.SpecularColor.ToVector4()));
-			binding.AddMaterialLevelSetter<DefaultMaterial>("cMatSpecularPower", (m, p) => p.SetValue(m.SpecularPower));
 			binding.AddMaterialLevelSetter<DefaultMaterial>("cMatEmissiveColor", (m, p) => p.SetValue(m.EmissiveColor.ToVector3()));
 
 			binding.AddMaterialLevelSetter<DefaultMaterial>("DiffMap", (m, p) => p.SetValue(m.DiffuseTexture ?? Resources.White));
-			binding.AddMaterialLevelSetter<DefaultMaterial>("SpecMap", (m, p) => p.SetValue(m.SpecularTexture ?? Resources.White));
-			binding.AddMaterialLevelSetter<DefaultMaterial>("NormalMap", (m, p) => p.SetValue(m.NormalTexture ?? Resources.White));
 
 			_colorBindings[key] = binding;
 
@@ -248,7 +208,7 @@ namespace OpenGothic.Materials
 
 			if (mesh != null && mesh.Skin != null)
 			{
-				key = 1;
+				key |= 1;
 			}
 
 			if (_shadowBindings[key] != null)
@@ -257,8 +217,6 @@ namespace OpenGothic.Materials
 			}
 
 			var defines = new Dictionary<string, string>();
-			defines["ALPHAMASK"] = "1";
-
 			if (mesh != null && mesh.Skin != null)
 			{
 				defines["SKINNED"] = "1";

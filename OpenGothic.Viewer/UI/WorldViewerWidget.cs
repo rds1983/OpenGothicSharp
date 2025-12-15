@@ -51,7 +51,7 @@ public class WorldViewerWidget : Widget, IViewerWidget
 		var camera = new Camera
 		{
 			NearPlane = 10.0f,
-			FarPlane = 100000.0f
+			FarPlane = 50000.0f
 		};
 
 		_controller = new CameraInputController(camera)

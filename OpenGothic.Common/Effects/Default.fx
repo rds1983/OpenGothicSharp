@@ -10,27 +10,16 @@
 #include "Include/Fog.fxh"
 
 uniform float4x3 cModel;
-uniform float4x4 cView;
 uniform float4x4 cViewProj;
-
-uniform float3 cCameraPos;
 
 #ifdef SKINNED
 	uniform float4x3 cSkinMatrices[MAXBONES];
 #endif
 
-
 uniform float4 cMatDiffColor;
-uniform float4 cMatSpecColor;
 uniform float3 cMatEmissiveColor;
-uniform float cMatSpecularPower;
 
 DECLARE_TEXTURE2D_LINEAR_WRAP(DiffMap);
-DECLARE_TEXTURE2D_LINEAR_WRAP(SpecMap);
-
-#if defined(NORMALMAP)
-	DECLARE_TEXTURE2D_LINEAR_WRAP(NormalMap);
-#endif
 
 #ifdef CLIPPLANE
 
@@ -70,9 +59,6 @@ struct VSOutput
 	#endif
 	#ifdef SPOTLIGHT
 		float4 SpotPos : TEXCOORD4;
-	#endif
-	#if defined(POINTLIGHT) && defined(CUBEMASK)
-		float3 CubeMaskVec : TEXCOORD4;
 	#endif
 	#if defined(CLIPPLANE)
 		float Clip : TEXCOORD7;
@@ -118,10 +104,6 @@ VSOutput VS(VSInput input)
 		output.SpotPos = mul(projWorldPos, cSpotLightMatrix);
 	#endif
 
-	#if defined(POINTLIGHT) && defined(CUBEMASK)
-		output.CubeMaskVec = mul(worldPos - cLightPos.xyz, (float3x3)cLightMatrices[0]);
-	#endif
-
 	return output;
 }
 
@@ -133,22 +115,17 @@ float4 PS(VSOutput input): OUTCOLOR0
 
 	// Get material diffuse albedo
 	float4 diffInput = Sample2D(DiffMap, input.TexCoord.xy);
+
 	if (diffInput.a < 0.5)
 		discard;
-	float4 diffColor = cMatDiffColor * diffInput;
 
-	// Get material specular albedo
-	float3 specColor = cMatSpecColor.rgb * Sample2D(SpecMap, input.TexCoord.xy).rgb;
+	float4 diffColor = cMatDiffColor * diffInput;
 
 	// Get normal
 	float3 normal = normalize(input.Normal);
 
 	// Get fog factor
-	#ifdef HEIGHTFOG
-		float fogFactor = GetHeightFogFactor(input.WorldPos.w, input.WorldPos.y);
-	#else
-		float fogFactor = GetFogFactor(input.WorldPos.w);
-	#endif
+	float fogFactor = GetFogFactor(input.WorldPos.w);
 
 	// Per-pixel forward lighting
 	float3 lightDir;
@@ -164,14 +141,11 @@ float4 PS(VSOutput input): OUTCOLOR0
 
 	#if defined(SPOTLIGHT)
 		lightColor = input.SpotPos.w > 0.0 ? Sample2DProj(LightSpotMap, input.SpotPos).rgb * cLightColor.rgb : 0.0;
-	#elif defined(POINTLIGHT) && defined(CUBEMASK)
-		lightColor = SampleCube(LightCubeMap, input.CubeMaskVec).rgb * cLightColor.rgb;
 	#else
 		lightColor = cLightColor.rgb;
 	#endif
 
-	float spec = GetSpecular(normal, cCameraPos - input.WorldPos.xyz, lightDir, cMatSpecularPower);
-	finalColor = diff * lightColor * (diffColor.rgb + spec * specColor * cLightColor.a);
+	finalColor = diff * lightColor * diffColor.rgb;
 
 	finalColor += GetAmbientColor() * diffColor.rgb;
 	finalColor += cMatEmissiveColor;

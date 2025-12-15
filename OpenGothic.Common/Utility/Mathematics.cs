@@ -79,7 +79,7 @@ internal static class Mathematics
 	/// </summary>
 	/// <param name="v"></param>
 	/// <returns></returns>
-	public static Vector3 ToXna(this System.Numerics.Vector3 v) => new Vector3(v.X, v.Y, v.Z);
+	public static Vector3 ToXna(this System.Numerics.Vector3 v) => new Vector3(v.X, v.Y, -v.Z);
 
 	public static Quaternion ToXna(this System.Numerics.Quaternion v)
 	{
