@@ -1,3 +1,4 @@
+using Myra.Graphics2D;
 using Myra.Graphics2D.UI;
 using Nursia;
 using System;
@@ -8,6 +9,7 @@ namespace OpenGothic.Viewer.UI;
 public partial class MainPanel
 {
 	private readonly Assets _assets;
+	private IViewerWidget _viewerWidget;
 
 	public MainPanel()
 	{
@@ -56,6 +58,8 @@ public partial class MainPanel
 		widget.VerticalAlignment = VerticalAlignment.Stretch;
 		_panelViewer.Widgets.Add(widget);
 
+		_viewerWidget = (IViewerWidget)widget;
+
 	}
 
 	private void RebuildList()
@@ -81,5 +85,20 @@ public partial class MainPanel
 				Text = key
 			});
 		}
+	}
+
+	public override void InternalRender(RenderContext context)
+	{
+		if (_viewerWidget != null)
+		{
+			var stats = _viewerWidget.RenderStatistics;
+			_labelDrawCalls.Text = stats.DrawCalls.ToString();
+			_labelEffectsSwitches.Text = stats.EffectsSwitches.ToString();
+			_labelPrimitivesDrawn.Text = stats.PrimitivesDrawn.ToString();
+			_labelVerticesDrawn.Text = stats.VerticesDrawn.ToString();
+			_labelPasses.Text = stats.Passes.ToString();
+		}
+
+		base.InternalRender(context);
 	}
 }

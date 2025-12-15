@@ -1,24 +1,92 @@
 using DigitalRiseModel;
 using DigitalRiseModel.Animation;
+using Microsoft.Xna.Framework;
 using Myra.Events;
 using Myra.Graphics2D;
 using Myra.Graphics2D.UI;
 using Nursia;
+using Nursia.Env;
+using Nursia.Materials;
+using Nursia.Rendering;
+using Nursia.SceneGraph;
+using Nursia.SceneGraph.Lights;
+using Nursia.Utilities;
+using OpenGothic.Materials;
 using System;
 
 namespace OpenGothic.Viewer.UI;
 
-public partial class ModelViewerPanel
+public partial class ModelViewerPanel : IViewerWidget
 {
-	private readonly ModelViewerWidget _viewerWidget;
+	private readonly CameraInputController _controller;
+	private readonly ForwardRenderer _renderer;
+	private readonly NursiaModelNode _modelNode = new NursiaModelNode();
+	private readonly SceneNode _scene = new SceneNode();
+
+	public AnimationController Player { get; }
+
+	public bool IsAnimating { get; set; }
+
+	public RenderStatistics RenderStatistics => _renderer.Statistics;
 
 	public DrModel Model
 	{
-		get => _viewerWidget.Model;
+		get => _modelNode.Model;
 
 		set
 		{
-			_viewerWidget.Model = value;
+			_modelNode.SetModel(value, false);
+
+			if (value != null)
+			{
+				// Set materials
+				_modelNode.Materials = new IMaterial[Model.Meshes.Length][];
+
+				for (var i = 0; i < Model.Meshes.Length; ++i)
+				{
+					var mesh = Model.Meshes[i];
+
+					_modelNode.Materials[i] = new IMaterial[mesh.MeshParts.Count];
+					for (var j = 0; j < mesh.MeshParts.Count; ++j)
+					{
+						var meshPart = mesh.MeshParts[j];
+						if (meshPart.Material == null)
+						{
+							continue;
+						}
+
+						_modelNode.Materials[i][j] = new DefaultMaterial
+						{
+							DiffuseColor = meshPart.Material.DiffuseColor,
+							DiffuseTexture = meshPart.Material.DiffuseTexture,
+							NormalTexture = meshPart.Material.NormalTexture
+						};
+					}
+				}
+			}
+
+			// Reset camera
+			var camera = _controller.Camera;
+			if (_modelNode.Model != null)
+			{
+				var bb = _modelNode.BoundingBox.Value;
+				var min = bb.Min;
+				var max = bb.Max;
+				var center = (min + max) / 2;
+				var cameraPosition = new Vector3(center.X, center.Y, center.Z + (max.Z - min.Z) * 3);
+
+				camera.View = Matrix.CreateLookAt(cameraPosition, center, Vector3.Up);
+
+				var size = Math.Max(max.X - min.X, max.Y - min.Y);
+				size = Math.Max(size, max.Z - min.Z);
+
+				camera.NearPlane = size / 1000.0f;
+				camera.FarPlane = size * 10.0f;
+			}
+			else
+			{
+				camera.View = Matrix.CreateLookAt(Vector3.One, Vector3.Zero, Vector3.Up);
+			}
 
 			_comboAnimations.Widgets.Clear();
 
@@ -64,13 +132,19 @@ public partial class ModelViewerPanel
 	{
 		BuildUI();
 
-		_viewerWidget = new ModelViewerWidget
-		{
-			HorizontalAlignment = HorizontalAlignment.Stretch,
-			VerticalAlignment = VerticalAlignment.Stretch
-		};
-		
-		_panelModelViewer.Widgets.Add(_viewerWidget);
+		_renderer = new ForwardRenderer();
+
+		// Front light
+		_scene.Children.Add(new DirectLight { Rotation = new Vector3(45, 45, 0), CastsShadow = false });
+
+		// Back light
+		_scene.Children.Add(new DirectLight { Rotation = new Vector3(225, 45, 0), CastsShadow = false });
+
+		_scene.Children.Add(_modelNode);
+
+		_controller = new CameraInputController(new Camera());
+
+		Player = new AnimationController(_modelNode.ModelInstance);
 
 		_comboAnimations.Widgets.Clear();
 		_comboAnimations.SelectedIndexChanged += _comboAnimations_SelectedIndexChanged;
@@ -78,13 +152,13 @@ public partial class ModelViewerPanel
 		_comboPlaybackMode.SelectedIndex = 0;
 		_comboPlaybackMode.SelectedIndexChanged += (s, a) =>
 		{
-			_viewerWidget.Player.PlaybackMode = (PlaybackMode)_comboPlaybackMode.SelectedIndex.Value;
+			Player.PlaybackMode = (PlaybackMode)_comboPlaybackMode.SelectedIndex.Value;
 		};
 
 		_sliderSpeed.ValueChanged += (s, a) =>
 		{
 			_labelSpeed.Text = _sliderSpeed.Value.ToString("0.00");
-			_viewerWidget.Player.Speed = _sliderSpeed.Value;
+			Player.Speed = _sliderSpeed.Value;
 		};
 
 
@@ -96,14 +170,9 @@ public partial class ModelViewerPanel
 
 		_buttonPlayStop.Click += _buttonPlayStop_Click;
 
-		_checkDrawBoundingBoxes.IsCheckedChanged += (s, a) =>
+		Player.TimeChanged += (s, a) =>
 		{
-			Nrs.DebugSettings.DrawBoundingBoxes = _checkDrawBoundingBoxes.IsChecked;
-		};
-
-		_viewerWidget.TimeChanged += (s, a) =>
-		{
-			var player = _viewerWidget.Player;
+			var player = Player;
 			if (player.AnimationClip == null)
 			{
 				return;
@@ -123,40 +192,40 @@ public partial class ModelViewerPanel
 
 	private void _buttonPlayStop_Click(object sender, EventArgs e)
 	{
-		_viewerWidget.IsAnimating = !_viewerWidget.IsAnimating;
+		IsAnimating = !IsAnimating;
 
 		var label = (Label)_buttonPlayStop.Content;
-		label.Text = _viewerWidget.IsAnimating ? "Stop" : "Play";
+		label.Text = IsAnimating ? "Stop" : "Play";
 	}
 
 	private void _sliderTime_ValueChanged(object sender, ValueChangedEventArgs<float> e)
 	{
-		if (!_viewerWidget.Player.IsPlaying)
+		if (!Player.IsPlaying)
 		{
 			return;
 		}
 
 		var k = (e.NewValue - _sliderTime.Minimum) / (_sliderTime.Maximum - _sliderTime.Minimum);
-		var passed = _viewerWidget.Player.AnimationClip.Duration * k;
-		_viewerWidget.Player.Time = passed;
+		var passed = Player.AnimationClip.Duration * k;
+		Player.Time = passed;
 	}
 
 	private void _comboAnimations_SelectedIndexChanged(object sender, EventArgs e)
 	{
 		if (_comboAnimations.SelectedItem == null || string.IsNullOrEmpty(((Label)_comboAnimations.SelectedItem).Text))
 		{
-			_viewerWidget.Player.StopClip();
+			Player.StopClip();
 		}
 		else
 		{
 			var clip = (AnimationClip)((Label)_comboAnimations.SelectedItem).Tag;
 			if (_checkCrossfade.IsChecked)
 			{
-				_viewerWidget.Player.CrossFade(clip.Name, TimeSpan.FromSeconds(0.5f));
+				Player.CrossFade(clip.Name, TimeSpan.FromSeconds(0.5f));
 			}
 			else
 			{
-				_viewerWidget.Player.StartClip(clip.Name);
+				Player.StartClip(clip.Name);
 			}
 		}
 
@@ -165,12 +234,33 @@ public partial class ModelViewerPanel
 
 	public override void InternalRender(RenderContext context)
 	{
-		var stats = _viewerWidget.RenderStatistics;
-		_labelDrawCalls.Text = stats.DrawCalls.ToString();
-		_labelEffectsSwitches.Text = stats.EffectsSwitches.ToString();
-		_labelPrimitivesDrawn.Text = stats.PrimitivesDrawn.ToString();
-		_labelVerticesDrawn.Text = stats.VerticesDrawn.ToString();
-		_labelPasses.Text = stats.Passes.ToString();
+		_controller.Update();
+
+		if (_modelNode.Model != null && IsAnimating)
+		{
+			Player.Update(ViewerGame.LastGameTime.ElapsedGameTime);
+		}
+
+		var bounds = ActualBounds;
+
+		var p = ToGlobal(bounds.Location);
+		bounds.X = p.X;
+		bounds.Y = p.Y;
+
+		// Save scissor as it would be destroyed on exception
+		var device = Nrs.GraphicsDevice;
+		var scissor = device.ScissorRectangle;
+
+		try
+		{
+			var target = _renderer.RenderToTarget(_scene, _controller.Camera, RenderEnvironment.Default, bounds.Width, bounds.Height);
+
+			context.Draw(target, ActualBounds, Color.White);
+		}
+		catch (Exception)
+		{
+			Nrs.GraphicsDevice.ScissorRectangle = scissor;
+		}
 
 		base.InternalRender(context);
 	}

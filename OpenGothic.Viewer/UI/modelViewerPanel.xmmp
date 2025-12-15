@@ -1,7 +1,6 @@
 <Project>
   <Project.ExportOptions Namespace="OpenGothic.Viewer.UI" Class="ModelViewerPanel" OutputPath="D:\Projects\OpenGothicSharp\OpenGothic.Viewer\UI" />
   <Panel>
-    <Panel Id="_panelModelViewer" />
     <VerticalStackPanel Spacing="8">
       <Grid ColumnSpacing="8" RowSpacing="8">
         <Grid.DefaultRowProportion Type="Auto" />
@@ -38,28 +37,6 @@
         <HorizontalSlider Width="300" Id="_sliderTime" />
         <Label Text="0.0" Id="_labelTime" />
       </HorizontalStackPanel>
-      <HorizontalStackPanel Spacing="8">
-        <CheckButton CheckContentSpacing="8" Id="_checkDrawBoundingBoxes">
-          <Label Text="Draw Bounding Boxes" />
-        </CheckButton>
-      </HorizontalStackPanel>
     </VerticalStackPanel>
-    <Grid ColumnSpacing="8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Left="-4" Id="_panelStatistics">
-      <Grid.DefaultRowProportion Type="Auto" />
-      <Grid.ColumnsProportions>
-        <Proportion Type="Auto" />
-        <Proportion Type="Fill" />
-      </Grid.ColumnsProportions>
-      <Label Text="Effects Switches:" />
-      <Label Text="Draw Calls:" Grid.Row="1" />
-      <Label Text="Vertices Drawn:" Grid.Row="2" />
-      <Label Text="Primitives Drawn:" Grid.Row="3" />
-      <Label Text="Passes:" Grid.Row="4" />
-      <Label Text="10" Id="_labelEffectsSwitches" Grid.Column="1" />
-      <Label Text="10" Id="_labelDrawCalls" Grid.Column="1" Grid.Row="1" />
-      <Label Text="10" Id="_labelVerticesDrawn" Grid.Column="1" Grid.Row="2" />
-      <Label Text="10" Id="_labelPrimitivesDrawn" Grid.Column="1" Grid.Row="3" />
-      <Label Text="10" Id="_labelPasses" Grid.Column="1" Grid.Row="4" />
-    </Grid>
   </Panel>
 </Project>

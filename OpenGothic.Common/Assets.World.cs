@@ -41,7 +41,7 @@ namespace OpenGothic
 						DiffuseTexture = texture
 					};
 
-					switch(zkMaterial.AlphaFunction)
+					switch (zkMaterial.AlphaFunction)
 					{
 						case AlphaFunction.None:
 							break;
@@ -70,32 +70,55 @@ namespace OpenGothic
 				var vertexIndexMap = new Dictionary<int, Dictionary<int, int>>();
 				foreach (var polygon in pair.Value.Item2)
 				{
-					for (var i = 0; i < 3; ++i)
+					var featureIndices = polygon.FeatureIndices;
+					var positionIndices = polygon.PositionIndices;
+
+					if (featureIndices.Count != positionIndices.Count)
 					{
-						var fidx = polygon.FeatureIndices[i];
+						throw new Exception($"featureIndices.Count != positionIndices.Count");
+					}
 
-						Dictionary<int, int> posMap;
-						if (!vertexIndexMap.TryGetValue(fidx, out posMap))
+					// Convert polygon to triangles
+					for (var t = 2; t < featureIndices.Count; ++t)
+					{
+						for (var i = 0; i < 3; ++i)
 						{
-							posMap = new Dictionary<int, int>();
-							vertexIndexMap[fidx] = posMap;
+							int idx = 0;
+							
+							if (i == 1)
+							{
+								idx = t - 1;
+							}
+							else if (i == 2)
+							{
+								idx = t;
+							}
+
+							var fidx = featureIndices[idx];
+
+							Dictionary<int, int> posMap;
+							if (!vertexIndexMap.TryGetValue(fidx, out posMap))
+							{
+								posMap = new Dictionary<int, int>();
+								vertexIndexMap[fidx] = posMap;
+							}
+
+							var pidx = positionIndices[idx];
+							int index;
+							if (!posMap.TryGetValue(pidx, out index))
+							{
+								var feature = features[fidx];
+								var position = positions[pidx];
+
+								var vertex = new VertexPositionNormalTexture(position.ToXna(), feature.Normal.ToXna(), feature.Texture.ToXna());
+								meshBuilder.AddVertex(vertex);
+
+								index = meshBuilder.Vertices.Count - 1;
+								posMap[pidx] = index;
+							}
+
+							meshBuilder.AddIndex(index);
 						}
-
-						var pidx = polygon.PositionIndices[i];
-						int index;
-						if (!posMap.TryGetValue(pidx, out index))
-						{
-							var feature = features[fidx];
-							var position = positions[pidx];
-
-							var vertex = new VertexPositionNormalTexture(position.ToXna(), feature.Normal.ToXna(), feature.Texture.ToXna());
-							meshBuilder.AddVertex(vertex);
-
-							index = meshBuilder.Vertices.Count - 1;
-							posMap[pidx] = index;
-						}
-
-						meshBuilder.AddIndex(index);
 					}
 				}
 
