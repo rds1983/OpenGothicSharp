@@ -60,7 +60,6 @@ public class WorldViewerWidget : Widget, IViewerWidget
 		};
 
 		Nrs.GraphicsSettings.MaxShadowDistance = 20000.0f;
-		Nrs.GraphicsSettings.ShadowBias = 0.0001f;
 	}
 
 	public override void InternalRender(RenderContext context)

@@ -6,6 +6,7 @@ using OpenGothic.Utility;
 using System;
 using System.Collections.Generic;
 using ZenKit;
+using IMaterial = Nursia.Materials.IMaterial;
 
 namespace OpenGothic
 {
@@ -16,18 +17,19 @@ namespace OpenGothic
 			var record = GetLastRecord(name);
 
 			// Group polygons by materials
-			var groupedPolygons = new Dictionary<int, Tuple<DefaultMaterial, List<IPolygon>>>();
+			var groupedPolygons = new Dictionary<int, Tuple<IMaterial, List<IPolygon>>>();
 			var zkWorld = new World(record.Node.Buffer);
 
 			var polygons = zkWorld.Mesh.Polygons;
+			var materials = zkWorld.Mesh.Materials;
 			for (var i = 0; i < polygons.Count; ++i)
 			{
 				var polygon = polygons[i];
 
-				Tuple<DefaultMaterial, List<IPolygon>> p;
+				Tuple<IMaterial, List<IPolygon>> p;
 				if (!groupedPolygons.TryGetValue(polygon.MaterialIndex, out p))
 				{
-					var zkMaterial = zkWorld.Mesh.Materials[polygon.MaterialIndex];
+					var zkMaterial = materials[polygon.MaterialIndex];
 
 					Texture2D texture = null;
 
@@ -41,8 +43,14 @@ namespace OpenGothic
 
 					var mat = new DefaultMaterial
 					{
+//						DiffuseColor = zkMaterial.Color.ToXna(),
 						DiffuseTexture = texture
 					};
+
+					if (zkMaterial.Group == MaterialGroup.Water/* || zkMaterial.Group == MaterialGroup.Earth || zkMaterial.Group == MaterialGroup.Snow*/)
+					{
+						mat.CastsShadows = false;
+					}
 
 					switch (zkMaterial.AlphaFunction)
 					{
@@ -56,7 +64,7 @@ namespace OpenGothic
 							break;
 					}
 
-					p = new Tuple<DefaultMaterial, List<IPolygon>>(mat, new List<IPolygon>());
+					p = new Tuple<IMaterial, List<IPolygon>>(mat, new List<IPolygon>());
 					groupedPolygons[polygon.MaterialIndex] = p;
 				}
 

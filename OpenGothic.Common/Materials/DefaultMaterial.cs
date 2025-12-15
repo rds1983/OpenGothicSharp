@@ -6,36 +6,25 @@ using Newtonsoft.Json;
 using Nursia;
 using Nursia.Materials;
 using Nursia.Rendering;
-using Nursia.SceneGraph.Lights;
 using System.Collections.Generic;
 using System.ComponentModel;
 
 namespace OpenGothic.Materials
 {
-	public class DefaultMaterial : IMaterial
+	public class DefaultMaterial : BaseMaterial
 	{
-		private static readonly EffectBinding[] _allBindings = new EffectBinding[64];
+		private static readonly EffectBinding[] _shadowBindings = new EffectBinding[4];
+		private static readonly EffectBinding[] _colorBindings = new EffectBinding[64];
 
 		private MaterialFlags _flags = MaterialFlags.AcceptsLight | MaterialFlags.CastsShadows | MaterialFlags.AcceptsShadows;
 
 		public string Id { get; set; }
 
-		[Category("States")]
-		public BlendState BlendState { get; set; }
-
-		[Category("States")]
-		public DepthStencilState DepthStencilState { get; set; }
-
-		[Category("States")]
-		public RasterizerState RasterizerState { get; set; }
-
 		[Browsable(false)]
 		[JsonIgnore]
-		public MaterialFlags Flags
+		public override MaterialFlags Flags
 		{
 			get => _flags;
-
-			set => _flags = value;
 		}
 
 		[Category("Behavior")]
@@ -130,7 +119,7 @@ namespace OpenGothic.Materials
 			}
 		}
 
-		public IMaterial Clone()
+		public override IMaterial Clone()
 		{
 			return new DefaultMaterial
 			{
@@ -153,7 +142,7 @@ namespace OpenGothic.Materials
 			};
 		}
 
-		private static EffectBinding InternalGetBinding(LightTechnique lightTechnique, ShadowType shadow, bool skinning, bool clipPlane)
+		private static EffectBinding InternalGetBinding(LightTechnique lightTechnique, bool shadow, bool skinning, bool clipPlane)
 		{
 			var key = 0;
 
@@ -167,14 +156,17 @@ namespace OpenGothic.Materials
 				key |= 2;
 			}
 
-			if (shadow == ShadowType.Simple)
+			if (shadow)
 			{
-				key |= 4;
-			}
+				if (Nrs.GraphicsSettings.ShadowType == ShadowType.Simple)
+				{
+					key |= 4;
+				}
 
-			if (shadow == ShadowType.PCF)
-			{
-				key |= 8;
+				if (Nrs.GraphicsSettings.ShadowType == ShadowType.PCF)
+				{
+					key |= 8;
+				}
 			}
 
 			if (skinning)
@@ -187,7 +179,7 @@ namespace OpenGothic.Materials
 				key |= 32;
 			}
 
-			var binding = _allBindings[key];
+			var binding = _colorBindings[key];
 			if (binding != null)
 			{
 				return binding;
@@ -208,15 +200,15 @@ namespace OpenGothic.Materials
 					break;
 			}
 
-			if (shadow != ShadowType.None)
+			if (shadow)
 			{
 				defines["SHADOW"] = "1";
 
-				if (shadow == ShadowType.PCF)
+				if (Nrs.GraphicsSettings.ShadowType == ShadowType.PCF)
 				{
 					defines["PCFSHADOW"] = "1";
 				}
-				else if (shadow == ShadowType.Simple)
+				else if (Nrs.GraphicsSettings.ShadowType == ShadowType.Simple)
 				{
 					defines["SIMPLESHADOW"] = "1";
 				}
@@ -245,12 +237,44 @@ namespace OpenGothic.Materials
 			binding.AddMaterialLevelSetter<DefaultMaterial>("SpecMap", (m, p) => p.SetValue(m.SpecularTexture ?? Resources.White));
 			binding.AddMaterialLevelSetter<DefaultMaterial>("NormalMap", (m, p) => p.SetValue(m.NormalTexture ?? Resources.White));
 
-			_allBindings[key] = binding;
+			_colorBindings[key] = binding;
 
 			return binding;
 		}
 
-		public EffectBinding GetEffectBinding(LightTechnique technique, ShadowType shadow, bool translucent, DrMeshPart mesh, bool clipPlane)
+		public override EffectBinding GetShadowTechnique(DrMeshPart mesh)
+		{
+			var key = 0;
+
+			if (mesh != null && mesh.Skin != null)
+			{
+				key = 1;
+			}
+
+			if (_shadowBindings[key] != null)
+			{
+				return _shadowBindings[key];
+			}
+
+			var defines = new Dictionary<string, string>();
+			defines["ALPHAMASK"] = "1";
+
+			if (mesh != null && mesh.Skin != null)
+			{
+				defines["SKINNED"] = "1";
+			}
+
+			var effect = Resources.GetEffect("Shadow", defines);
+			var binding = new EffectBinding(effect);
+
+			binding.AddMaterialLevelSetter<DefaultMaterial>("DiffMap", (m, p) => p.SetValue(m.DiffuseTexture ?? Resources.White));
+
+			_shadowBindings[key] = binding;
+
+			return binding;
+		}
+
+		public override EffectBinding GetColorTechnique(LightTechnique technique, bool shadow, bool translucent, DrMeshPart mesh, bool clipPlane)
 		{
 			return InternalGetBinding(technique, shadow, mesh != null && mesh.Skin != null, clipPlane);
 		}
