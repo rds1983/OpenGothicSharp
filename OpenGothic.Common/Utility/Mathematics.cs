@@ -10,6 +10,12 @@ internal static class Mathematics
 	/// </summary>
 	public const float ZeroTolerance = 1e-6f;
 
+	private static readonly Matrix LTR = new Matrix(
+			1, 0, 0, 0,
+			0, 1, 0, 0,
+			0, 0, -1, 0,
+			0, 0, 0, 1);
+
 	/// <summary>
 	/// Compares two floating point numbers based on an epsilon zero tolerance.
 	/// </summary>
@@ -74,8 +80,7 @@ internal static class Mathematics
 	public static Vector2 ToXna(this System.Numerics.Vector2 v) => new Vector2(v.X, v.Y);
 
 	/// <summary>
-	/// Gothic uses left-handed coordinate system, all below transforms transforms it to right-handed
-	/// That's why Z coordinate is negated, matrix is transposed and quaternion is conjugated
+	/// Gothic uses left-handed coordinate system, all below transforms change it to right-handed
 	/// </summary>
 	/// <param name="v"></param>
 	/// <returns></returns>
@@ -83,8 +88,7 @@ internal static class Mathematics
 
 	public static Quaternion ToXna(this System.Numerics.Quaternion v)
 	{
-		var result = new Quaternion(v.X, v.Y, v.Z, v.W);
-		result.Conjugate();
+		var result = new Quaternion(v.X, v.Y, -v.Z, v.W);
 
 		return result;
 	}
@@ -96,6 +100,8 @@ internal static class Mathematics
 			m.M31, m.M32, m.M33, m.M34,
 			m.M41, m.M42, m.M43, m.M44);
 
-		return Matrix.Transpose(result);
+		result = Matrix.Transpose(result);
+
+		return LTR * result * LTR;
 	}
 }

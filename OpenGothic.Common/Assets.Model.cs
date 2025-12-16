@@ -29,12 +29,10 @@ partial class Assets
 
 	private DrMeshPart CreatePart(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, IMultiResolutionSubMesh zkSubMesh)
 	{
-		VertexBuffer vertexBuffer;
-		BoundingBox boundingBox;
-
+		IMeshBuilder meshBuilder;
 		if (zkSkinnedMesh == null)
 		{
-			var vertices = new List<VertexPositionNormalTexture>();
+			var mb = new MeshBuilderPNT();
 			var wedges = zkSubMesh.Wedges;
 			var positions = zkMesh.Positions;
 			for (var i = 0; i < wedges.Count; ++i)
@@ -44,11 +42,10 @@ partial class Assets
 
 				var vertex = new VertexPositionNormalTexture(pos.ToXna(), wedge.Normal.ToXna(), wedge.Texture.ToXna());
 
-				vertices.Add(vertex);
+				mb.AddVertex(vertex);
 			}
 
-			vertexBuffer = vertices.CreateVertexBuffer(device);
-			boundingBox = vertices.BuildBoundingBox();
+			meshBuilder = mb;
 		}
 		else
 		{
@@ -60,7 +57,7 @@ partial class Assets
 				skinMap[nodes[i]] = i;
 			}
 
-			var vertices = new List<VertexSkinned>();
+			var mb = new MeshBuilderS();
 
 			var wedges = zkSubMesh.Wedges;
 			var zkWeights = zkSkinnedMesh.Weights;
@@ -76,7 +73,7 @@ partial class Assets
 				var pos3 = Vector3.Zero;
 
 				var weight = zkWeights[wedge.Index];
-				
+
 				pos0 = weight[0].Position.ToXna();
 				blendIndices.X = skinMap[weight[0].NodeIndex];
 				blendWeights.X = weight[0].Weight;
@@ -110,7 +107,7 @@ partial class Assets
 
 				var vertex = new VertexSkinned(pos0, pos1, pos2, pos3, wedge.Normal.ToXna(), wedge.Texture.ToXna(), new Byte4(blendIndices), blendWeights);
 
-				vertices.Add(vertex);
+				mb.AddVertex(vertex);
 			}
 
 			// Set indices/weights
@@ -123,31 +120,18 @@ partial class Assets
 				}
 			}
 
-			vertexBuffer = vertices.CreateVertexBuffer(device);
-			boundingBox = vertices.BuildBoundingBox();
+			meshBuilder = mb;
 		}
-
-		var indices = new List<ushort>();
 
 		var triangles = zkSubMesh.Triangles;
 		for (var i = 0; i < triangles.Count; ++i)
 		{
 			var triangle = triangles[i];
 
-			indices.Add(triangle.Wedge0);
-			indices.Add(triangle.Wedge1);
-			indices.Add(triangle.Wedge2);
+			meshBuilder.AddIndex(triangle.Wedge0);
+			meshBuilder.AddIndex(triangle.Wedge1);
+			meshBuilder.AddIndex(triangle.Wedge2);
 		}
-
-		// Unwind indices, since we need to convert left-handed to right-handed
-/*		for (var i = 0; i < indices.Count; i += 3)
-		{
-			var temp = indices[i];
-			indices[i] = indices[i + 2];
-			indices[i + 2] = temp;
-		}*/
-
-		var indexBuffer = indices.CreateIndexBuffer(device);
 
 		DrMaterial material = null;
 		if (zkSubMesh.Material != null)
@@ -163,10 +147,10 @@ partial class Assets
 			}
 		}
 
-		return new DrMeshPart(vertexBuffer, indexBuffer, boundingBox)
-		{
-			Material = material
-		};
+		var result = meshBuilder.CreateMeshPart(device, true);
+		result.Material = material;
+
+		return result;
 	}
 
 	private DrMesh CreateMesh(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh)

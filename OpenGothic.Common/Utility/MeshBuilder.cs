@@ -1,21 +1,33 @@
 ﻿using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using OpenGothic.Vertices;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace OpenGothic.Utility;
 
-internal class MeshBuilder
+internal interface IMeshBuilder
+{
+	int IndicesCount { get; }
+
+	void AddIndex(int index);
+	void AddIndicesRange(IEnumerable<int> indices);
+	int GetIndex(int index);
+	int[] CreateIndicesArray();
+	void ClearIndices();
+	DrMeshPart CreateMeshPart(GraphicsDevice graphicsDevice, bool toLeftHanded);
+}
+
+internal abstract class MeshBuilder<T> : IMeshBuilder where T : IVertexType
 {
 	private bool _uses32BitIndices = false;
 
-	public List<VertexPositionNormalTexture> Vertices = new List<VertexPositionNormalTexture>();
+	public List<T> Vertices = new List<T>();
 	private List<int> _indices { get; } = new List<int>();
 
 	public int IndicesCount => _indices.Count;
 
-	public void AddVertex(VertexPositionNormalTexture v) => Vertices.Add(v);
+	public void AddVertex(T v) => Vertices.Add(v);
 
 	public void AddIndex(int index)
 	{
@@ -58,8 +70,7 @@ internal class MeshBuilder
 			for (var i = 0; i < Vertices.Count; ++i)
 			{
 				var v = Vertices[i];
-				v.TextureCoordinate.X = 1.0f - v.TextureCoordinate.X;
-
+				InvertTextureX(ref v);
 				Vertices[i] = v;
 			}
 		}
@@ -80,8 +91,36 @@ internal class MeshBuilder
 			indexBuffer = _indices.ToArray().CreateIndexBuffer(graphicsDevice);
 		}
 
-		var vertexBuffer = Vertices.ToArray().CreateVertexBuffer(graphicsDevice);
+		var vertexBuffer = CreateVertexBuffer(graphicsDevice, Vertices.ToArray());
 
-		return new DrMeshPart(vertexBuffer, indexBuffer, BoundingBox.CreateFromPoints(from v in Vertices select v.Position));
+		return new DrMeshPart(vertexBuffer, indexBuffer, CreateBoundingBox(Vertices));
 	}
+
+	protected abstract void InvertTextureX(ref T v);
+	protected abstract VertexBuffer CreateVertexBuffer(GraphicsDevice device, T[] vertices);
+	protected abstract BoundingBox CreateBoundingBox(IEnumerable<T> vertices);
+}
+
+internal class MeshBuilderPNT : MeshBuilder<VertexPositionNormalTexture>
+{
+	protected override void InvertTextureX(ref VertexPositionNormalTexture v)
+	{
+		v.TextureCoordinate.X = 1.0f - v.TextureCoordinate.X;
+	}
+
+	protected override VertexBuffer CreateVertexBuffer(GraphicsDevice device, VertexPositionNormalTexture[] vertices) => vertices.CreateVertexBuffer(device);
+
+	protected override BoundingBox CreateBoundingBox(IEnumerable<VertexPositionNormalTexture> vertices) => BoundingBox.CreateFromPoints(vertices.GetPositions());
+}
+
+internal class MeshBuilderS : MeshBuilder<VertexSkinned>
+{
+	protected override void InvertTextureX(ref VertexSkinned v)
+	{
+		v.TextureCoordinate.X = 1.0f - v.TextureCoordinate.X;
+	}
+
+	protected override VertexBuffer CreateVertexBuffer(GraphicsDevice device, VertexSkinned[] vertices) => vertices.CreateVertexBuffer(device);
+
+	protected override BoundingBox CreateBoundingBox(IEnumerable<VertexSkinned> vertices) => BoundingBox.CreateFromPoints(vertices.GetPositions());
 }

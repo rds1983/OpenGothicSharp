@@ -36,14 +36,15 @@ namespace OpenGothic
 					if (!string.IsNullOrEmpty(zkMaterial.Texture))
 					{
 						texture = GetTexture(device, zkMaterial.Texture);
-					} else
+					}
+					else
 					{
 						continue;
 					}
 
 					var mat = new DefaultMaterial
 					{
-//						DiffuseColor = zkMaterial.Color.ToXna(),
+						//						DiffuseColor = zkMaterial.Color.ToXna(),
 						DiffuseTexture = texture
 					};
 
@@ -77,7 +78,7 @@ namespace OpenGothic
 			var result = new List<MeshNode>();
 			foreach (var pair in groupedPolygons)
 			{
-				var meshBuilder = new MeshBuilder();
+				var meshBuilder = new MeshBuilderPNT();
 				var vertexIndexMap = new Dictionary<int, Dictionary<int, int>>();
 				foreach (var polygon in pair.Value.Item2)
 				{
@@ -95,7 +96,7 @@ namespace OpenGothic
 						for (var i = 0; i < 3; ++i)
 						{
 							int idx = 0;
-							
+
 							if (i == 1)
 							{
 								idx = t - 1;
