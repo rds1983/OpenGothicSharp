@@ -12,7 +12,7 @@ internal static class Configuration
 	{
 		RenderEnvironment = RenderEnvironment.Default.Clone();
 		RenderEnvironment.FogEnabled = true;
-		RenderEnvironment.FogStart = 20000.0f;
-		RenderEnvironment.FogEnd = 50000.0f;
+		RenderEnvironment.FogStart = Constants.FogStart;
+		RenderEnvironment.FogEnd = Constants.FogEnd;
 	}
 }
