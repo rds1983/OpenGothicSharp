@@ -15,7 +15,7 @@ public class ViewerGame : Game
 	private readonly FramesPerSecondCounter _fpsCounter = new FramesPerSecondCounter();
 	private string _path;
 
-	public static GameTime LastGameTime { get; private set;  }
+	public static GameTime LastGameTime { get; private set; }
 
 	public ViewerGame(string path)
 	{
@@ -67,7 +67,7 @@ public class ViewerGame : Game
 
 		GraphicsDevice.Clear(Color.Black);
 
-		_mainPanel._labelFPS.Text = $"FPS: {_fpsCounter.FramesPerSecond}";
+		_mainPanel._labelFPS.Text = _fpsCounter.FramesPerSecond.ToString();
 
 		_desktop.Render();
 

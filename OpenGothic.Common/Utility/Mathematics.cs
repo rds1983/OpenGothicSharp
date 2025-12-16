@@ -104,4 +104,27 @@ internal static class Mathematics
 
 		return LTR * result * LTR;
 	}
+
+	public static int Clamp(this int value, int min, int max)
+	{
+		if (value < min)
+		{
+			value = min;
+		}
+
+		if (value > max)
+		{
+			value = max;
+		}
+
+		return value;
+	}
+
+	public static Vector3 CalculateCenter(this BoundingBox source)
+	{
+		return new Vector3(
+			source.Min.X + (source.Max.X - source.Min.X) / 2,
+			source.Min.Y + (source.Max.Y - source.Min.Y) / 2,
+			source.Min.Z + (source.Max.Z - source.Min.Z) / 2);
+	}
 }

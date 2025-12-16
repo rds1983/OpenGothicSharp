@@ -27,6 +27,8 @@ public partial class ModelViewerPanel : IViewerWidget
 
 	public bool IsAnimating { get; set; }
 
+	public Camera Camera => _controller.Camera;
+
 	public RenderStatistics RenderStatistics => _renderer.Statistics;
 
 	public DrModel Model

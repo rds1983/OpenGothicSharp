@@ -2,7 +2,6 @@
 using Myra.Graphics2D;
 using Myra.Graphics2D.UI;
 using Nursia;
-using Nursia.Env;
 using Nursia.Rendering;
 using Nursia.SceneGraph;
 using Nursia.SceneGraph.Lights;
@@ -16,28 +15,12 @@ public class WorldViewerWidget : Widget, IViewerWidget
 	private readonly CameraInputController _controller;
 	private readonly ForwardRenderer _renderer;
 	private readonly SceneNode _root = new SceneNode(), _worldRoot = new SceneNode();
-	private MeshNode[] _world;
+
+	public Camera Camera => _controller.Camera;
 
 	public RenderStatistics RenderStatistics => _renderer.Statistics;
 
-	public MeshNode[] World
-	{
-		get => _world;
-
-		set
-		{
-			_worldRoot.Children.Clear();
-
-			_world = value;
-			if (_world != null)
-			{
-				foreach (var node in _world)
-				{
-					_worldRoot.Children.Add(node);
-				}
-			}
-		}
-	}
+	public WorldGrid World { get; set; }
 
 	public WorldViewerWidget()
 	{
@@ -51,7 +34,7 @@ public class WorldViewerWidget : Widget, IViewerWidget
 		var camera = new Camera
 		{
 			NearPlane = 10.0f,
-			FarPlane = 50000.0f
+			FarPlane = Constants.MaxDistance
 		};
 
 		_controller = new CameraInputController(camera)
@@ -59,7 +42,8 @@ public class WorldViewerWidget : Widget, IViewerWidget
 			SpeedBoost = 500.0f
 		};
 
-		Nrs.GraphicsSettings.MaxShadowDistance = 20000.0f;
+		Nrs.GraphicsSettings.MaxShadowDistance = Constants.MaxShadowDistance;
+		Nrs.GraphicsSettings.Cascades = 2;
 	}
 
 	public override void InternalRender(RenderContext context)
@@ -80,6 +64,24 @@ public class WorldViewerWidget : Widget, IViewerWidget
 
 		try
 		{
+			_root.CustomBoxes.Clear();
+			_worldRoot.Children.Clear();
+			for(var i = 0; i < Constants.GridSize; ++i)
+			{
+				for(var j = 0;  j < Constants.GridSize; ++j)
+				{
+					var cell = World.Cells[i, j];
+
+
+					_root.CustomBoxes.Add(cell.BoundingBox);
+
+					if (_controller.Camera.Frustum.Intersects(cell.BoundingBox) && cell.Root.Children.Count > 0)
+					{
+						_worldRoot.Children.Add(cell.Root);
+					}
+				}
+			}
+
 			var target = _renderer.RenderToTarget(_root, _controller.Camera, Configuration.RenderEnvironment, bounds.Width, bounds.Height);
 
 			context.Draw(target, ActualBounds, Color.White);

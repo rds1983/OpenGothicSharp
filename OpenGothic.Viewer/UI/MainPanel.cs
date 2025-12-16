@@ -106,6 +106,8 @@ public partial class MainPanel
 	{
 		if (_viewerWidget != null)
 		{
+			_labelCameraPosition.Text = _viewerWidget.Camera.Translation.ToString();
+
 			var stats = _viewerWidget.RenderStatistics;
 			_labelDrawCalls.Text = stats.DrawCalls.ToString();
 			_labelEffectsSwitches.Text = stats.EffectsSwitches.ToString();
