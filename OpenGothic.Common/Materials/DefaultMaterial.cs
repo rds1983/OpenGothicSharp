@@ -13,8 +13,8 @@ namespace OpenGothic.Materials
 {
 	public class DefaultMaterial : BaseMaterial
 	{
-		private static readonly EffectBinding[] _shadowBindings = new EffectBinding[2];
-		private static readonly EffectBinding[] _colorBindings = new EffectBinding[64];
+		private static readonly EffectBinding[] _shadowBindings = new EffectBinding[4];
+		private static readonly EffectBinding[] _colorBindings = new EffectBinding[128];
 
 		private MaterialFlags _flags = MaterialFlags.AcceptsLight | MaterialFlags.CastsShadows | MaterialFlags.AcceptsShadows;
 
@@ -107,7 +107,7 @@ namespace OpenGothic.Materials
 			};
 		}
 
-		private static EffectBinding InternalGetBinding(LightTechnique lightTechnique, bool shadow, bool skinning, bool clipPlane)
+		private static EffectBinding InternalGetBinding(LightTechnique lightTechnique, bool shadow, bool skinning, bool clipPlane, bool instanced)
 		{
 			var key = 0;
 
@@ -142,6 +142,11 @@ namespace OpenGothic.Materials
 			if (clipPlane)
 			{
 				key |= 32;
+			}
+
+			if (instanced)
+			{
+				key |= 64;
 			}
 
 			var binding = _colorBindings[key];
@@ -188,6 +193,11 @@ namespace OpenGothic.Materials
 				defines["CLIPPLANE"] = "1";
 			}
 
+			if (instanced)
+			{
+				defines["INSTANCED"] = "1";
+			}
+
 			var effect = Resources.GetEffect("Default", defines);
 			binding = new EffectBinding(effect);
 
@@ -202,13 +212,18 @@ namespace OpenGothic.Materials
 			return binding;
 		}
 
-		public override EffectBinding GetShadowTechnique(DrMeshPart mesh)
+		public override EffectBinding GetShadowTechnique(DrMeshPart mesh, bool instancing)
 		{
 			var key = 0;
 
 			if (mesh != null && mesh.Skin != null)
 			{
 				key |= 1;
+			}
+
+			if (instancing)
+			{
+				key |= 2;
 			}
 
 			if (_shadowBindings[key] != null)
@@ -222,6 +237,11 @@ namespace OpenGothic.Materials
 				defines["SKINNED"] = "1";
 			}
 
+			if (instancing)
+			{
+				defines["INSTANCED"] = "1";
+			}
+
 			var effect = Resources.GetEffect("Shadow", defines);
 			var binding = new EffectBinding(effect);
 
@@ -232,9 +252,9 @@ namespace OpenGothic.Materials
 			return binding;
 		}
 
-		public override EffectBinding GetColorTechnique(LightTechnique technique, bool shadow, bool translucent, DrMeshPart mesh, bool clipPlane)
+		public override EffectBinding GetColorTechnique(DrMeshPart mesh, LightTechnique technique, bool shadow, bool translucent, bool clipPlane, bool instancing)
 		{
-			return InternalGetBinding(technique, shadow, mesh != null && mesh.Skin != null, clipPlane);
+			return InternalGetBinding(technique, shadow, mesh != null && mesh.Skin != null, clipPlane, instancing);
 		}
 	}
 }

@@ -44,7 +44,7 @@ struct VSInput
 		float4 BlendWeights : BLENDWEIGHT;
 	#endif
 	#ifdef INSTANCED
-		float4x3 ModelInstance : TEXCOORD1;
+		float4x4 ModelInstance : BLENDWEIGHT;
 	#endif
 };
 
@@ -69,7 +69,11 @@ VSOutput VS(VSInput input)
 {
 	VSOutput output = (VSOutput)0;
 
-	output.Normal = normalize(mul(input.Normal, (float3x3)cModel));
+	#if !defined(INSTANCED)
+		output.Normal = normalize(mul(input.Normal, (float3x3)cModel));
+	#else
+		output.Normal = normalize(mul(input.Normal, (float3x3)input.ModelInstance));
+	#endif
 
 	#if !defined(SKINNED)
 		float3 inputPos = input.Pos;
@@ -80,7 +84,13 @@ VSOutput VS(VSInput input)
 			(mul(float4(input.Pos3, 1.0), cSkinMatrices[input.BlendIndices.w]) * input.BlendWeights.w);
 	#endif
 
-	float3 worldPos = mul(float4(inputPos, 1.0), cModel);
+	#if !defined(INSTANCED)
+		float3 worldPos = mul(float4(inputPos, 1.0), cModel);
+	#else
+		float4 worldPos2 = mul(float4(inputPos, 1.0), transpose(input.ModelInstance));
+		float3 worldPos = mul(worldPos2, cModel);
+	#endif
+
 	output.Pos = mul(float4(worldPos, 1.0), cViewProj);
 
 	output.WorldPos = float4(worldPos, GetDepth(output.Pos));
