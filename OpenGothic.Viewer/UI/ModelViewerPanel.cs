@@ -57,11 +57,7 @@ public partial class ModelViewerPanel : IViewerWidget
 							continue;
 						}
 
-						_modelNode.Materials[i][j] = new DefaultMaterial
-						{
-							DiffuseColor = meshPart.Material.DiffuseColor,
-							DiffuseTexture = meshPart.Material.DiffuseTexture
-						};
+						_modelNode.Materials[i][j] = MaterialFactory.Create(meshPart.Material);
 					}
 				}
 			}

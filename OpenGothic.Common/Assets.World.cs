@@ -312,36 +312,42 @@ namespace OpenGothic
 					var cell = result.FindCellByBox(bb);
 					if (cell != null)
 					{
-						Dictionary<string, MultiMeshNode> groupedMultiMeshes;
+						Dictionary<string, List<MultiMeshNode>> groupedMultiMeshes;
 						if (cell.Root.Tag == null)
 						{
-							groupedMultiMeshes = new Dictionary<string, MultiMeshNode>();
+							groupedMultiMeshes = new Dictionary<string, List<MultiMeshNode>>();
 							cell.Root.Tag = groupedMultiMeshes;
-						} else
+						}
+						else
 						{
-							groupedMultiMeshes = (Dictionary<string, MultiMeshNode>)cell.Root.Tag;
+							groupedMultiMeshes = (Dictionary<string, List<MultiMeshNode>>)cell.Root.Tag;
 						}
 
-						MultiMeshNode multiMeshNode;
-						if (groupedMultiMeshes.TryGetValue(n, out multiMeshNode))
+						List<MultiMeshNode> multiMeshes;
+						if (groupedMultiMeshes.TryGetValue(n, out multiMeshes))
 						{
 							// Add instance
-							multiMeshNode.InstancesTransforms.Add(transform);
-						} else
-						{
-							multiMeshNode = new MultiMeshNode();
-
-							foreach(var part in mesh.MeshParts)
+							foreach (var mm in multiMeshes)
 							{
-								var meshMaterial = new MaterialMesh
+								mm.InstancesTransforms.Add(transform);
+							}
+						}
+						else
+						{
+							multiMeshes = new List<MultiMeshNode>();
+
+							foreach (var part in mesh.MeshParts)
+							{
+								var mm = new MultiMeshNode
 								{
-									Mesh = part
+									Mesh = part,
+									Material = MaterialFactory.Create(part.Material)
 								};
 
-								multiMeshNode.Meshes.Add(meshMaterial);
+								multiMeshes.Add(mm);
 							}
 
-							groupedMultiMeshes[n] = multiMeshNode;
+							groupedMultiMeshes[n] = multiMeshes;
 						}
 					}
 				}
@@ -363,12 +369,37 @@ namespace OpenGothic
 						continue;
 					}
 
-					var groupedMultiMeshes = (Dictionary<string, MultiMeshNode>)cell.Root.Tag;
+					var groupedMultiMeshes = (Dictionary<string, List<MultiMeshNode>>)cell.Root.Tag;
 					cell.Root.Tag = null;
 
-					foreach(var pair in groupedMultiMeshes)
+					foreach (var pair in groupedMultiMeshes)
 					{
-						cell.Root.Children.Add(pair.Value);
+						var multiMeshes = pair.Value;
+
+						foreach (var mm in multiMeshes)
+						{
+							if (mm.InstancesTransforms.Count == 1)
+							{
+								// Add as simple mesh nodes
+								for (var k = 0; k < mm.InstancesTransforms.Count; ++k)
+								{
+									var transform = mm.InstancesTransforms[k];
+
+									var meshNode = new MeshNode
+									{
+										Mesh = mm.Mesh,
+										Material = mm.Material,
+										LocalTransform = transform
+									};
+
+									cell.Root.Children.Add(meshNode);
+								}
+							}
+							else
+							{
+								cell.Root.Children.Add(mm);
+							}
+						}
 					}
 				}
 			}

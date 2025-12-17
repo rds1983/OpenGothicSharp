@@ -3,8 +3,6 @@ using DigitalRiseModel.Animation;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Graphics.PackedVector;
-using Nursia.SceneGraph;
-using OpenGothic.Materials;
 using OpenGothic.Utility;
 using OpenGothic.Vertices;
 using System;
@@ -14,8 +12,6 @@ using System.Linq;
 using ZenKit;
 
 namespace OpenGothic;
-
-using IMaterial = Nursia.Materials.IMaterial;
 
 partial class Assets
 {
