@@ -6,10 +6,12 @@ using Myra.Graphics2D;
 using Myra.Graphics2D.UI;
 using Nursia;
 using Nursia.Env;
+using Nursia.Materials;
 using Nursia.Rendering;
 using Nursia.SceneGraph;
 using Nursia.SceneGraph.Lights;
 using Nursia.Utilities;
+using OpenGothic.Materials;
 using System;
 
 namespace OpenGothic.Viewer.UI;
@@ -18,10 +20,10 @@ public partial class ModelViewerPanel : IViewerWidget
 {
 	private readonly CameraInputController _controller;
 	private readonly ForwardRenderer _renderer;
-	private NursiaModelNode _modelNode;
+	private readonly NursiaModelNode _modelNode = new NursiaModelNode();
 	private readonly SceneNode _scene = new SceneNode();
 
-	public AnimationController Player { get; private set; }
+	public AnimationController Player { get; }
 
 	public bool IsAnimating { get; set; }
 
@@ -29,41 +31,44 @@ public partial class ModelViewerPanel : IViewerWidget
 
 	public RenderStatistics RenderStatistics => _renderer.Statistics;
 
-	public NursiaModelNode ModelNode
+	public DrModel Model
 	{
-		get => _modelNode;
+		get => _modelNode.Model;
 
 		set
 		{
-			if (_modelNode != null)
-			{
-				_modelNode.RemoveFromParent();
-			}
+			_modelNode.SetModel(value, false);
 
-			_modelNode = value;
-
-			Player = new AnimationController(_modelNode.ModelInstance);
-			Player.TimeChanged += (s, a) =>
+			if (value != null)
 			{
-				var player = Player;
-				if (player.AnimationClip == null)
+				// Set materials
+				_modelNode.Materials = new IMaterial[Model.Meshes.Length][];
+
+				for (var i = 0; i < Model.Meshes.Length; ++i)
 				{
-					return;
+					var mesh = Model.Meshes[i];
+
+					_modelNode.Materials[i] = new IMaterial[mesh.MeshParts.Count];
+					for (var j = 0; j < mesh.MeshParts.Count; ++j)
+					{
+						var meshPart = mesh.MeshParts[j];
+						if (meshPart.Material == null)
+						{
+							continue;
+						}
+
+						_modelNode.Materials[i][j] = new DefaultMaterial
+						{
+							DiffuseColor = meshPart.Material.DiffuseColor,
+							DiffuseTexture = meshPart.Material.DiffuseTexture
+						};
+					}
 				}
-
-				var k = (float)(player.Time / player.AnimationClip.Duration);
-
-				var slider = _sliderTime;
-				slider.Value = slider.Minimum + k * (slider.Maximum - slider.Minimum);
-			};
-
-			_scene.Children.Add(_modelNode);
-
-			var model = _modelNode.Model;
+			}
 
 			// Reset camera
 			var camera = _controller.Camera;
-			if (model != null)
+			if (_modelNode.Model != null)
 			{
 				var bb = _modelNode.BoundingBox.Value;
 				var min = bb.Min;
@@ -86,11 +91,11 @@ public partial class ModelViewerPanel : IViewerWidget
 
 			_comboAnimations.Widgets.Clear();
 
-			if (model.Animations != null)
+			if (value.Animations != null)
 			{
 				// Default pose
 				_comboAnimations.Widgets.Add(new Label());
-				foreach (var pair in model.Animations)
+				foreach (var pair in value.Animations)
 				{
 					var str = pair.Key;
 					if (string.IsNullOrEmpty(str))
@@ -136,8 +141,11 @@ public partial class ModelViewerPanel : IViewerWidget
 		// Back light
 		_scene.Children.Add(new DirectLight { Rotation = new Vector3(225, 45, 0), CastsShadow = false });
 
+		_scene.Children.Add(_modelNode);
 
 		_controller = new CameraInputController(new Camera());
+
+		Player = new AnimationController(_modelNode.ModelInstance);
 
 		_comboAnimations.Widgets.Clear();
 		_comboAnimations.SelectedIndexChanged += _comboAnimations_SelectedIndexChanged;
@@ -162,6 +170,20 @@ public partial class ModelViewerPanel : IViewerWidget
 		};
 
 		_buttonPlayStop.Click += _buttonPlayStop_Click;
+
+		Player.TimeChanged += (s, a) =>
+		{
+			var player = Player;
+			if (player.AnimationClip == null)
+			{
+				return;
+			}
+
+			var k = (float)(player.Time / player.AnimationClip.Duration);
+
+			var slider = _sliderTime;
+			slider.Value = slider.Minimum + k * (slider.Maximum - slider.Minimum);
+		};
 	}
 
 	private void ResetAnimation()
@@ -215,7 +237,7 @@ public partial class ModelViewerPanel : IViewerWidget
 	{
 		_controller.Update();
 
-		if (ModelNode != null && IsAnimating)
+		if (_modelNode.Model != null && IsAnimating)
 		{
 			Player.Update(ViewerGame.LastGameTime.ElapsedGameTime);
 		}

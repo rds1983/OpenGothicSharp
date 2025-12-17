@@ -301,22 +301,48 @@ namespace OpenGothic
 
 				var transform = vob.Rotation.ToXna() * Matrix.CreateTranslation(vob.Position.ToXna());
 
-				// transform *= top.Item1;
-
 				var asMesh = vob.Visual as VisualMultiResolutionMesh;
 				if (asMesh != null)
 				{
 					var n = Path.ChangeExtension(asMesh.Name, "MRM");
-					var mesh = GetModel(device, n);
+					var mesh = GetMultiMesh(device, n);
 
-					mesh.LocalTransform = transform;
-
-					var bb = mesh.BoundingBox.Value.Transform(ref transform);
+					var bb = mesh.BoundingBox.Transform(ref transform);
 
 					var cell = result.FindCellByBox(bb);
 					if (cell != null)
 					{
-						cell.Root.Children.Add(mesh);
+						Dictionary<string, MultiMeshNode> groupedMultiMeshes;
+						if (cell.Root.Tag == null)
+						{
+							groupedMultiMeshes = new Dictionary<string, MultiMeshNode>();
+							cell.Root.Tag = groupedMultiMeshes;
+						} else
+						{
+							groupedMultiMeshes = (Dictionary<string, MultiMeshNode>)cell.Root.Tag;
+						}
+
+						MultiMeshNode multiMeshNode;
+						if (groupedMultiMeshes.TryGetValue(n, out multiMeshNode))
+						{
+							// Add instance
+							multiMeshNode.InstancesTransforms.Add(transform);
+						} else
+						{
+							multiMeshNode = new MultiMeshNode();
+
+							foreach(var part in mesh.MeshParts)
+							{
+								var meshMaterial = new MaterialMesh
+								{
+									Mesh = part
+								};
+
+								multiMeshNode.Meshes.Add(meshMaterial);
+							}
+
+							groupedMultiMeshes[n] = multiMeshNode;
+						}
 					}
 				}
 
@@ -325,6 +351,28 @@ namespace OpenGothic
 					vobs.Add(new Tuple<Matrix, IVirtualObject>(transform, child));
 				}
 			}
+
+			// Add multimeshes
+			for (var i = 0; i < Constants.GridSize; ++i)
+			{
+				for (var j = 0; j < Constants.GridSize; ++j)
+				{
+					var cell = result.Cells[i, j];
+					if (cell.Root.Tag == null)
+					{
+						continue;
+					}
+
+					var groupedMultiMeshes = (Dictionary<string, MultiMeshNode>)cell.Root.Tag;
+					cell.Root.Tag = null;
+
+					foreach(var pair in groupedMultiMeshes)
+					{
+						cell.Root.Children.Add(pair.Value);
+					}
+				}
+			}
+
 
 			return result;
 		}

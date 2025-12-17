@@ -46,7 +46,7 @@ public partial class MainPanel
 
 			var modelViewerPanel = new ModelViewerPanel
 			{
-				ModelNode = model
+				Model = model
 			};
 
 			widget = modelViewerPanel;

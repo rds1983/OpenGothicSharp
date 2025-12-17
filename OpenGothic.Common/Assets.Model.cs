@@ -309,114 +309,77 @@ partial class Assets
 		return new ModelResult(result, originalBones);
 	}
 
-	private NursiaModelNode LoadModel(GraphicsDevice device, string name)
+	private DrModel LoadModel(GraphicsDevice device, string name)
 	{
 		name = name.ToUpper();
 		var record = GetLastRecord(name);
 
-		DrModel model = null;
-		if (name.EndsWith(".MSB"))
+		var zkScript = new ModelScript(record.Node.Buffer);
+
+		var hierarchyName = Path.ChangeExtension(name, "MDH");
+		var zkHierarchy = new ModelHierarchy(GetLastRecord(hierarchyName).Node.Buffer);
+
+		var meshName = Path.ChangeExtension(zkScript.SkeletonName, "MDM");
+		var zkMesh = new ZenKit.ModelMesh(GetLastRecord(meshName).Node.Buffer);
+
+		var modelInfo = LoadModel(device, zkHierarchy, zkMesh);
+
+		var nameNoExt = Path.GetFileNameWithoutExtension(name);
+
+		modelInfo.Model.Animations = new Dictionary<string, AnimationClip>();
+
+		var zkAnimations = zkScript.Animations;
+		for (var i = 0; i < zkAnimations.Count; ++i)
 		{
-			var zkScript = new ModelScript(record.Node.Buffer);
+			var animation = zkAnimations[i];
 
-			var hierarchyName = Path.ChangeExtension(name, "MDH");
-			var zkHierarchy = new ModelHierarchy(GetLastRecord(hierarchyName).Node.Buffer);
+			var animationName = nameNoExt + "-" + animation.Name + ".MAN";
 
-			var meshName = Path.ChangeExtension(zkScript.SkeletonName, "MDM");
-			var zkMesh = new ZenKit.ModelMesh(GetLastRecord(meshName).Node.Buffer);
+			var zkAnimation = new ModelAnimation(GetLastRecord(animationName).Node.Buffer);
 
-			var modelInfo = LoadModel(device, zkHierarchy, zkMesh);
+			var timeStep = TimeSpan.FromSeconds(1.0f / animation.Fps);
 
-			var nameNoExt = Path.GetFileNameWithoutExtension(name);
+			var channels = new List<AnimationChannel>();
 
-			modelInfo.Model.Animations = new Dictionary<string, AnimationClip>();
+			var zkAnimationNodeIndices = zkAnimation.NodeIndices;
 
-			var zkAnimations = zkScript.Animations;
-			for (var i = 0; i < zkAnimations.Count; ++i)
+			var samples = zkAnimation.Samples;
+			for (var k = 0; k < zkAnimationNodeIndices.Count; ++k)
 			{
-				var animation = zkAnimations[i];
+				var bone = modelInfo.OriginalBones[zkAnimationNodeIndices[k]];
 
-				var animationName = nameNoExt + "-" + animation.Name + ".MAN";
-
-				var zkAnimation = new ModelAnimation(GetLastRecord(animationName).Node.Buffer);
-
-				var timeStep = TimeSpan.FromSeconds(1.0f / animation.Fps);
-
-				var channels = new List<AnimationChannel>();
-
-				var zkAnimationNodeIndices = zkAnimation.NodeIndices;
-
-				var samples = zkAnimation.Samples;
-				for (var k = 0; k < zkAnimationNodeIndices.Count; ++k)
+				var keyframes = new List<AnimationChannelKeyframe>();
+				var time = TimeSpan.Zero;
+				for (var j = 0; j < zkAnimation.FrameCount; ++j)
 				{
-					var bone = modelInfo.OriginalBones[zkAnimationNodeIndices[k]];
+					var pos = k + j * zkAnimationNodeIndices.Count;
+					var sample = samples[pos];
 
-					var keyframes = new List<AnimationChannelKeyframe>();
-					var time = TimeSpan.Zero;
-					for (var j = 0; j < zkAnimation.FrameCount; ++j)
-					{
-						var pos = k + j * zkAnimationNodeIndices.Count;
-						var sample = samples[pos];
+					time += timeStep;
+					var keyframe = new AnimationChannelKeyframe(time, new SrtTransform(sample.Position.ToXna(), sample.Rotation.ToXna(), bone.DefaultPose.Scale));
 
-						time += timeStep;
-						var keyframe = new AnimationChannelKeyframe(time, new SrtTransform(sample.Position.ToXna(), sample.Rotation.ToXna(), bone.DefaultPose.Scale));
-
-						keyframes.Add(keyframe);
-					}
-
-					var channel = new AnimationChannel(bone.Index, keyframes.ToArray());
-					channels.Add(channel);
+					keyframes.Add(keyframe);
 				}
 
-				var clip = new AnimationClip(animation.Name, zkAnimation.FrameCount * timeStep, channels.ToArray());
-				modelInfo.Model.Animations[clip.Name] = clip;
+				var channel = new AnimationChannel(bone.Index, keyframes.ToArray());
+				channels.Add(channel);
 			}
 
-			model = modelInfo.Model;
-		}
-		else if (name.EndsWith(".MRM"))
-		{
-			var zkMesh = new MultiResolutionMesh(record.Node.Buffer);
-			var mesh = CreateMesh(device, null, zkMesh);
-			var root = new DrModelBone("_ROOT", mesh);
-
-			model = new DrModel(root);
-		}
-		else
-		{
-			throw new Exception($"Couldn't load model {name}");
+			var clip = new AnimationClip(animation.Name, zkAnimation.FrameCount * timeStep, channels.ToArray());
+			modelInfo.Model.Animations[clip.Name] = clip;
 		}
 
-		var result = new NursiaModelNode();
-		result.SetModel(model, false);
-
-		// Set materials
-		result.Materials = new IMaterial[model.Meshes.Length][];
-
-		for (var i = 0; i < model.Meshes.Length; ++i)
-		{
-			var mesh = model.Meshes[i];
-
-			result.Materials[i] = new IMaterial[mesh.MeshParts.Count];
-			for (var j = 0; j < mesh.MeshParts.Count; ++j)
-			{
-				var meshPart = mesh.MeshParts[j];
-				if (meshPart.Material == null)
-				{
-					continue;
-				}
-
-				result.Materials[i][j] = new DefaultMaterial
-				{
-					DiffuseColor = meshPart.Material.DiffuseColor,
-					DiffuseTexture = meshPart.Material.DiffuseTexture
-				};
-			}
-		}
-
-		return result;
-
+		return modelInfo.Model;
 	}
 
-	public NursiaModelNode GetModel(GraphicsDevice device, string name) => (NursiaModelNode)Get(device, name, LoadModel).Clone();
+	private DrMesh LoadMultiMesh(GraphicsDevice device, string name)
+	{
+		var record = GetLastRecord(name);
+		var zkMesh = new MultiResolutionMesh(record.Node.Buffer);
+
+		return CreateMesh(device, null, zkMesh);
+	}
+
+	public DrModel GetModel(GraphicsDevice device, string name) => Get(device, name, LoadModel);
+	public DrMesh GetMultiMesh(GraphicsDevice device, string name) => Get(device, name, LoadMultiMesh);
 }
