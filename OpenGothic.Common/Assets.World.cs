@@ -1,5 +1,4 @@
-﻿using DigitalRiseModel;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Nursia.SceneGraph;
 using OpenGothic.Materials;
@@ -7,6 +6,7 @@ using OpenGothic.Utility;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using ZenKit;
 using ZenKit.Vobs;
 using IMaterial = Nursia.Materials.IMaterial;
@@ -21,6 +21,23 @@ namespace OpenGothic
 			public BoundingBox BoundingBox;
 		}
 
+		private class MaterialInfo
+		{
+			public ZenKit.IMaterial Material { get; }
+
+			public MaterialInfo(ZenKit.IMaterial material)
+			{
+				Material = material ?? throw new ArgumentNullException(nameof(material));
+			}
+
+			public bool EqualsTo(ZenKit.IMaterial material)
+			{
+				return Material.Texture == material.Texture;
+			}
+
+			public override string ToString() => Material.Texture;
+		}
+
 		private WorldGrid LoadWorld(GraphicsDevice device, string name)
 		{
 			var record = GetLastRecord(name);
@@ -31,6 +48,37 @@ namespace OpenGothic
 			var materials = zkWorld.Mesh.Materials;
 			var features = zkWorld.Mesh.Features;
 			var positions = zkWorld.Mesh.Positions;
+
+			// Group materials
+			var materialsGroups = new List<MaterialInfo>();
+			var materialsMap = new Dictionary<int, int>();
+			for (var i = 0; i < materials.Count; ++i)
+			{
+				var mat = materials[i];
+				if (string.IsNullOrEmpty(mat.Texture))
+				{
+					continue;
+				}
+
+				int? mgIndex = null;
+				for (var j = 0; j < materialsGroups.Count; ++j)
+				{
+					if (materialsGroups[j].EqualsTo(mat))
+					{
+						mgIndex = j;
+						break;
+					}
+				}
+
+				if (mgIndex == null)
+				{
+					var mg = new MaterialInfo(mat);
+					materialsGroups.Add(mg);
+					mgIndex = materialsGroups.Count - 1;
+				}
+
+				materialsMap[i] = mgIndex.Value;
+			}
 
 			// Build total bounding box
 			var allPositions = new List<Vector3>();
@@ -91,8 +139,6 @@ namespace OpenGothic
 						}
 					}
 				}
-
-				var notfound = 5;
 			found:;
 			}
 
@@ -109,10 +155,17 @@ namespace OpenGothic
 					{
 						var polygon = polygons[cellData.Polygons[k]];
 
-						Tuple<IMaterial, List<IPolygon>> p;
-						if (!groupedPolygons.TryGetValue(polygon.MaterialIndex, out p))
+						var originalMaterial = materials[polygon.MaterialIndex];
+						if (string.IsNullOrEmpty(originalMaterial.Texture))
 						{
-							var zkMaterial = materials[polygon.MaterialIndex];
+							continue;
+						}
+
+						var materialIndex = materialsMap[polygon.MaterialIndex];
+						Tuple<IMaterial, List<IPolygon>> p;
+						if (!groupedPolygons.TryGetValue(materialIndex, out p))
+						{
+							var zkMaterial = materialsGroups[materialIndex].Material;
 
 							Texture2D texture = null;
 
@@ -149,7 +202,7 @@ namespace OpenGothic
 							}
 
 							p = new Tuple<IMaterial, List<IPolygon>>(mat, new List<IPolygon>());
-							groupedPolygons[polygon.MaterialIndex] = p;
+							groupedPolygons[materialIndex] = p;
 						}
 
 						p.Item2.Add(polygon);
