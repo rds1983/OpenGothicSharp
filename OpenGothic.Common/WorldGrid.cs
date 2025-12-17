@@ -25,5 +25,21 @@ namespace OpenGothic
 				}
 			}
 		}
+
+		public WorldGridCell FindCellByBox(BoundingBox box)
+		{
+			for (var i = 0; i < Constants.GridSize; ++i)
+			{
+				for (var j = 0; j < Constants.GridSize; ++j)
+				{
+					if (Cells[i, j].BoundingBox.Intersects(box))
+					{
+						return Cells[i, j];
+					}
+				}
+			}
+
+			return null;
+		}
 	}
 }

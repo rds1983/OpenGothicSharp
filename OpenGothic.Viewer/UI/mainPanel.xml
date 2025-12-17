@@ -8,6 +8,9 @@
           <CheckButton IsChecked="True" CheckContentSpacing="4" Id="_checkMsbFilter">
             <Label Text="*.MSB" />
           </CheckButton>
+          <CheckButton CheckContentSpacing="4" Id="_checkMrmFilter">
+            <Label Text="*.MRM" />
+          </CheckButton>
           <CheckButton IsChecked="True" CheckContentSpacing="4" Id="_checkZenFilter">
             <Label Text="*.ZEN" />
           </CheckButton>

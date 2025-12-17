@@ -1,11 +1,14 @@
-﻿using Microsoft.Xna.Framework;
+﻿using DigitalRiseModel;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Nursia.SceneGraph;
 using OpenGothic.Materials;
 using OpenGothic.Utility;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using ZenKit;
+using ZenKit.Vobs;
 using IMaterial = Nursia.Materials.IMaterial;
 
 namespace OpenGothic
@@ -56,7 +59,7 @@ namespace OpenGothic
 					cellsData[i, j] = new CellData();
 
 					var min = boundingBox.Min + new Vector3(i * cellSizeX, 0, j * cellSizeZ);
-					var max = new Vector3(min.X + cellSizeX, boundingBox.Max.Y, min.Z  + cellSizeZ);
+					var max = new Vector3(min.X + cellSizeX, boundingBox.Max.Y, min.Z + cellSizeZ);
 
 					cellsData[i, j].BoundingBox = new BoundingBox(min, max);
 				}
@@ -224,6 +227,49 @@ namespace OpenGothic
 
 					// Update bounding box
 					cell.BoundingBox = cellData.BoundingBox;
+				}
+			}
+
+			// Virtual objects
+
+			// Enqueue root objects
+			var vobs = new List<Tuple<Matrix, IVirtualObject>>();
+			foreach (var vob in zkWorld.RootObjects)
+			{
+				vobs.Add(new Tuple<Matrix, IVirtualObject>(Matrix.Identity, vob));
+			}
+
+			while (vobs.Count > 0)
+			{
+				var top = vobs[0];
+				vobs.RemoveAt(0);
+
+				var vob = top.Item2;
+
+				var transform = vob.Rotation.ToXna() * Matrix.CreateTranslation(vob.Position.ToXna());
+
+				// transform *= top.Item1;
+
+				var asMesh = vob.Visual as VisualMultiResolutionMesh;
+				if (asMesh != null)
+				{
+					var n = Path.ChangeExtension(asMesh.Name, "MRM");
+					var mesh = GetModel(device, n);
+
+					mesh.LocalTransform = transform;
+
+					var bb = mesh.BoundingBox.Value.Transform(ref transform);
+
+					var cell = result.FindCellByBox(bb);
+					if (cell != null)
+					{
+						cell.Root.Children.Add(mesh);
+					}
+				}
+
+				foreach (var child in vob.Children)
+				{
+					vobs.Add(new Tuple<Matrix, IVirtualObject>(transform, child));
 				}
 			}
 

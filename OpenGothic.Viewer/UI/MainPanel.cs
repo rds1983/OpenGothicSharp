@@ -20,6 +20,7 @@ public partial class MainPanel
 
 		_textBoxFilter.TextChanged += (s, a) => RebuildList();
 		_checkMsbFilter.IsCheckedChanged += (s, a) => RebuildList();
+		_checkMrmFilter.IsCheckedChanged += (s, a) => RebuildList();
 		_checkZenFilter.IsCheckedChanged += (s, a) => RebuildList();
 
 		_listItems.SelectedIndexChanged += _listItems_SelectedIndexChanged;
@@ -39,13 +40,13 @@ public partial class MainPanel
 		var label = (Label)_listItems.SelectedItem;
 
 		Widget widget;
-		if (label.Text.EndsWith(".MSB"))
+		if (label.Text.EndsWith(".MSB") || label.Text.EndsWith(".MRM"))
 		{
 			var model = _assets.GetModel(Nrs.GraphicsDevice, label.Text);
 
 			var modelViewerPanel = new ModelViewerPanel
 			{
-				Model = model
+				ModelNode = model
 			};
 
 			widget = modelViewerPanel;
@@ -81,7 +82,8 @@ public partial class MainPanel
 			var ext = Path.GetExtension(key).ToUpper();
 
 			if ((ext == ".MSB" && _checkMsbFilter.IsChecked) ||
-				(ext == ".ZEN" && _checkZenFilter.IsChecked))
+				(ext == ".ZEN" && _checkZenFilter.IsChecked) ||
+				(ext == ".MRM" && _checkMrmFilter.IsChecked))
 			{
 			}
 			else
