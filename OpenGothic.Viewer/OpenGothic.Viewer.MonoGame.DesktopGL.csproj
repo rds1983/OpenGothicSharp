@@ -9,7 +9,8 @@
   <ItemGroup>
     <PackageReference Include="MonoGame.Framework.DesktopGL" Version="$(MonoGameVersion)" />
     <PackageReference Include="Myra" Version="$(MyraVersion)" />
-    <PackageReference Include="Nursia.MonoGame" Version="$(NursiaVersion)" />
-    <PackageReference Include="ZenKit" Version="$(ZenKitVersion)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\OpenGothic.Common\OpenGothic.Common.MonoGame.csproj" />
   </ItemGroup>
 </Project>

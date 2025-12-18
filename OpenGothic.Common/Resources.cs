@@ -35,6 +35,7 @@ internal static class Resources
 #if FNA
 		var path = "OpenGothic.Effects.FNA.bin";
 #else
+		var path = "OpenGothic.Effects.MonoGameOGL.bin";
 #endif
 
 		_assetsEffects = AssetManager.CreateResourceAssetManager(assembly, path, false);

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(MonoGameTargetFramework)</TargetFramework>
+    <RootNamespace>OpenGothic</RootNamespace>
+    <OutputPath>bin\MonoGame\$(Configuration)</OutputPath>
+    <DefineConstants>$(DefineConstants);MONOGAME</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ZenKit" Version="$(ZenKitVersion)" />
+    <PackageReference Include="Nursia.MonoGame" Version="$(NursiaVersion)" />
+    <PackageReference Include="MonoGame.Framework.DesktopGL" PrivateAssets="All" Version="$(MonoGameVersion)" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Effects\MonoGameOGL\bin\*.*" />
+  </ItemGroup>
+</Project>

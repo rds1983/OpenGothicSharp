@@ -11,7 +11,7 @@
     <Version>0.1.0</Version>
     <MonoGameVersion>3.8.4.1</MonoGameVersion>
     <MyraVersion>1.5.10</MyraVersion>
-    <NursiaVersion>0.6.0</NursiaVersion>
+    <NursiaVersion>0.6.1</NursiaVersion>
     <ZenKitVersion>0.1.13</ZenKitVersion>
   </PropertyGroup>
 </Project>

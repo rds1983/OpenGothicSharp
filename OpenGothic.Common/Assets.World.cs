@@ -216,6 +216,11 @@ namespace OpenGothic
 						var vertexIndexMap = new Dictionary<int, Dictionary<int, int>>();
 						foreach (var polygon in pair.Value.Item2)
 						{
+							if (polygon.IsGhostOccluder)
+							{
+								continue;
+							}
+
 							var featureIndices = polygon.FeatureIndices;
 							var positionIndices = polygon.PositionIndices;
 
@@ -268,14 +273,18 @@ namespace OpenGothic
 							}
 						}
 
-						var meshPart = meshBuilder.CreateMeshPart(device, true);
-						var meshNode = new MeshNode
+						if (meshBuilder.IndicesCount > 0)
 						{
-							Mesh = meshPart,
-							Material = pair.Value.Item1
-						};
 
-						cell.Root.Children.Add(meshNode);
+							var meshPart = meshBuilder.CreateMeshPart(device, true);
+							var meshNode = new MeshNode
+							{
+								Mesh = meshPart,
+								Material = pair.Value.Item1
+							};
+
+							cell.Root.Children.Add(meshNode);
+						}
 					}
 
 					// Update bounding box
