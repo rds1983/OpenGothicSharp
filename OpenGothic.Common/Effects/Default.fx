@@ -1,4 +1,5 @@
 #include "Include/Macros.fxh"
+#include "Include/Transform.fxh"
 #include "Include/Sampling.fxh"
 #include "Include/Depth.fxh"
 #include "Include/BlinnPhongLighting.fxh"
@@ -8,13 +9,6 @@
 #endif
 
 #include "Include/Fog.fxh"
-
-uniform float4x3 cModel;
-uniform float4x4 cViewProj;
-
-#ifdef SKINNED
-	uniform float4x3 cSkinMatrices[MAXBONES];
-#endif
 
 uniform float4 cMatDiffColor;
 uniform float3 cMatEmissiveColor;
@@ -69,29 +63,11 @@ VSOutput VS(VSInput input)
 {
 	VSOutput output = (VSOutput)0;
 
-	#if !defined(INSTANCED)
-		output.Normal = normalize(mul(input.Normal, (float3x3)cModel));
-	#else
-		output.Normal = normalize(mul(input.Normal, (float3x3)input.ModelInstance));
-	#endif
+	CALCULATE_WORLD_POS(worldPos);
+	CALCULATE_WORLD_NORMAL(worldNormal);
 
-	#if !defined(SKINNED)
-		float3 inputPos = input.Pos;
-	#else
-		float3 inputPos = (mul(float4(input.Pos0, 1.0), cSkinMatrices[input.BlendIndices.x]) * input.BlendWeights.x) +
-			(mul(float4(input.Pos1, 1.0), cSkinMatrices[input.BlendIndices.y]) * input.BlendWeights.y) +
-			(mul(float4(input.Pos2, 1.0), cSkinMatrices[input.BlendIndices.z]) * input.BlendWeights.z) +
-			(mul(float4(input.Pos3, 1.0), cSkinMatrices[input.BlendIndices.w]) * input.BlendWeights.w);
-	#endif
-
-	#if !defined(INSTANCED)
-		float3 worldPos = mul(float4(inputPos, 1.0), cModel);
-	#else
-		float4 worldPos2 = mul(float4(inputPos, 1.0), transpose(input.ModelInstance));
-		float3 worldPos = mul(worldPos2, cModel);
-	#endif
-
-	output.Pos = mul(float4(worldPos, 1.0), cViewProj);
+	output.Pos = GetClipPos(worldPos);
+	output.Normal = worldNormal;
 
 	output.WorldPos = float4(worldPos, GetDepth(output.Pos));
 

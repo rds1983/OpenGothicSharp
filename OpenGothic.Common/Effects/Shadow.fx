@@ -1,12 +1,6 @@
 #include "Include/Macros.fxh"
+#include "Include/Transform.fxh"
 #include "Include/Sampling.fxh"
-
-uniform float4x3 cModel;
-uniform float4x4 cViewProj;
-
-#ifdef SKINNED
-	uniform float4x3 cSkinMatrices[MAXBONES];
-#endif
 
 DECLARE_TEXTURE2D_POINT_CLAMP(DiffMap);
 
@@ -26,7 +20,7 @@ struct VSInput
 		int4 BlendIndices : BLENDINDICES;
 	#endif
 	#ifdef INSTANCED
-		float4x3 ModelInstance : TEXCOORD1;
+		float4x4 ModelInstance : BLENDWEIGHT;
 	#endif
 };
 
@@ -41,17 +35,8 @@ VSOutput VS(VSInput input)
 {
 	VSOutput output = (VSOutput)0;
 
-	#if !defined(SKINNED)
-		float3 inputPos = input.Pos;
-	#else
-		float3 inputPos = (mul(float4(input.Pos0, 1.0), cSkinMatrices[input.BlendIndices.x]) * input.BlendWeights.x) +
-			(mul(float4(input.Pos1, 1.0), cSkinMatrices[input.BlendIndices.y]) * input.BlendWeights.y) +
-			(mul(float4(input.Pos2, 1.0), cSkinMatrices[input.BlendIndices.z]) * input.BlendWeights.z) +
-			(mul(float4(input.Pos3, 1.0), cSkinMatrices[input.BlendIndices.w]) * input.BlendWeights.w);
-	#endif
-
-	float3 worldPos = mul(float4(inputPos, 1.0), cModel);
-	output.Pos = mul(float4(worldPos, 1.0), cViewProj);
+	CALCULATE_WORLD_POS(worldPos);
+	output.Pos = GetClipPos(worldPos);
 
 	output.TexCoord = GetTexCoord(input.TexCoord);
 
