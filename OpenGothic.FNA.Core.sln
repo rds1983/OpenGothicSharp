@@ -17,8 +17,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XNAssets.FontStashSharp.FNA
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenGothic.Viewer.FNA.Core", "OpenGothic.Viewer\OpenGothic.Viewer.FNA.Core.csproj", "{DA97CED8-4711-27BF-A997-EE71620A4B72}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DigitalRiseModel.FNA.Core", "..\DigitalRiseModel\Source\DigitalRiseModel.FNA.Core.csproj", "{16F2FDC6-24FC-C915-D42D-BC0873ADB534}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Nursia.FNA.Core", "..\Nursia\Nursia\Nursia.FNA.Core.csproj", "{207BC1AE-0822-5FAF-0D3A-FE26ADCBC844}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenGothic.Common.FNA.Core", "OpenGothic.Common\OpenGothic.Common.FNA.Core.csproj", "{6704D89B-3D38-4236-FBB7-14B485675B6F}"
@@ -26,6 +24,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenGothic.FNA.Core", "OpenGothic\OpenGothic.FNA.Core.csproj", "{D53683B8-28BD-15AC-67C9-69154DBD3205}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenGothic.Launcher.FNA.Core", "OpenGothic.Launcher\OpenGothic.Launcher.FNA.Core.csproj", "{DD82684D-5D3E-8D66-4953-CE812408AEBE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DigitalRiseModel.FNA.Core", "..\DigitalRiseModel\DigitalRiseModel\DigitalRiseModel.FNA.Core.csproj", "{AF82EDF1-2582-EDB2-D858-C788CCD39A8F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -57,10 +57,6 @@ Global
 		{DA97CED8-4711-27BF-A997-EE71620A4B72}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DA97CED8-4711-27BF-A997-EE71620A4B72}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DA97CED8-4711-27BF-A997-EE71620A4B72}.Release|Any CPU.Build.0 = Release|Any CPU
-		{16F2FDC6-24FC-C915-D42D-BC0873ADB534}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{16F2FDC6-24FC-C915-D42D-BC0873ADB534}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{16F2FDC6-24FC-C915-D42D-BC0873ADB534}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{16F2FDC6-24FC-C915-D42D-BC0873ADB534}.Release|Any CPU.Build.0 = Release|Any CPU
 		{207BC1AE-0822-5FAF-0D3A-FE26ADCBC844}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{207BC1AE-0822-5FAF-0D3A-FE26ADCBC844}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{207BC1AE-0822-5FAF-0D3A-FE26ADCBC844}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -77,6 +73,10 @@ Global
 		{DD82684D-5D3E-8D66-4953-CE812408AEBE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DD82684D-5D3E-8D66-4953-CE812408AEBE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DD82684D-5D3E-8D66-4953-CE812408AEBE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AF82EDF1-2582-EDB2-D858-C788CCD39A8F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AF82EDF1-2582-EDB2-D858-C788CCD39A8F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AF82EDF1-2582-EDB2-D858-C788CCD39A8F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AF82EDF1-2582-EDB2-D858-C788CCD39A8F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -87,8 +87,8 @@ Global
 		{55A6A49E-FCB0-0FA9-0CEC-734EB69F8855} = {B19C1122-D91C-4AE8-AC54-77144F9CCFC0}
 		{96FF26B3-E037-18F1-75AF-DAED23B417DD} = {B19C1122-D91C-4AE8-AC54-77144F9CCFC0}
 		{6C90CE78-ED1F-AA5B-A8DB-7958E76C8DCF} = {B19C1122-D91C-4AE8-AC54-77144F9CCFC0}
-		{16F2FDC6-24FC-C915-D42D-BC0873ADB534} = {B19C1122-D91C-4AE8-AC54-77144F9CCFC0}
 		{207BC1AE-0822-5FAF-0D3A-FE26ADCBC844} = {B19C1122-D91C-4AE8-AC54-77144F9CCFC0}
+		{AF82EDF1-2582-EDB2-D858-C788CCD39A8F} = {B19C1122-D91C-4AE8-AC54-77144F9CCFC0}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {15B24D51-3673-48ED-9A52-49AAEA512199}
