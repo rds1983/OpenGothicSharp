@@ -27,7 +27,7 @@ partial class Assets
 		}
 	}
 
-	private DrMeshPart CreatePart(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, IMultiResolutionSubMesh zkSubMesh)
+	private DrMeshPart CreatePart(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, IMultiResolutionSubMesh zkSubMesh, Matrix[] inverseBindMatrices = null)
 	{
 		IMeshBuilder meshBuilder;
 		if (zkSkinnedMesh == null)
@@ -75,12 +75,14 @@ partial class Assets
 				var weight = zkWeights[wedge.Index];
 
 				pos0 = weight[0].Position.ToXna();
+				pos0 = Vector3.Transform(pos0, inverseBindMatrices[weight[0].NodeIndex]);
 				blendIndices.X = skinMap[weight[0].NodeIndex];
 				blendWeights.X = weight[0].Weight;
 
 				if (weight.Count > 1)
 				{
 					pos1 = weight[1].Position.ToXna();
+					pos1 = Vector3.Transform(pos1, inverseBindMatrices[weight[1].NodeIndex]);
 					blendIndices.Y = skinMap[weight[1].NodeIndex];
 					blendWeights.Y = weight[1].Weight;
 				}
@@ -88,6 +90,7 @@ partial class Assets
 				if (weight.Count > 2)
 				{
 					pos2 = weight[2].Position.ToXna();
+					pos2 = Vector3.Transform(pos2, inverseBindMatrices[weight[2].NodeIndex]);
 					blendIndices.Z = skinMap[weight[2].NodeIndex];
 					blendWeights.Z = weight[2].Weight;
 				}
@@ -95,6 +98,7 @@ partial class Assets
 				if (weight.Count > 3)
 				{
 					pos3 = weight[3].Position.ToXna();
+					pos3 = Vector3.Transform(pos3, inverseBindMatrices[weight[3].NodeIndex]);
 					blendIndices.W = skinMap[weight[3].NodeIndex];
 					blendWeights.W = weight[3].Weight;
 				}
@@ -105,7 +109,9 @@ partial class Assets
 				blendWeights.Z /= sum;
 				blendWeights.W /= sum;
 
-				var vertex = new VertexSkinned(pos0, pos1, pos2, pos3, wedge.Normal.ToXna(), wedge.Texture.ToXna(), new Byte4(blendIndices), blendWeights);
+				var blendedPosition = pos0 * blendWeights.X + pos1 * blendWeights.Y + pos2 * blendWeights.Z + pos3 * blendWeights.W;
+
+				var vertex = new VertexSkinned(blendedPosition, wedge.Normal.ToXna(), wedge.Texture.ToXna(), new Byte4(blendIndices), blendWeights);
 
 				mb.AddVertex(vertex);
 			}
@@ -153,12 +159,12 @@ partial class Assets
 		return result;
 	}
 
-	private DrMesh CreateMesh(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh)
+	private DrMesh CreateMesh(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, Matrix[] zkHierarchy = null)
 	{
 		var mesh = new DrMesh();
 		foreach (var submesh in zkMesh.SubMeshes)
 		{
-			var meshPart = CreatePart(device, zkSkinnedMesh, zkMesh, submesh);
+			var meshPart = CreatePart(device, zkSkinnedMesh, zkMesh, submesh, zkHierarchy);
 			mesh.MeshParts.Add(meshPart);
 		}
 
@@ -238,6 +244,17 @@ partial class Assets
 		var zkMeshes = zkMesh.Meshes;
 		if (zkMeshes.Count > 0)
 		{
+			// Build inverse bind matrices for the whole bones hierarchy
+			var imb = new Matrix[originalBones.Length];
+
+			var tempModel = new DrModel(root);
+			tempModel.CopyAbsoluteBoneTransformsTo(imb);
+
+			for (var i = 0; i < imb.Length; ++i)
+			{
+				// imb[i] = Matrix.Invert(imb[i]);
+			}
+
 			// Create new root
 			root = new DrModelBone("_ROOT");
 
@@ -247,7 +264,13 @@ partial class Assets
 			for (var i = 0; i < zkMeshes.Count; ++i)
 			{
 				var zkSkinnedMesh = zkMeshes[i];
-				var mesh = CreateMesh(device, zkSkinnedMesh, zkSkinnedMesh.Mesh);
+				var meshImb = new Matrix[zkSkinnedMesh.Nodes.Count];
+				for (var j = 0; j < meshImb.Length; ++j)
+				{
+					meshImb[j] = imb[zkSkinnedMesh.Nodes[j]];
+				}
+
+				var mesh = CreateMesh(device, zkSkinnedMesh, zkSkinnedMesh.Mesh, imb);
 
 				// Store joint bones
 				var joints = new List<DrModelBone>();
@@ -286,8 +309,8 @@ partial class Assets
 					var jointsData = new List<DrSkinJoint>();
 					for (var j = 0; j < joints.Count; ++j)
 					{
-						var joint = new DrSkinJoint(joints[j], Matrix.Identity);
-						// var joint = new DrSkinJoint(joints[j], Matrix.Invert(boneTransforms[joints[j].Index]));
+						// var joint = new DrSkinJoint(joints[j], Matrix.Identity);
+						var joint = new DrSkinJoint(joints[j], Matrix.Invert(boneTransforms[joints[j].Index]));
 						jointsData.Add(joint);
 					}
 
@@ -361,8 +384,11 @@ partial class Assets
 				channels.Add(channel);
 			}
 
-			var clip = new AnimationClip(animation.Name, zkAnimation.FrameCount * timeStep, channels.ToArray());
-			modelInfo.Model.Animations[clip.Name] = clip;
+			if (channels.Count > 0)
+			{
+				var clip = new AnimationClip(animation.Name, zkAnimation.FrameCount * timeStep, channels.ToArray());
+				modelInfo.Model.Animations[clip.Name] = clip;
+			}
 		}
 
 		return modelInfo.Model;
