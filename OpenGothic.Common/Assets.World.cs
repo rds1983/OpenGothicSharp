@@ -321,18 +321,18 @@ namespace OpenGothic
 					var cell = result.FindCellByBox(bb);
 					if (cell != null)
 					{
-						Dictionary<string, List<MultiMeshNode>> groupedMultiMeshes;
+						Dictionary<string, List<InstancedMeshNode>> groupedMultiMeshes;
 						if (cell.Root.Tag == null)
 						{
-							groupedMultiMeshes = new Dictionary<string, List<MultiMeshNode>>();
+							groupedMultiMeshes = new Dictionary<string, List<InstancedMeshNode>>();
 							cell.Root.Tag = groupedMultiMeshes;
 						}
 						else
 						{
-							groupedMultiMeshes = (Dictionary<string, List<MultiMeshNode>>)cell.Root.Tag;
+							groupedMultiMeshes = (Dictionary<string, List<InstancedMeshNode>>)cell.Root.Tag;
 						}
 
-						List<MultiMeshNode> multiMeshes;
+						List<InstancedMeshNode> multiMeshes;
 						if (groupedMultiMeshes.TryGetValue(n, out multiMeshes))
 						{
 							// Add instance
@@ -343,11 +343,11 @@ namespace OpenGothic
 						}
 						else
 						{
-							multiMeshes = new List<MultiMeshNode>();
+							multiMeshes = new List<InstancedMeshNode>();
 
 							foreach (var part in mesh.MeshParts)
 							{
-								var mm = new MultiMeshNode
+								var mm = new InstancedMeshNode
 								{
 									Mesh = part,
 									Material = MaterialFactory.Create(part.Material)
@@ -378,7 +378,7 @@ namespace OpenGothic
 						continue;
 					}
 
-					var groupedMultiMeshes = (Dictionary<string, List<MultiMeshNode>>)cell.Root.Tag;
+					var groupedMultiMeshes = (Dictionary<string, List<InstancedMeshNode>>)cell.Root.Tag;
 					cell.Root.Tag = null;
 
 					foreach (var pair in groupedMultiMeshes)

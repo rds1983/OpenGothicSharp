@@ -10,6 +10,8 @@ internal static class Configuration
 
 	static Configuration()
 	{
+		NoFixedStep = true;
+
 		RenderEnvironment = RenderEnvironment.Default.Clone();
 		RenderEnvironment.FogEnabled = true;
 		RenderEnvironment.FogStart = Constants.FogStart;

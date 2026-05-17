@@ -21,10 +21,6 @@ class Program
 
 			AMBConfiguration.Logger = Console.WriteLine;
 
-/*			var assets = new Assets(args[0]);
-
-			var world = assets.GetWorld(null, "newworld.zen");*/
-
 			using (var game = new MainGame(args[0]))
 			{
 				game.Run();

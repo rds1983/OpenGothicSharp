@@ -30,6 +30,12 @@ public class ViewerGame : Game
 		Window.AllowUserResizing = true;
 		IsMouseVisible = true;
 
+		if (Configuration.NoFixedStep)
+		{
+			IsFixedTimeStep = false;
+			_graphics.SynchronizeWithVerticalRetrace = false;
+		}
+
 		Configuration.GamePath = _path;
 	}
 

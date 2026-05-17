@@ -21,7 +21,7 @@ public partial class ModelViewerPanel : IViewerWidget
 	private readonly CameraInputController _controller;
 	private readonly ForwardRenderer _renderer;
 	private readonly NursiaModelNode _modelNode = new NursiaModelNode();
-	private readonly SceneNode _scene = new SceneNode();
+	private readonly Scene _scene;
 
 	public AnimationController Player { get; }
 
@@ -37,7 +37,7 @@ public partial class ModelViewerPanel : IViewerWidget
 
 		set
 		{
-			_modelNode.SetModel(value, false);
+			_modelNode.Model = value;
 
 			if (value != null)
 			{
@@ -131,13 +131,19 @@ public partial class ModelViewerPanel : IViewerWidget
 
 		_renderer = new ForwardRenderer();
 
+		_scene = new Scene
+		{
+			Root = new SceneNode()
+		};
+
 		// Front light
-		_scene.Children.Add(new DirectLight { Rotation = new Vector3(45, 45, 0), CastsShadow = false });
+		_scene.Root.Children.Add(new DirectLight { Rotation = new Vector3(45, 45, 0), CastsShadow = false });
 
 		// Back light
-		_scene.Children.Add(new DirectLight { Rotation = new Vector3(225, 45, 0), CastsShadow = false });
+		_scene.Root.Children.Add(new DirectLight { Rotation = new Vector3(225, 45, 0), CastsShadow = false });
 
-		_scene.Children.Add(_modelNode);
+		// Models
+		_scene.Root.Children.Add(_modelNode);
 
 		_controller = new CameraInputController(new Camera());
 
@@ -149,7 +155,14 @@ public partial class ModelViewerPanel : IViewerWidget
 		_comboPlaybackMode.SelectedIndex = 0;
 		_comboPlaybackMode.SelectedIndexChanged += (s, a) =>
 		{
-			Player.PlaybackMode = (PlaybackMode)_comboPlaybackMode.SelectedIndex.Value;
+			if (Player.RootNode != null)
+			{
+				bool isBackward = _comboPlaybackMode.SelectedIndex.Value == 1;
+				if (isBackward)
+					Player.RootNode.Flags |= AnimationFlags.PlayBackwards;
+				else
+					Player.RootNode.Flags &= ~AnimationFlags.PlayBackwards;
+			}
 		};
 
 		_sliderSpeed.ValueChanged += (s, a) =>
@@ -170,12 +183,12 @@ public partial class ModelViewerPanel : IViewerWidget
 		Player.TimeChanged += (s, a) =>
 		{
 			var player = Player;
-			if (player.AnimationClip == null)
+			if (player.RootNode == null)
 			{
 				return;
 			}
 
-			var k = (float)(player.Time / player.AnimationClip.Duration);
+			var k = (float)(player.Time / player.RootNode.Duration);
 
 			var slider = _sliderTime;
 			slider.Value = slider.Minimum + k * (slider.Maximum - slider.Minimum);
@@ -203,7 +216,7 @@ public partial class ModelViewerPanel : IViewerWidget
 		}
 
 		var k = (e.NewValue - _sliderTime.Minimum) / (_sliderTime.Maximum - _sliderTime.Minimum);
-		var passed = Player.AnimationClip.Duration * k;
+		var passed = Player.RootNode.Duration * k;
 		Player.Time = passed;
 	}
 
@@ -218,7 +231,7 @@ public partial class ModelViewerPanel : IViewerWidget
 			var clip = (AnimationClip)((Label)_comboAnimations.SelectedItem).Tag;
 			if (_checkCrossfade.IsChecked)
 			{
-				Player.CrossFade(clip.Name, TimeSpan.FromSeconds(0.5f));
+				Player.CrossfadeToClip(clip.Name, TimeSpan.FromSeconds(0.5f));
 			}
 			else
 			{

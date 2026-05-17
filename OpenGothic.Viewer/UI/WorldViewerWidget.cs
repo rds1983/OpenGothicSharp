@@ -14,7 +14,8 @@ public class WorldViewerWidget : Widget, IViewerWidget
 {
 	private readonly CameraInputController _controller;
 	private readonly ForwardRenderer _renderer;
-	private readonly SceneNode _root = new SceneNode(), _worldRoot = new SceneNode();
+	private readonly SceneNode _worldRoot = new SceneNode();
+	private readonly Scene _scene;
 
 	public Camera Camera => _controller.Camera;
 
@@ -26,10 +27,18 @@ public class WorldViewerWidget : Widget, IViewerWidget
 	{
 		_renderer = new ForwardRenderer();
 
-		// Light
-		_root.Children.Add(new DirectLight { Rotation = new Vector3(225, 45, 0), CastsShadow = true });
+		_scene = new Scene
+		{
+			Root = new SceneNode()
+		};
 
-		_root.Children.Add(_worldRoot);
+		var root = _scene.Root;
+
+		// Light
+		root.Children.Add(new DirectLight { Rotation = new Vector3(225, 45, 0), CastsShadow = true });
+
+		// World Root
+		root.Children.Add(_worldRoot);
 
 		var camera = new Camera
 		{
@@ -64,16 +73,12 @@ public class WorldViewerWidget : Widget, IViewerWidget
 
 		try
 		{
-			_root.CustomBoxes.Clear();
 			_worldRoot.Children.Clear();
 			for(var i = 0; i < Constants.GridSize; ++i)
 			{
 				for(var j = 0;  j < Constants.GridSize; ++j)
 				{
 					var cell = World.Cells[i, j];
-
-
-					_root.CustomBoxes.Add(cell.BoundingBox);
 
 					if (_controller.Camera.Frustum.Intersects(cell.BoundingBox) && cell.Root.Children.Count > 0)
 					{
@@ -82,7 +87,7 @@ public class WorldViewerWidget : Widget, IViewerWidget
 				}
 			}
 
-			var target = _renderer.RenderToTarget(_root, _controller.Camera, Configuration.RenderEnvironment, bounds.Width, bounds.Height);
+			var target = _renderer.RenderToTarget(_scene, _controller.Camera, Configuration.RenderEnvironment, bounds.Width, bounds.Height);
 
 			context.Draw(target, ActualBounds, Color.White);
 		}

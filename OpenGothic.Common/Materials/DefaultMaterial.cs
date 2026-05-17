@@ -107,44 +107,44 @@ namespace OpenGothic.Materials
 			};
 		}
 
-		private static EffectBinding InternalGetBinding(LightTechnique lightTechnique, bool shadow, bool skinning, bool clipPlane, bool instanced)
+		private static EffectBinding InternalGetBinding(MaterialTechnique materialTechnique, LightTechnique lightTechnique, bool shadow, bool clipPlane)
 		{
 			var key = 0;
 
-			if (lightTechnique == LightTechnique.Point)
+			if (materialTechnique == MaterialTechnique.Skinned)
 			{
 				key |= 1;
 			}
 
-			if (lightTechnique == LightTechnique.Spot)
+			if (materialTechnique == MaterialTechnique.Instanced)
 			{
 				key |= 2;
+			}
+
+			if (lightTechnique == LightTechnique.Point)
+			{
+				key |= 4;
+			}
+
+			if (lightTechnique == LightTechnique.Spot)
+			{
+				key |= 8;
 			}
 
 			if (shadow)
 			{
 				if (Nrs.GraphicsSettings.ShadowType == ShadowType.Simple)
 				{
-					key |= 4;
+					key |= 16;
 				}
 
 				if (Nrs.GraphicsSettings.ShadowType == ShadowType.PCF)
 				{
-					key |= 8;
+					key |= 32;
 				}
 			}
 
-			if (skinning)
-			{
-				key |= 16;
-			}
-
 			if (clipPlane)
-			{
-				key |= 32;
-			}
-
-			if (instanced)
 			{
 				key |= 64;
 			}
@@ -156,6 +156,18 @@ namespace OpenGothic.Materials
 			}
 
 			var defines = new Dictionary<string, string>();
+			switch (materialTechnique)
+			{
+				case MaterialTechnique.Ordinary:
+					break;
+				case MaterialTechnique.Skinned:
+					defines["SKINNED"] = "1";
+					break;
+				case MaterialTechnique.Instanced:
+					defines["INSTANCED"] = "1";
+					break;
+			}
+
 			switch (lightTechnique)
 			{
 				case LightTechnique.Point:
@@ -183,19 +195,9 @@ namespace OpenGothic.Materials
 				}
 			}
 
-			if (skinning)
-			{
-				defines["SKINNED"] = "1";
-			}
-
 			if (clipPlane)
 			{
 				defines["CLIPPLANE"] = "1";
-			}
-
-			if (instanced)
-			{
-				defines["INSTANCED"] = "1";
 			}
 
 			var effect = Resources.GetEffect("Default", defines);
@@ -212,16 +214,16 @@ namespace OpenGothic.Materials
 			return binding;
 		}
 
-		public override EffectBinding GetShadowTechnique(DrMeshPart mesh, bool instancing)
+		public override EffectBinding GetShadowTechnique(MaterialTechnique materialTechnique)
 		{
 			var key = 0;
 
-			if (mesh != null && mesh.Skin != null)
+			if (materialTechnique == MaterialTechnique.Skinned)
 			{
 				key |= 1;
 			}
 
-			if (instancing)
+			if (materialTechnique == MaterialTechnique.Instanced)
 			{
 				key |= 2;
 			}
@@ -232,14 +234,16 @@ namespace OpenGothic.Materials
 			}
 
 			var defines = new Dictionary<string, string>();
-			if (mesh != null && mesh.Skin != null)
+			switch (materialTechnique)
 			{
-				defines["SKINNED"] = "1";
-			}
-
-			if (instancing)
-			{
-				defines["INSTANCED"] = "1";
+				case MaterialTechnique.Ordinary:
+					break;
+				case MaterialTechnique.Skinned:
+					defines["SKINNED"] = "1";
+					break;
+				case MaterialTechnique.Instanced:
+					defines["INSTANCED"] = "1";
+					break;
 			}
 
 			var effect = Resources.GetEffect("Shadow", defines);
@@ -252,9 +256,9 @@ namespace OpenGothic.Materials
 			return binding;
 		}
 
-		public override EffectBinding GetColorTechnique(DrMeshPart mesh, LightTechnique technique, bool shadow, bool translucent, bool clipPlane, bool instancing)
+		public override EffectBinding GetColorTechnique(MaterialTechnique materialTechnique, LightTechnique lightTechnique, bool shadow, bool translucent, bool normalMapping, bool clipPlane)
 		{
-			return InternalGetBinding(technique, shadow, mesh != null && mesh.Skin != null, clipPlane, instancing);
+			return InternalGetBinding(materialTechnique, lightTechnique, shadow, clipPlane);
 		}
 	}
 }
