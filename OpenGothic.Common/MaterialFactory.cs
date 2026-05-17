@@ -1,6 +1,5 @@
 ﻿using DigitalRiseModel;
 using Nursia.Materials;
-using OpenGothic.Materials;
 
 namespace OpenGothic
 {
@@ -8,7 +7,7 @@ namespace OpenGothic
 	{
 		public static IMaterial Create(DrMaterial material)
 		{
-			return new DefaultMaterial
+			return new BlinnPhongMaterial
 			{
 				DiffuseColor = material.DiffuseColor,
 				DiffuseTexture = material.DiffuseTexture

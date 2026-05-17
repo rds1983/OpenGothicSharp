@@ -1,12 +1,11 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Nursia.Materials;
 using Nursia.SceneGraph;
-using OpenGothic.Materials;
 using OpenGothic.Utility;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using ZenKit;
 using ZenKit.Vobs;
 using IMaterial = Nursia.Materials.IMaterial;
@@ -178,7 +177,7 @@ namespace OpenGothic
 								continue;
 							}
 
-							var mat = new DefaultMaterial
+							var mat = new BlinnPhongMaterial
 							{
 								//						DiffuseColor = zkMaterial.Color.ToXna(),
 								DiffuseTexture = texture

@@ -11,7 +11,6 @@ using Nursia.Rendering;
 using Nursia.SceneGraph;
 using Nursia.SceneGraph.Lights;
 using Nursia.Utilities;
-using OpenGothic.Materials;
 using System;
 
 namespace OpenGothic.Viewer.UI;

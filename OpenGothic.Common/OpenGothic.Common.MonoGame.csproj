@@ -10,7 +10,4 @@
     <PackageReference Include="Nursia.MonoGame" Version="$(NursiaVersion)" />
     <PackageReference Include="MonoGame.Framework.DesktopGL" PrivateAssets="All" Version="$(MonoGameVersion)" />
   </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Effects\MonoGameOGL\bin\*.*" />
-  </ItemGroup>
 </Project>
