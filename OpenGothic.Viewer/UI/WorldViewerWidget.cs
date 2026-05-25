@@ -48,7 +48,7 @@ public class WorldViewerWidget : Widget, IViewerWidget
 
 		_controller = new CameraInputController(camera)
 		{
-			SpeedBoost = 500.0f
+			MoveSpeed = 500.0f
 		};
 
 		Nrs.GraphicsSettings.MaxShadowDistance = Constants.MaxShadowDistance;

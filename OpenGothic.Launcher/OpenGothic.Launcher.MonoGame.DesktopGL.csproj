@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(MonoGameTargetFramework)</TargetFramework>
+    <RootNamespace>OpenGothic.Viewer</RootNamespace>
+    <OutputPath>bin\MonoGame\$(Configuration)</OutputPath>
+    <DefineConstants>$(DefineConstants);MONOGAME</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="$(MonoGameVersion)" />
+    <PackageReference Include="Myra" Version="$(MyraVersion)" />
+  </ItemGroup>  
+  <ItemGroup>
+    <ProjectReference Include="..\..\Nursia\Nursia\Nursia.MonoGame.csproj" />
+    <ProjectReference Include="..\OpenGothic.Common\OpenGothic.Common.MonoGame.csproj" />
+  </ItemGroup>
+</Project>
