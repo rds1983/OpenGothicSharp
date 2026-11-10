@@ -1,45 +1,46 @@
 ﻿using Microsoft.Xna.Framework;
-using Nursia.SceneGraph;
+using OpenGothic.Engine;
+using System.Collections.Generic;
 
-namespace OpenGothic
+namespace OpenGothic;
+
+public class WorldGridCell
 {
-	public class WorldGridCell
-	{
-		public SceneNode Root { get; } = new SceneNode();
-		public BoundingBox BoundingBox { get; internal set; }
+	public List<SceneNode> Children { get; } = new List<SceneNode>();
+	public BoundingBox BoundingBox { get; internal set; }
+	public object Tag { get; set; }
 
-		public override string ToString() => $"{Root.Children.Count} meshes";
+	public override string ToString() => $"{Children.Count} meshes";
+}
+
+public class WorldGrid
+{
+	public WorldGridCell[,] Cells { get; } = new WorldGridCell[Constants.GridSize, Constants.GridSize];
+
+	public WorldGrid()
+	{
+		for (var i = 0; i < Constants.GridSize; ++i)
+		{
+			for (var j = 0; j < Constants.GridSize; ++j)
+			{
+				Cells[i, j] = new WorldGridCell();
+			}
+		}
 	}
 
-	public class WorldGrid
+	public WorldGridCell FindCellByBox(BoundingBox box)
 	{
-		public WorldGridCell[,] Cells { get; } = new WorldGridCell[Constants.GridSize, Constants.GridSize];
-
-		public WorldGrid()
+		for (var i = 0; i < Constants.GridSize; ++i)
 		{
-			for (var i = 0; i < Constants.GridSize; ++i)
+			for (var j = 0; j < Constants.GridSize; ++j)
 			{
-				for (var j = 0; j < Constants.GridSize; ++j)
+				if (Cells[i, j].BoundingBox.Intersects(box))
 				{
-					Cells[i, j] = new WorldGridCell();
+					return Cells[i, j];
 				}
 			}
 		}
 
-		public WorldGridCell FindCellByBox(BoundingBox box)
-		{
-			for (var i = 0; i < Constants.GridSize; ++i)
-			{
-				for (var j = 0; j < Constants.GridSize; ++j)
-				{
-					if (Cells[i, j].BoundingBox.Intersects(box))
-					{
-						return Cells[i, j];
-					}
-				}
-			}
-
-			return null;
-		}
+		return null;
 	}
 }

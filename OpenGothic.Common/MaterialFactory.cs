@@ -1,17 +1,17 @@
 ﻿using DigitalRiseModel;
-using Nursia.Materials;
 
-namespace OpenGothic
+namespace OpenGothic;
+
+using Material =  Engine.Material;
+
+public static class MaterialFactory
 {
-	public static class MaterialFactory
+	public static Material Create(DrMaterial material)
 	{
-		public static IMaterial Create(DrMaterial material)
+		return new Material
 		{
-			return new BlinnPhongMaterial
-			{
-				DiffuseColor = material.DiffuseColor,
-				DiffuseTexture = material.DiffuseTexture
-			};
-		}
+			DiffuseColor = material.DiffuseColor,
+			DiffuseTexture = material.DiffuseTexture
+		};
 	}
 }

@@ -58,7 +58,7 @@ public partial class Assets
 			}
 			else
 			{
-				Nrs.LogInfo($"Record '{vfsRoot.Name}' is already in the list. Previous vfs: {Path.GetFileName(existingRecords[0].VfsName)}");
+				OG.LogInfo($"Record '{vfsRoot.Name}' is already in the list. Previous vfs: {Path.GetFileName(existingRecords[0].VfsName)}");
 			}
 
 			var record = new RecordInfo(vfsName, vfs, vfsRoot);
@@ -73,14 +73,14 @@ public partial class Assets
 
 	private void Load()
 	{
-		Nrs.LogInfo($"Gothic Path: {Folder}");
+		OG.LogInfo($"Gothic Path: {Folder}");
 
 		var dataFolder = Path.Combine(Folder, "Data");
 
 		var vdfs = Directory.GetFiles(dataFolder, "*.vdf", SearchOption.AllDirectories);
 		foreach (var vfsName in vdfs)
 		{
-			Nrs.LogInfo($"Processing file {vfsName}");
+			OG.LogInfo($"Processing file {vfsName}");
 
 			var vfs = new Vfs();
 
@@ -98,7 +98,7 @@ public partial class Assets
 			return (T)obj;
 		}
 
-		Nrs.LogInfo($"Quering {typeof(T).Name} '{name}'");
+		OG.LogInfo($"Quering {typeof(T).Name} '{name}'");
 
 		var result = loader(device, name);
 		_cache[name] = result;

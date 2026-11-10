@@ -1,10 +1,14 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using OpenGothic.Engine;
+using OpenGothic.Utility;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using ZenKit;
 using ZenKit.Vobs;
+
+using Material = OpenGothic.Engine.Material;
 
 namespace OpenGothic
 {
@@ -145,7 +149,7 @@ namespace OpenGothic
 					var cellData = cellsData[i, j];
 
 					// Group polygons by materials
-					var groupedPolygons = new Dictionary<int, Tuple<IMaterial, List<IPolygon>>>();
+					var groupedPolygons = new Dictionary<int, Tuple<Material, List<IPolygon>>>();
 					for (var k = 0; k < cellData.Polygons.Count; ++k)
 					{
 						var polygon = polygons[cellData.Polygons[k]];
@@ -157,7 +161,7 @@ namespace OpenGothic
 						}
 
 						var materialIndex = materialsMap[polygon.MaterialIndex];
-						Tuple<IMaterial, List<IPolygon>> p;
+						Tuple<Material, List<IPolygon>> p;
 						if (!groupedPolygons.TryGetValue(materialIndex, out p))
 						{
 							var zkMaterial = materialsGroups[materialIndex].Material;
@@ -173,7 +177,7 @@ namespace OpenGothic
 								continue;
 							}
 
-							var mat = new BlinnPhongMaterial
+							var mat = new Material
 							{
 								//						DiffuseColor = zkMaterial.Color.ToXna(),
 								DiffuseTexture = texture
@@ -181,7 +185,7 @@ namespace OpenGothic
 
 							if (zkMaterial.Group == MaterialGroup.Water/* || zkMaterial.Group == MaterialGroup.Earth || zkMaterial.Group == MaterialGroup.Snow*/)
 							{
-								mat.CastsShadows = false;
+								mat.CastsShadow = false;
 							}
 
 							switch (zkMaterial.AlphaFunction)
@@ -196,7 +200,7 @@ namespace OpenGothic
 									break;
 							}
 
-							p = new Tuple<IMaterial, List<IPolygon>>(mat, new List<IPolygon>());
+							p = new Tuple<Material, List<IPolygon>>(mat, new List<IPolygon>());
 							groupedPolygons[materialIndex] = p;
 						}
 
@@ -278,7 +282,7 @@ namespace OpenGothic
 								Material = pair.Value.Item1
 							};
 
-							cell.Root.Children.Add(meshNode);
+							cell.Children.Add(meshNode);
 						}
 					}
 
@@ -317,14 +321,14 @@ namespace OpenGothic
 					if (cell != null)
 					{
 						Dictionary<string, List<InstancedMeshNode>> groupedMultiMeshes;
-						if (cell.Root.Tag == null)
+						if (cell.Tag == null)
 						{
 							groupedMultiMeshes = new Dictionary<string, List<InstancedMeshNode>>();
-							cell.Root.Tag = groupedMultiMeshes;
+							cell.Tag = groupedMultiMeshes;
 						}
 						else
 						{
-							groupedMultiMeshes = (Dictionary<string, List<InstancedMeshNode>>)cell.Root.Tag;
+							groupedMultiMeshes = (Dictionary<string, List<InstancedMeshNode>>)cell.Tag;
 						}
 
 						List<InstancedMeshNode> multiMeshes;
@@ -368,13 +372,13 @@ namespace OpenGothic
 				for (var j = 0; j < Constants.GridSize; ++j)
 				{
 					var cell = result.Cells[i, j];
-					if (cell.Root.Tag == null)
+					if (cell.Tag == null)
 					{
 						continue;
 					}
 
-					var groupedMultiMeshes = (Dictionary<string, List<InstancedMeshNode>>)cell.Root.Tag;
-					cell.Root.Tag = null;
+					var groupedMultiMeshes = (Dictionary<string, List<InstancedMeshNode>>)cell.Tag;
+					cell.Tag = null;
 
 					foreach (var pair in groupedMultiMeshes)
 					{
@@ -393,15 +397,15 @@ namespace OpenGothic
 									{
 										Mesh = mm.Mesh,
 										Material = mm.Material,
-										LocalTransform = transform
+										Transform = transform
 									};
 
-									cell.Root.Children.Add(meshNode);
+									cell.Children.Add(meshNode);
 								}
 							}
 							else
 							{
-								cell.Root.Children.Add(mm);
+								cell.Children.Add(mm);
 							}
 						}
 					}
