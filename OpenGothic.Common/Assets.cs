@@ -1,5 +1,4 @@
 ﻿using Microsoft.Xna.Framework.Graphics;
-using Nursia;
 using OpenGothic.Utility;
 using System;
 using System.Collections.Generic;

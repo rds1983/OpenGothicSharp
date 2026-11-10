@@ -1,14 +1,10 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using Nursia.Materials;
-using Nursia.SceneGraph;
-using OpenGothic.Utility;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using ZenKit;
 using ZenKit.Vobs;
-using IMaterial = Nursia.Materials.IMaterial;
 
 namespace OpenGothic
 {
