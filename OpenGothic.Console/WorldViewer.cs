@@ -1,4 +1,5 @@
 using DigitalRiseModel;
+using DigitalRiseModel.Animation;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -28,10 +29,16 @@ internal sealed class WorldViewer : Game
 	private readonly Dictionary<DrMeshPart, BoundingSphere> _boundsCache = new Dictionary<DrMeshPart, BoundingSphere>();
 
 	private WorldGrid _world;
+	private const string HeroIdleClip = "S_RUN";
+	private const string HeroRunClip = "S_RUNL";
+
 	private DrModel _hero;
+	private DrModelInstance _heroInstance;
+	private AnimationController _heroAnimations;
 	private DrMesh _heroHead;
 	private DrModelBone _heroHeadBone;
-	private Matrix[] _heroBoneTransforms;
+	private DrModelBone _heroRootBone;
+	private bool _heroMoving;
 	private BasicEffect _effect;
 	private SkinnedEffect _skinnedEffect;
 	private Matrix _projection = Matrix.Identity;
@@ -128,12 +135,27 @@ internal sealed class WorldViewer : Game
 			_skinnedEffect.FogStart = Constants.MaxShadowDistance;
 			_skinnedEffect.FogEnd = FarPlane * 0.8f;
 
-			// The hero's starting outfit; the human model script itself has no animations imported here.
-			_hero = assets.GetModel(GraphicsDevice, "HUMANS.MSB", "ARMOR_PRISONER.MDM");
+			// The hero's starting outfit. In Gothic's naming S_RUN is the standing idle and
+			// S_RUNL is the actual run cycle.
+			_hero = assets.GetModel(GraphicsDevice, "HUMANS.MSB", "ARMOR_PRISONER.MDM", HeroIdleClip, HeroRunClip);
 			_heroHead = assets.GetMorphMesh(GraphicsDevice, "HUM_HEAD_PONY.MMB");
 			_heroHeadBone = _hero.FindBoneByName("BIP01 HEAD");
-			_heroBoneTransforms = new Matrix[_hero.Bones.Length];
+
+			foreach (var bone in _hero.Bones)
+			{
+				if (bone.Parent == _hero.Root && bone.Mesh == null)
+				{
+					_heroRootBone = bone;
+					break;
+				}
+			}
+
+			_heroInstance = new DrModelInstance(_hero);
+			_heroAnimations = new AnimationController(_heroInstance);
+			_heroAnimations.StartClip(HeroIdleClip, AnimationFlags.Looped);
+
 			Console.WriteLine($"Hero model:      {_hero.Meshes.Length} meshes, {_hero.Bones.Length} bones, head {(_heroHeadBone != null ? "attached" : "missing")}");
+			Console.WriteLine($"Hero clips:      {string.Join(", ", _hero.Animations.Keys)}");
 
 			var viewport = GraphicsDevice.Viewport;
 			_viewportWidth = viewport.Width;
@@ -177,9 +199,34 @@ internal sealed class WorldViewer : Game
 		if (keyboard.IsKeyDown(Keys.D)) direction += _camera.PlanarRight;
 		if (keyboard.IsKeyDown(Keys.A)) direction -= _camera.PlanarRight;
 
+		UpdateHeroAnimation(delta, direction != Vector3.Zero);
+
 		_player.Move(direction, delta, keyboard.IsKeyDown(Keys.LeftShift));
 		ResolveCollision();
 		ApplyGravity(delta);
+	}
+
+	private void UpdateHeroAnimation(float delta, bool moving)
+	{
+		if (_heroAnimations == null)
+		{
+			return;
+		}
+
+		if (moving != _heroMoving)
+		{
+			_heroMoving = moving;
+			_heroAnimations.CrossfadeToClip(moving ? HeroRunClip : HeroIdleClip, TimeSpan.FromSeconds(0.25), AnimationFlags.Looped);
+		}
+
+		_heroAnimations.Update(TimeSpan.FromSeconds(delta));
+
+		// Gothic run clips animate the root bone forward (S_RUNL moves it hundreds of units).
+		// The player position is authoritative, so keep the root at its default pose.
+		if (_heroRootBone != null)
+		{
+			_heroInstance.SetBoneLocalTransform(_heroRootBone.Index, _heroInstance.GetDefaultPose(_heroRootBone.Index).ToMatrix());
+		}
 	}
 
 	private void ResolveCollision()
@@ -319,8 +366,6 @@ internal sealed class WorldViewer : Game
 		var feet = _player.Position - Vector3.Up * Player.HalfHeight;
 		var world = Matrix.CreateRotationY(_player.Yaw) * Matrix.CreateTranslation(feet);
 
-		_hero.CopyAbsoluteBoneTransformsTo(_heroBoneTransforms);
-
 		_skinnedEffect.View = _effect.View;
 		_skinnedEffect.Projection = _effect.Projection;		var drawCalls = 0;
 		foreach (var mesh in _hero.Meshes)
@@ -333,9 +378,9 @@ internal sealed class WorldViewer : Game
 				}
 
 				// Skinned vertices are already baked into the model's bind pose, so only the hero
-				// transform is needed here; the skeleton comes from the bone matrices.
+				// transform is needed here; the skeleton comes from the animated bone matrices.
 				_skinnedEffect.World = world;
-				_skinnedEffect.SetBoneTransforms(GetSkinTransforms(part.Skin));
+				_skinnedEffect.SetBoneTransforms(_heroInstance.GetSkinTransforms(part.Skin.SkinIndex));
 				_skinnedEffect.Texture = part.Material?.DiffuseTexture;
 				_skinnedEffect.DiffuseColor = part.Material?.DiffuseColor.ToVector3() ?? Vector3.One;
 				_skinnedEffect.CurrentTechnique.Passes[0].Apply();
@@ -351,7 +396,7 @@ internal sealed class WorldViewer : Game
 		{
 			// The head is a morph mesh without morphing for now; its vertices live in head-bone space.
 			var headWorld = _heroHeadBone != null
-				? _heroBoneTransforms[_heroHeadBone.Index] * world
+				? _heroInstance.GetBoneGlobalTransform(_heroHeadBone.Index) * world
 				: world;
 
 			_effect.World = headWorld;
@@ -370,18 +415,6 @@ internal sealed class WorldViewer : Game
 		}
 
 		return drawCalls;
-	}
-
-	private Matrix[] GetSkinTransforms(DrSkin skin)
-	{
-		var transforms = new Matrix[skin.Joints.Length];
-		for (var i = 0; i < transforms.Length; ++i)
-		{
-			var joint = skin.Joints[i];
-			transforms[i] = joint.InverseBindTransform * _heroBoneTransforms[joint.Bone.Index];
-		}
-
-		return transforms;
 	}
 
 	private void DrawPart(DrMeshPart part, Material material, Matrix world)

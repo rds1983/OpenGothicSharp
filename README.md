@@ -132,7 +132,11 @@ usual desktop OpenGL and audio dependencies required by MonoGame DesktopGL are i
 `OpenGothic.Console` mounts the game archives, loads `NEWWORLD.ZEN` and renders it with a
 third-person follow camera. The player is the real hero model: the `HUMANS.MSB` skeleton with
 the prisoner outfit mesh (`ARMOR_PRISONER.MDM`) and the ponytail head (`HUM_HEAD_PONY.MMB`),
-drawn with stock `SkinnedEffect`/`BasicEffect` in the bind pose — animation is not played yet.
+drawn with stock `SkinnedEffect`/`BasicEffect`. Its standing idle (`S_RUN`, Gothic's name for
+the idle loop) and run cycle (`S_RUNL`) play through DigitalRiseModel's `AnimationController`
+with a short crossfade when movement starts or stops; only those two clips are imported instead
+of the 784 in the model script. Root motion is ignored (the run clip moves its root bone forward), so
+the player position stays authoritative.
 The hero is spawned at the world's start point (`zCVobStartpoint`, which is Xardas' tower in
 `NEWWORLD.ZEN`). Gravity keeps it on the ground: a CPU collision grid built from the
 world's static polygons and static vob meshes traces down from the player and snaps it to the

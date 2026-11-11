@@ -343,14 +343,28 @@ partial class Assets
 
 		var modelInfo = LoadModel(device, zkHierarchy, zkMesh);
 
-		var nameNoExt = Path.GetFileNameWithoutExtension(name);
-
 		modelInfo.Model.Animations = new Dictionary<string, AnimationClip>();
+		ImportAnimations(modelInfo.Model, modelInfo.OriginalBones, zkScript, name, null);
+
+		return modelInfo.Model;
+	}
+
+	/// <summary>
+	/// Imports .MAN clips referenced by the model script. When <paramref name="filter"/> is set,
+	/// only clips with those names are loaded.
+	/// </summary>
+	private void ImportAnimations(DrModel model, DrModelBone[] originalBones, ModelScript zkScript, string modelName, HashSet<string> filter)
+	{
+		var nameNoExt = Path.GetFileNameWithoutExtension(modelName);
 
 		var zkAnimations = zkScript.Animations;
 		for (var i = 0; i < zkAnimations.Count; ++i)
 		{
 			var animation = zkAnimations[i];
+			if (filter != null && !filter.Contains(animation.Name))
+			{
+				continue;
+			}
 
 			var animationName = nameNoExt + "-" + animation.Name + ".MAN";
 
@@ -365,7 +379,7 @@ partial class Assets
 			var samples = zkAnimation.Samples;
 			for (var k = 0; k < zkAnimationNodeIndices.Count; ++k)
 			{
-				var bone = modelInfo.OriginalBones[zkAnimationNodeIndices[k]];
+				var bone = originalBones[zkAnimationNodeIndices[k]];
 
 				var keyframes = new List<AnimationChannelKeyframe>();
 				var time = TimeSpan.Zero;
@@ -374,10 +388,10 @@ partial class Assets
 					var pos = k + j * zkAnimationNodeIndices.Count;
 					var sample = samples[pos];
 
-					time += timeStep;
 					var keyframe = new AnimationChannelKeyframe(time, new SrtTransform(sample.Position.ToXna(), sample.Rotation.ToXna(), bone.DefaultPose.Scale));
-
 					keyframes.Add(keyframe);
+
+					time += timeStep;
 				}
 
 				var channel = new AnimationChannel(bone.Index, keyframes.ToArray());
@@ -387,11 +401,9 @@ partial class Assets
 			if (channels.Count > 0)
 			{
 				var clip = new AnimationClip(animation.Name, zkAnimation.FrameCount * timeStep, channels.ToArray());
-				modelInfo.Model.Animations[clip.Name] = clip;
+				model.Animations[clip.Name] = clip;
 			}
 		}
-
-		return modelInfo.Model;
 	}
 
 	private readonly Dictionary<string, Vector3[]> _collisionTriangles = new Dictionary<string, Vector3[]>();
@@ -452,22 +464,36 @@ partial class Assets
 	}
 
 	/// <summary>
-	/// Loads a model script with an explicitly chosen mesh instead of its default skeleton mesh,
-	/// without importing animation clips.
+	/// Loads a model script with an explicitly chosen mesh instead of its default skeleton mesh.
+	/// Only the animation clips named in <paramref name="animationNames"/> are imported.
 	/// </summary>
-	public DrModel GetModel(GraphicsDevice device, string scriptName, string meshName)
+	public DrModel GetModel(GraphicsDevice device, string scriptName, string meshName, params string[] animationNames)
 	{
 		var key = scriptName.ToUpper() + "|" + meshName.ToUpper();
-		return Get(device, key, (d, _) => LoadModel(d, scriptName, meshName));
+		if (animationNames.Length > 0)
+		{
+			key += "|" + string.Join(",", animationNames);
+		}
+
+		return Get(device, key, (d, _) => LoadModel(d, scriptName, meshName, animationNames));
 	}
 
-	private DrModel LoadModel(GraphicsDevice device, string scriptName, string meshName)
+	private DrModel LoadModel(GraphicsDevice device, string scriptName, string meshName, string[] animationNames)
 	{
 		var zkScript = new ModelScript(GetLastRecord(scriptName).Node.Buffer);
 		var zkHierarchy = new ModelHierarchy(GetLastRecord(Path.ChangeExtension(scriptName, "MDH")).Node.Buffer);
 		var zkMesh = new ZenKit.ModelMesh(GetLastRecord(meshName).Node.Buffer);
 
-		return LoadModel(device, zkHierarchy, zkMesh).Model;
+		var modelInfo = LoadModel(device, zkHierarchy, zkMesh);
+
+		modelInfo.Model.Animations = new Dictionary<string, AnimationClip>();
+		if (animationNames.Length > 0)
+		{
+			var filter = new HashSet<string>(animationNames, StringComparer.OrdinalIgnoreCase);
+			ImportAnimations(modelInfo.Model, modelInfo.OriginalBones, zkScript, scriptName, filter);
+		}
+
+		return modelInfo.Model;
 	}
 
 	/// <summary>Loads the base mesh of a morph mesh (.MMB) as a static mesh.</summary>
