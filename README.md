@@ -130,7 +130,10 @@ usual desktop OpenGL and audio dependencies required by MonoGame DesktopGL are i
 ## Running the world viewer
 
 `OpenGothic.Console` mounts the game archives, loads `NEWWORLD.ZEN` and renders it with a
-free-fly camera. Rendering uses stock MonoGame effects only (`BasicEffect`), with per-cell and
+third-person follow camera. The player is a plain white capsule from DigitalRiseModel's
+`MeshPrimitives`, spawned at the world's start point (`zCVobStartpoint`, which is Xardas'
+tower in `NEWWORLD.ZEN`). There is no collision yet, so it passes through everything and can
+fly vertically. Rendering uses stock MonoGame effects only (`BasicEffect`), with per-cell and
 per-instance frustum culling over the `WorldGrid`; nothing is pre-baked or copied into the
 project.
 
@@ -143,14 +146,15 @@ dotnet run --project OpenGothic.Console -- "C:\\GOG Games\\Gothic II" ADDONWORLD
 
 | Input | Action |
 |---|---|
-| `W` / `A` / `S` / `D` | Move forward / left / back / right |
-| `Space` / `Left Ctrl` | Move up / down |
-| `Left Shift` | Fast movement |
-| Mouse | Look around |
-| Mouse wheel | Change movement speed |
+| `W` / `A` / `S` / `D` | Run relative to the camera |
+| `Space` / `Left Ctrl` | Fly up / down (no collision yet) |
+| `Left Shift` | Sprint |
+| Mouse | Orbit the camera |
+| Mouse wheel | Camera distance |
 | `Escape` | Quit |
 
-The window title reports the live draw-call count, camera position and movement speed. Exit
+The window title reports the live draw-call count, the player position and the camera
+distance. Exit
 codes: `0` success, `1` missing arguments, `2` not a Gothic II folder, `3` unhandled error,
 `4` world could not be loaded.
 
@@ -240,7 +244,8 @@ Directory.Build.props          Central package versions, runtime IDs and metadat
 OpenGothic.Console/
   Program.cs                   Command line parsing and usage
   WorldViewer.cs               MonoGame host, world rendering and culling
-  FlyCamera.cs                 Keyboard/mouse free-fly camera
+  FollowCamera.cs              Third-person orbit camera
+  Player.cs                    Capsule avatar and movement
 OpenGothic.Common/
   OpenGothic.Common.MonoGame.csproj
   OG.cs                        Global GraphicsDevice, logging, version

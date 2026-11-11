@@ -17,6 +17,9 @@ public class WorldGrid
 {
 	public WorldGridCell[,] Cells { get; } = new WorldGridCell[Constants.GridSize, Constants.GridSize];
 
+	/// <summary>Player start marker from the world (zCVobStartpoint), if any.</summary>
+	public Vector3? PlayerStart { get; set; }
+
 	public WorldGrid()
 	{
 		for (var i = 0; i < Constants.GridSize; ++i)

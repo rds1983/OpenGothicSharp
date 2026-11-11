@@ -1,4 +1,5 @@
 using DigitalRiseModel;
+using DigitalRiseModel.Primitives;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -10,8 +11,8 @@ using System.Diagnostics;
 namespace OpenGothic.Tools;
 
 /// <summary>
-/// Interactive world viewer: loads the requested .ZEN, then draws every mesh with
-/// stock MonoGame effects (BasicEffect) while the camera flies through the scene.
+/// Interactive world viewer: loads the requested .ZEN, draws every mesh with stock
+/// MonoGame effects (BasicEffect) and lets a capsule player run through it.
 /// The mesh loader needs a live GraphicsDevice, which is why this is a Game host.
 /// </summary>
 internal sealed class WorldViewer : Game
@@ -23,10 +24,12 @@ internal sealed class WorldViewer : Game
 	private readonly GraphicsDeviceManager _graphics;
 	private readonly string _folder;
 	private readonly string _worldName;
-	private readonly FlyCamera _camera = new FlyCamera();
+	private readonly FollowCamera _camera = new FollowCamera();
+	private readonly Player _player = new Player();
 	private readonly Dictionary<DrMeshPart, BoundingSphere> _boundsCache = new Dictionary<DrMeshPart, BoundingSphere>();
 
 	private WorldGrid _world;
+	private DrMesh _playerMesh;
 	private BasicEffect _effect;
 	private Matrix _projection = Matrix.Identity;
 	private int _viewportWidth;
@@ -83,11 +86,11 @@ internal sealed class WorldViewer : Game
 			Console.WriteLine($"World loaded in {stopwatch.Elapsed.TotalMilliseconds:F0} ms.");
 			Console.WriteLine();
 			Console.WriteLine("Controls:");
-			Console.WriteLine("  W/A/S/D         move");
-			Console.WriteLine("  Space / L-Ctrl  up / down");
-			Console.WriteLine("  Left Shift      fast move");
-			Console.WriteLine("  Mouse           look");
-			Console.WriteLine("  Mouse wheel     movement speed");
+			Console.WriteLine("  W/A/S/D         run");
+			Console.WriteLine("  Space / L-Ctrl  fly up / down (no collision yet)");
+			Console.WriteLine("  Left Shift      sprint");
+			Console.WriteLine("  Mouse           orbit camera");
+			Console.WriteLine("  Mouse wheel     camera distance");
 			Console.WriteLine("  Escape          quit");
 			Console.WriteLine();
 
@@ -109,12 +112,14 @@ internal sealed class WorldViewer : Game
 			_effect.FogStart = Constants.MaxShadowDistance;
 			_effect.FogEnd = FarPlane * 0.8f;
 
+			_playerMesh = MeshPrimitives.CreateCapsuleMesh(GraphicsDevice, Player.CapsuleLength, Player.Radius, 16, 1.0f, 1.0f, true);
+
 			var viewport = GraphicsDevice.Viewport;
 			_viewportWidth = viewport.Width;
 			_viewportHeight = viewport.Height;
 			_projection = Matrix.CreatePerspectiveFieldOfView(FieldOfView, (float)Math.Max(1, _viewportWidth) / Math.Max(1, _viewportHeight), NearPlane, FarPlane);
 
-			PlaceCamera(_world);
+			PlacePlayer(_world);
 			CenterMouse();
 
 			_succeeded = true;
@@ -146,14 +151,14 @@ internal sealed class WorldViewer : Game
 		var delta = (float)gameTime.ElapsedGameTime.TotalSeconds;
 		var direction = Vector3.Zero;
 
-		if (keyboard.IsKeyDown(Keys.W)) direction += _camera.Forward;
-		if (keyboard.IsKeyDown(Keys.S)) direction -= _camera.Forward;
-		if (keyboard.IsKeyDown(Keys.D)) direction += _camera.Right;
-		if (keyboard.IsKeyDown(Keys.A)) direction -= _camera.Right;
+		if (keyboard.IsKeyDown(Keys.W)) direction += _camera.PlanarForward;
+		if (keyboard.IsKeyDown(Keys.S)) direction -= _camera.PlanarForward;
+		if (keyboard.IsKeyDown(Keys.D)) direction += _camera.PlanarRight;
+		if (keyboard.IsKeyDown(Keys.A)) direction -= _camera.PlanarRight;
 		if (keyboard.IsKeyDown(Keys.Space)) direction += Vector3.Up;
 		if (keyboard.IsKeyDown(Keys.LeftControl)) direction -= Vector3.Up;
 
-		_camera.Move(direction, delta, keyboard.IsKeyDown(Keys.LeftShift));
+		_player.Move(direction, delta, keyboard.IsKeyDown(Keys.LeftShift));
 	}
 
 	private void UpdateMouseLook()
@@ -199,10 +204,11 @@ internal sealed class WorldViewer : Game
 			return;
 		}
 
-		_effect.View = _camera.View;
+		var view = _camera.GetView(_player.Position);
+		_effect.View = view;
 		_effect.Projection = _projection;
 
-		var frustum = new BoundingFrustum(_camera.View * _projection);
+		var frustum = new BoundingFrustum(view * _projection);
 		var drawCalls = 0;
 
 		foreach (var cell in _world.Cells)
@@ -244,14 +250,45 @@ internal sealed class WorldViewer : Game
 			}
 		}
 
+		drawCalls += DrawPlayer();
+
 		_titleUpdateTimer += gameTime.ElapsedGameTime.TotalSeconds;
 		if (_titleUpdateTimer >= 0.25)
 		{
 			_titleUpdateTimer = 0.0;
-			Window.Title = $"OpenGothic viewer | {_worldName} | {drawCalls} draws | pos {_camera.Position.X:0},{_camera.Position.Y:0},{_camera.Position.Z:0} | speed {_camera.MoveSpeed:0}";
+			Window.Title = $"OpenGothic viewer | {_worldName} | {drawCalls} draws | player {_player.Position.X:0},{_player.Position.Y:0},{_player.Position.Z:0} | camera {_camera.Distance:0}";
 		}
 
 		base.Draw(gameTime);
+	}
+
+	private int DrawPlayer()
+	{
+		if (_playerMesh == null)
+		{
+			return 0;
+		}
+
+		var device = GraphicsDevice;
+		var rasterizer = device.RasterizerState;
+
+		// Pure white, untextured capsule; culling off because the primitive's winding is not worth relying on.
+		device.RasterizerState = RasterizerState.CullNone;
+		_effect.TextureEnabled = false;
+		_effect.Texture = null;
+		_effect.DiffuseColor = Vector3.One;
+		_effect.World = _player.World;
+		_effect.CurrentTechnique.Passes[0].Apply();
+
+		foreach (var part in _playerMesh.MeshParts)
+		{
+			device.SetVertexBuffer(part.VertexBuffer);
+			device.Indices = part.IndexBuffer;
+			device.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, part.PrimitiveCount);
+		}
+
+		device.RasterizerState = rasterizer;
+		return _playerMesh.MeshParts.Count;
 	}
 
 	private void DrawPart(DrMeshPart part, Material material, Matrix world)
@@ -284,8 +321,22 @@ internal sealed class WorldViewer : Game
 		return frustum.Intersects(transformed);
 	}
 
-	private void PlaceCamera(WorldGrid world)
+	private void PlacePlayer(WorldGrid world)
 	{
+		_camera.Yaw = 0.0f;
+		_camera.Pitch = -0.25f;
+		_camera.Distance = 250.0f;
+		_player.Yaw = 0.0f;
+
+		// The world's zCVobStartpoint marks where a new game begins (Xardas' tower in NEWWORLD).
+		if (world.PlayerStart is Vector3 start)
+		{
+			// The marker sits on the floor, while the capsule is centered on its position.
+			_player.Position = start + Vector3.Up * (Player.CapsuleLength * 0.5f + Player.Radius);
+			Console.WriteLine($"Player start:    {Format(start)}");
+			return;
+		}
+
 		BoundingBox? bounds = null;
 		foreach (var cell in world.Cells)
 		{
@@ -300,9 +351,15 @@ internal sealed class WorldViewer : Game
 		var box = bounds ?? new BoundingBox(Vector3.Zero, Vector3.Zero);
 		var center = (box.Min + box.Max) * 0.5f;
 
-		_camera.Position = new Vector3(center.X, box.Max.Y + 1500.0f, center.Z);
-		_camera.Yaw = 0.0f;
-		_camera.Pitch = -0.45f;
+		_player.Position = new Vector3(center.X, box.Max.Y + 1500.0f, center.Z);
+		Console.WriteLine("Player start:    no startpoint in world, using world centre");
+	}
+
+	protected override void UnloadContent()
+	{
+		_playerMesh?.Dispose();
+		_playerMesh = null;
+		base.UnloadContent();
 	}
 
 	private void CenterMouse()

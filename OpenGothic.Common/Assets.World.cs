@@ -310,6 +310,11 @@ namespace OpenGothic
 
 				var transform = vob.Rotation.ToXna() * Matrix.CreateTranslation(vob.Position.ToXna());
 
+				if (result.PlayerStart == null && vob is StartPoint)
+				{
+					result.PlayerStart = transform.Translation;
+				}
+
 				var asMesh = vob.Visual as VisualMultiResolutionMesh;
 				if (asMesh != null)
 				{
