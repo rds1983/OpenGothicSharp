@@ -7,6 +7,8 @@
     <Description>Insane attempt to rewrite Gothic in C#</Description>
     <RootNamespace>OpenGothic</RootNamespace>
     <MonoGameTargetFramework>net8.0</MonoGameTargetFramework>
+    <!-- ZenKit's targets set a RuntimeIdentifier, so restore needs the matching runtimes. -->
+    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64</RuntimeIdentifiers>
     <Version>0.1.0</Version>
     <MonoGameVersion>3.8.6.1</MonoGameVersion>
     <DigitalRiseModelVersion>0.7.5</DigitalRiseModelVersion>

@@ -127,11 +127,12 @@ usual desktop OpenGL and audio dependencies required by MonoGame DesktopGL are i
 
 ---
 
-## Running the world loader
+## Running the world viewer
 
-`OpenGothic.Console` is a small console host that mounts the game archives, loads
-`NEWWORLD.ZEN` and prints a summary (grid cells, mesh/instanced nodes, bounds, timing).
-It opens a temporary MonoGame window because the mesh loader needs a live `GraphicsDevice`.
+`OpenGothic.Console` mounts the game archives, loads `NEWWORLD.ZEN` and renders it with a
+free-fly camera. Rendering uses stock MonoGame effects only (`BasicEffect`), with per-cell and
+per-instance frustum culling over the `WorldGrid`; nothing is pre-baked or copied into the
+project.
 
 ```bash
 dotnet run --project OpenGothic.Console -- "C:\\GOG Games\\Gothic II"
@@ -140,8 +141,21 @@ dotnet run --project OpenGothic.Console -- "C:\\GOG Games\\Gothic II"
 dotnet run --project OpenGothic.Console -- "C:\\GOG Games\\Gothic II" ADDONWORLD.ZEN
 ```
 
-Exit codes: `0` success, `1` missing arguments, `2` not a Gothic II folder, `3` unhandled
-error, `4` world could not be loaded.
+| Input | Action |
+|---|---|
+| `W` / `A` / `S` / `D` | Move forward / left / back / right |
+| `Space` / `Left Ctrl` | Move up / down |
+| `Left Shift` | Fast movement |
+| Mouse | Look around |
+| Mouse wheel | Change movement speed |
+| `Escape` | Quit |
+
+The window title reports the live draw-call count, camera position and movement speed. Exit
+codes: `0` success, `1` missing arguments, `2` not a Gothic II folder, `3` unhandled error,
+`4` world could not be loaded.
+
+> The viewer needs a working desktop OpenGL context, since it creates a MonoGame window. Alpha
+> blending, water and animated objects are not handled yet — world geometry is drawn opaque.
 
 ---
 
@@ -225,7 +239,8 @@ OpenGothic.MonoGame.sln
 Directory.Build.props          Central package versions, runtime IDs and metadata
 OpenGothic.Console/
   Program.cs                   Command line parsing and usage
-  WorldLoader.cs               MonoGame host that loads a world and prints stats
+  WorldViewer.cs               MonoGame host, world rendering and culling
+  FlyCamera.cs                 Keyboard/mouse free-fly camera
 OpenGothic.Common/
   OpenGothic.Common.MonoGame.csproj
   OG.cs                        Global GraphicsDevice, logging, version

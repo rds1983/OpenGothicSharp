@@ -24,11 +24,11 @@ internal static class Program
 
 		var worldName = args.Length > 1 ? args[1] : DefaultWorld;
 
-		using (var loader = new WorldLoader(folder, worldName))
+		using (var viewer = new WorldViewer(folder, worldName))
 		{
 			try
 			{
-				loader.Run();
+				viewer.Run();
 			}
 			catch (Exception ex)
 			{
@@ -36,7 +36,7 @@ internal static class Program
 				return 3;
 			}
 
-			return loader.Succeeded ? 0 : 4;
+			return viewer.Succeeded ? 0 : 4;
 		}
 	}
 
