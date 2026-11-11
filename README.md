@@ -127,6 +127,24 @@ usual desktop OpenGL and audio dependencies required by MonoGame DesktopGL are i
 
 ---
 
+## Running the world loader
+
+`OpenGothic.Console` is a small console host that mounts the game archives, loads
+`NEWWORLD.ZEN` and prints a summary (grid cells, mesh/instanced nodes, bounds, timing).
+It opens a temporary MonoGame window because the mesh loader needs a live `GraphicsDevice`.
+
+```bash
+dotnet run --project OpenGothic.Console -- "C:\\GOG Games\\Gothic II"
+
+# load a different world
+dotnet run --project OpenGothic.Console -- "C:\\GOG Games\\Gothic II" ADDONWORLD.ZEN
+```
+
+Exit codes: `0` success, `1` missing arguments, `2` not a Gothic II folder, `3` unhandled
+error, `4` world could not be loaded.
+
+---
+
 ## Using the library
 
 Point `Assets` at the folder that contains the game's `Data` directory (the Gothic II install
@@ -204,7 +222,10 @@ right-handed MonoGame world.
 
 ```
 OpenGothic.MonoGame.sln
-Directory.Build.props          Central package versions and metadata
+Directory.Build.props          Central package versions, runtime IDs and metadata
+OpenGothic.Console/
+  Program.cs                   Command line parsing and usage
+  WorldLoader.cs               MonoGame host that loads a world and prints stats
 OpenGothic.Common/
   OpenGothic.Common.MonoGame.csproj
   OG.cs                        Global GraphicsDevice, logging, version

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(MonoGameTargetFramework)</TargetFramework>
+    <RootNamespace>OpenGothic.Tools</RootNamespace>
+    <AssemblyName>OpenGothic.Console</AssemblyName>
+    <DefineConstants>$(DefineConstants);MONOGAME</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\OpenGothic.Common\OpenGothic.Common.MonoGame.csproj" />
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="$(MonoGameVersion)" />
+  </ItemGroup>
+</Project>
