@@ -128,6 +128,13 @@ namespace OpenGothic
 
 				var bb = BoundingBox.CreateFromPoints(ps);
 
+				// Portals are invisible planes marking openings between sectors; the game never
+				// draws them, so neither should we (or they cover every passageway).
+				if (polygon.IsPortal)
+				{
+					continue;
+				}
+
 				// Static collision: walkable world polygons only (not ghost occluders or water).
 				var collisionMaterial = materials[polygon.MaterialIndex];
 				if (!polygon.IsGhostOccluder && collisionMaterial.Group != MaterialGroup.Water)

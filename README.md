@@ -136,9 +136,9 @@ tower in `NEWWORLD.ZEN`). Gravity keeps it on the ground: a CPU collision grid b
 world's static polygons traces down from the player and snaps it to the highest surface within
 stepping distance, otherwise it falls. Horizontal collision, jumping and swimming are not
 implemented yet, so walls can be walked through. Rendering uses stock MonoGame effects only
-(`BasicEffect`), with per-cell and
-per-instance frustum culling over the `WorldGrid`; nothing is pre-baked or copied into the
-project.
+(`BasicEffect`), with per-cell and per-instance frustum culling over the `WorldGrid`; nothing is
+pre-baked or copied into the project. Invisible portal polygons, which only mark openings
+between sectors, are skipped so passageways stay open instead of being covered by textures.
 
 ```bash
 dotnet run --project OpenGothic.Console -- "C:\\GOG Games\\Gothic II"
