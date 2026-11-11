@@ -132,8 +132,11 @@ usual desktop OpenGL and audio dependencies required by MonoGame DesktopGL are i
 `OpenGothic.Console` mounts the game archives, loads `NEWWORLD.ZEN` and renders it with a
 third-person follow camera. The player is a plain white capsule from DigitalRiseModel's
 `MeshPrimitives`, spawned at the world's start point (`zCVobStartpoint`, which is Xardas'
-tower in `NEWWORLD.ZEN`). There is no collision yet, so it passes through everything and can
-fly vertically. Rendering uses stock MonoGame effects only (`BasicEffect`), with per-cell and
+tower in `NEWWORLD.ZEN`). Gravity keeps it on the ground: a CPU collision grid built from the
+world's static polygons traces down from the player and snaps it to the highest surface within
+stepping distance, otherwise it falls. Horizontal collision, jumping and swimming are not
+implemented yet, so walls can be walked through. Rendering uses stock MonoGame effects only
+(`BasicEffect`), with per-cell and
 per-instance frustum culling over the `WorldGrid`; nothing is pre-baked or copied into the
 project.
 
@@ -147,7 +150,6 @@ dotnet run --project OpenGothic.Console -- "C:\\GOG Games\\Gothic II" ADDONWORLD
 | Input | Action |
 |---|---|
 | `W` / `A` / `S` / `D` | Run relative to the camera |
-| `Space` / `Left Ctrl` | Fly up / down (no collision yet) |
 | `Left Shift` | Sprint |
 | Mouse | Orbit the camera |
 | Mouse wheel | Camera distance |
@@ -254,6 +256,7 @@ OpenGothic.Common/
   Assets.Model.cs              .MDL/.MDH/.MDM/.MAN → DrModel + animation clips
   Assets.World.cs              .ZEN → WorldGrid, .MRM virtual objects, instancing
   WorldGrid.cs                 WorldGrid / WorldGridCell container
+  WorldCollision.cs            CPU triangle grid for ground queries
   MaterialFactory.cs           DrMaterial → engine Material
   Engine/
     SceneNode.cs               Base scene node with a local transform
@@ -276,7 +279,7 @@ Rough order of work, subject to change:
 
 1. **Rendering** — forward renderer, camera, frustum culling via `WorldGrid`, textured world and
    models, skinned animation playback.
-2. **Playable world** — first-person/free camera, collision against world polygons, spawn points.
+2. **Playable world** — full collision against world polygons (walls, ceilings), jumping.
 3. **Content completeness** — lights, animated world objects, VOB types beyond meshes,
    particle effects, sky/fog/water.
 4. **Gameplay** — Daedalus script VM (`DAT`/`OU`/`DAEDALUS.DAT`), NPCs, dialogue, inventory,

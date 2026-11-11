@@ -94,6 +94,7 @@ namespace OpenGothic
 			}
 
 			var boundingBox = BoundingBox.CreateFromPoints(allPositions);
+			var collision = new WorldCollision(boundingBox);
 
 			// Group polygons by cells
 			var cellSizeX = (boundingBox.Max.X - boundingBox.Min.X) / Constants.GridSize;
@@ -126,6 +127,16 @@ namespace OpenGothic
 				}
 
 				var bb = BoundingBox.CreateFromPoints(ps);
+
+				// Static collision: walkable world polygons only (not ghost occluders or water).
+				var collisionMaterial = materials[polygon.MaterialIndex];
+				if (!polygon.IsGhostOccluder && collisionMaterial.Group != MaterialGroup.Water)
+				{
+					for (var t = 2; t < ps.Count; ++t)
+					{
+						collision.AddTriangle(ps[0], ps[t - 1], ps[t]);
+					}
+				}
 
 				for (var cx = 0; cx < Constants.GridSize; ++cx)
 				{
@@ -419,6 +430,7 @@ namespace OpenGothic
 			}
 
 
+			result.Collision = collision;
 			return result;
 		}
 

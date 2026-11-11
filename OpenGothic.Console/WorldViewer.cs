@@ -12,7 +12,7 @@ namespace OpenGothic.Tools;
 
 /// <summary>
 /// Interactive world viewer: loads the requested .ZEN, draws every mesh with stock
-/// MonoGame effects (BasicEffect) and lets a capsule player run through it.
+/// MonoGame effects (BasicEffect) and lets a capsule player run over it.
 /// The mesh loader needs a live GraphicsDevice, which is why this is a Game host.
 /// </summary>
 internal sealed class WorldViewer : Game
@@ -87,7 +87,6 @@ internal sealed class WorldViewer : Game
 			Console.WriteLine();
 			Console.WriteLine("Controls:");
 			Console.WriteLine("  W/A/S/D         run");
-			Console.WriteLine("  Space / L-Ctrl  fly up / down (no collision yet)");
 			Console.WriteLine("  Left Shift      sprint");
 			Console.WriteLine("  Mouse           orbit camera");
 			Console.WriteLine("  Mouse wheel     camera distance");
@@ -155,10 +154,23 @@ internal sealed class WorldViewer : Game
 		if (keyboard.IsKeyDown(Keys.S)) direction -= _camera.PlanarForward;
 		if (keyboard.IsKeyDown(Keys.D)) direction += _camera.PlanarRight;
 		if (keyboard.IsKeyDown(Keys.A)) direction -= _camera.PlanarRight;
-		if (keyboard.IsKeyDown(Keys.Space)) direction += Vector3.Up;
-		if (keyboard.IsKeyDown(Keys.LeftControl)) direction -= Vector3.Up;
 
 		_player.Move(direction, delta, keyboard.IsKeyDown(Keys.LeftShift));
+		ApplyGravity(delta);
+	}
+
+	private void ApplyGravity(float delta)
+	{
+		var feet = _player.Position.Y - Player.HalfHeight;
+		float? groundY = null;
+
+		if (_world?.Collision != null
+			&& _world.Collision.TryGetGround(_player.Position.X, _player.Position.Z, feet + Player.StepHeight, out var ground))
+		{
+			groundY = ground;
+		}
+
+		_player.ApplyGravity(delta, groundY);
 	}
 
 	private void UpdateMouseLook()
@@ -332,7 +344,7 @@ internal sealed class WorldViewer : Game
 		if (world.PlayerStart is Vector3 start)
 		{
 			// The marker sits on the floor, while the capsule is centered on its position.
-			_player.Position = start + Vector3.Up * (Player.CapsuleLength * 0.5f + Player.Radius);
+			_player.Position = start + Vector3.Up * Player.HalfHeight;
 			Console.WriteLine($"Player start:    {Format(start)}");
 			return;
 		}

@@ -20,6 +20,9 @@ public class WorldGrid
 	/// <summary>Player start marker from the world (zCVobStartpoint), if any.</summary>
 	public Vector3? PlayerStart { get; set; }
 
+	/// <summary>Ground collision built from the world's static polygons.</summary>
+	public WorldCollision Collision { get; set; }
+
 	public WorldGrid()
 	{
 		for (var i = 0; i < Constants.GridSize; ++i)
