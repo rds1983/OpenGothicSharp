@@ -38,8 +38,6 @@ internal sealed class Player
 	/// <summary>Speed while holding Shift.</summary>
 	public float RunSpeed = 900.0f;
 
-	public Matrix World => Matrix.CreateRotationY(Yaw) * Matrix.CreateTranslation(Position);
-
 	/// <summary>Moves along <paramref name="direction"/>. Vertical movement is left to <see cref="ApplyGravity"/>.</summary>
 	public void Move(Vector3 direction, float deltaSeconds, bool run)
 	{

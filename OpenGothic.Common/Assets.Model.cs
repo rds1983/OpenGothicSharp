@@ -451,6 +451,34 @@ partial class Assets
 		return CreateMesh(device, null, zkMesh);
 	}
 
+	/// <summary>
+	/// Loads a model script with an explicitly chosen mesh instead of its default skeleton mesh,
+	/// without importing animation clips.
+	/// </summary>
+	public DrModel GetModel(GraphicsDevice device, string scriptName, string meshName)
+	{
+		var key = scriptName.ToUpper() + "|" + meshName.ToUpper();
+		return Get(device, key, (d, _) => LoadModel(d, scriptName, meshName));
+	}
+
+	private DrModel LoadModel(GraphicsDevice device, string scriptName, string meshName)
+	{
+		var zkScript = new ModelScript(GetLastRecord(scriptName).Node.Buffer);
+		var zkHierarchy = new ModelHierarchy(GetLastRecord(Path.ChangeExtension(scriptName, "MDH")).Node.Buffer);
+		var zkMesh = new ZenKit.ModelMesh(GetLastRecord(meshName).Node.Buffer);
+
+		return LoadModel(device, zkHierarchy, zkMesh).Model;
+	}
+
+	/// <summary>Loads the base mesh of a morph mesh (.MMB) as a static mesh.</summary>
+	public DrMesh GetMorphMesh(GraphicsDevice device, string name) => Get(device, name, LoadMorphMesh);
+
+	private DrMesh LoadMorphMesh(GraphicsDevice device, string name)
+	{
+		var zkMorphMesh = new MorphMesh(GetLastRecord(name).Node.Buffer);
+		return CreateMesh(device, null, zkMorphMesh.Mesh);
+	}
+
 	public DrModel GetModel(GraphicsDevice device, string name) => Get(device, name, LoadModel);
 	public DrMesh GetMultiMesh(GraphicsDevice device, string name) => Get(device, name, LoadMultiMesh);
 }

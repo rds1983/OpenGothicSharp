@@ -1,5 +1,4 @@
 using DigitalRiseModel;
-using DigitalRiseModel.Primitives;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -12,7 +11,7 @@ namespace OpenGothic.Tools;
 
 /// <summary>
 /// Interactive world viewer: loads the requested .ZEN, draws every mesh with stock
-/// MonoGame effects (BasicEffect) and lets a capsule player run over it.
+/// MonoGame effects (BasicEffect/SkinnedEffect) and lets the hero run over it.
 /// The mesh loader needs a live GraphicsDevice, which is why this is a Game host.
 /// </summary>
 internal sealed class WorldViewer : Game
@@ -29,8 +28,12 @@ internal sealed class WorldViewer : Game
 	private readonly Dictionary<DrMeshPart, BoundingSphere> _boundsCache = new Dictionary<DrMeshPart, BoundingSphere>();
 
 	private WorldGrid _world;
-	private DrMesh _playerMesh;
+	private DrModel _hero;
+	private DrMesh _heroHead;
+	private DrModelBone _heroHeadBone;
+	private Matrix[] _heroBoneTransforms;
 	private BasicEffect _effect;
+	private SkinnedEffect _skinnedEffect;
 	private Matrix _projection = Matrix.Identity;
 	private int _viewportWidth;
 	private int _viewportHeight;
@@ -111,7 +114,26 @@ internal sealed class WorldViewer : Game
 			_effect.FogStart = Constants.MaxShadowDistance;
 			_effect.FogEnd = FarPlane * 0.8f;
 
-			_playerMesh = MeshPrimitives.CreateCapsuleMesh(GraphicsDevice, Player.CapsuleLength, Player.Radius, 16, 1.0f, 1.0f, true);
+			_skinnedEffect = new SkinnedEffect(GraphicsDevice)
+			{
+				PreferPerPixelLighting = false,
+			};
+
+			_skinnedEffect.EnableDefaultLighting();
+			_skinnedEffect.AmbientLightColor = new Vector3(0.45f, 0.45f, 0.45f);
+			_skinnedEffect.DirectionalLight0.Direction = Vector3.Normalize(new Vector3(-0.4f, -1.0f, -0.3f));
+
+			_skinnedEffect.FogEnabled = true;
+			_skinnedEffect.FogColor = SkyColor.ToVector3();
+			_skinnedEffect.FogStart = Constants.MaxShadowDistance;
+			_skinnedEffect.FogEnd = FarPlane * 0.8f;
+
+			// The hero's starting outfit; the human model script itself has no animations imported here.
+			_hero = assets.GetModel(GraphicsDevice, "HUMANS.MSB", "ARMOR_PRISONER.MDM");
+			_heroHead = assets.GetMorphMesh(GraphicsDevice, "HUM_HEAD_PONY.MMB");
+			_heroHeadBone = _hero.FindBoneByName("BIP01 HEAD");
+			_heroBoneTransforms = new Matrix[_hero.Bones.Length];
+			Console.WriteLine($"Hero model:      {_hero.Meshes.Length} meshes, {_hero.Bones.Length} bones, head {(_heroHeadBone != null ? "attached" : "missing")}");
 
 			var viewport = GraphicsDevice.Viewport;
 			_viewportWidth = viewport.Width;
@@ -274,7 +296,7 @@ internal sealed class WorldViewer : Game
 			}
 		}
 
-		drawCalls += DrawPlayer();
+		drawCalls += DrawHero();
 
 		_titleUpdateTimer += gameTime.ElapsedGameTime.TotalSeconds;
 		if (_titleUpdateTimer >= 0.25)
@@ -286,33 +308,80 @@ internal sealed class WorldViewer : Game
 		base.Draw(gameTime);
 	}
 
-	private int DrawPlayer()
+	private int DrawHero()
 	{
-		if (_playerMesh == null)
+		if (_hero == null)
 		{
 			return 0;
 		}
 
 		var device = GraphicsDevice;
-		var rasterizer = device.RasterizerState;
+		var feet = _player.Position - Vector3.Up * Player.HalfHeight;
+		var world = Matrix.CreateRotationY(_player.Yaw) * Matrix.CreateTranslation(feet);
 
-		// Pure white, untextured capsule; culling off because the primitive's winding is not worth relying on.
-		device.RasterizerState = RasterizerState.CullNone;
-		_effect.TextureEnabled = false;
-		_effect.Texture = null;
-		_effect.DiffuseColor = Vector3.One;
-		_effect.World = _player.World;
-		_effect.CurrentTechnique.Passes[0].Apply();
+		_hero.CopyAbsoluteBoneTransformsTo(_heroBoneTransforms);
 
-		foreach (var part in _playerMesh.MeshParts)
+		_skinnedEffect.View = _effect.View;
+		_skinnedEffect.Projection = _effect.Projection;		var drawCalls = 0;
+		foreach (var mesh in _hero.Meshes)
 		{
-			device.SetVertexBuffer(part.VertexBuffer);
-			device.Indices = part.IndexBuffer;
-			device.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, part.PrimitiveCount);
+			foreach (var part in mesh.MeshParts)
+			{
+				if (part.Skin == null)
+				{
+					continue;
+				}
+
+				// Skinned vertices are already baked into the model's bind pose, so only the hero
+				// transform is needed here; the skeleton comes from the bone matrices.
+				_skinnedEffect.World = world;
+				_skinnedEffect.SetBoneTransforms(GetSkinTransforms(part.Skin));
+				_skinnedEffect.Texture = part.Material?.DiffuseTexture;
+				_skinnedEffect.DiffuseColor = part.Material?.DiffuseColor.ToVector3() ?? Vector3.One;
+				_skinnedEffect.CurrentTechnique.Passes[0].Apply();
+
+				device.SetVertexBuffer(part.VertexBuffer);
+				device.Indices = part.IndexBuffer;
+				device.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, part.PrimitiveCount);
+				++drawCalls;
+			}
 		}
 
-		device.RasterizerState = rasterizer;
-		return _playerMesh.MeshParts.Count;
+		if (_heroHead != null)
+		{
+			// The head is a morph mesh without morphing for now; its vertices live in head-bone space.
+			var headWorld = _heroHeadBone != null
+				? _heroBoneTransforms[_heroHeadBone.Index] * world
+				: world;
+
+			_effect.World = headWorld;
+			foreach (var part in _heroHead.MeshParts)
+			{
+				_effect.Texture = part.Material?.DiffuseTexture;
+				_effect.TextureEnabled = _effect.Texture != null;
+				_effect.DiffuseColor = part.Material?.DiffuseColor.ToVector3() ?? Vector3.One;
+				_effect.CurrentTechnique.Passes[0].Apply();
+
+				device.SetVertexBuffer(part.VertexBuffer);
+				device.Indices = part.IndexBuffer;
+				device.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, part.PrimitiveCount);
+				++drawCalls;
+			}
+		}
+
+		return drawCalls;
+	}
+
+	private Matrix[] GetSkinTransforms(DrSkin skin)
+	{
+		var transforms = new Matrix[skin.Joints.Length];
+		for (var i = 0; i < transforms.Length; ++i)
+		{
+			var joint = skin.Joints[i];
+			transforms[i] = joint.InverseBindTransform * _heroBoneTransforms[joint.Bone.Index];
+		}
+
+		return transforms;
 	}
 
 	private void DrawPart(DrMeshPart part, Material material, Matrix world)
@@ -381,8 +450,6 @@ internal sealed class WorldViewer : Game
 
 	protected override void UnloadContent()
 	{
-		_playerMesh?.Dispose();
-		_playerMesh = null;
 		base.UnloadContent();
 	}
 
