@@ -4,8 +4,8 @@ using Microsoft.Xna.Framework;
 namespace OpenGothic.Tools;
 
 /// <summary>
-/// Minimal player avatar: a capsule with gravity but no horizontal collision.
-/// <see cref="Position"/> is the centre of the capsule.
+/// Minimal player avatar: a capsule that collides with steep world geometry and is kept
+/// on the ground by gravity. <see cref="Position"/> is the centre of the capsule.
 /// </summary>
 internal sealed class Player
 {

@@ -133,9 +133,11 @@ usual desktop OpenGL and audio dependencies required by MonoGame DesktopGL are i
 third-person follow camera. The player is a plain white capsule from DigitalRiseModel's
 `MeshPrimitives`, spawned at the world's start point (`zCVobStartpoint`, which is Xardas'
 tower in `NEWWORLD.ZEN`). Gravity keeps it on the ground: a CPU collision grid built from the
-world's static polygons traces down from the player and snaps it to the highest surface within
-stepping distance, otherwise it falls. Horizontal collision, jumping and swimming are not
-implemented yet, so walls can be walked through. Rendering uses stock MonoGame effects only
+world's static polygons and static vob meshes traces down from the player and snaps it to the
+highest surface within stepping distance, otherwise it falls. The same grid pushes the player's
+cylinder out of walls and object sides, while obstacles up to a step high are climbed. Jumping,
+swimming and dynamic vobs (doors and other movable objects) are not handled yet. Rendering uses
+stock MonoGame effects only
 (`BasicEffect`), with per-cell and per-instance frustum culling over the `WorldGrid`; nothing is
 pre-baked or copied into the project. Invisible portal polygons, which only mark openings
 between sectors, are skipped so passageways stay open instead of being covered by textures.
@@ -256,7 +258,7 @@ OpenGothic.Common/
   Assets.Model.cs              .MDL/.MDH/.MDM/.MAN → DrModel + animation clips
   Assets.World.cs              .ZEN → WorldGrid, .MRM virtual objects, instancing
   WorldGrid.cs                 WorldGrid / WorldGridCell container
-  WorldCollision.cs            CPU triangle grid for ground queries
+  WorldCollision.cs            CPU triangle grid for ground and wall queries
   MaterialFactory.cs           DrMaterial → engine Material
   Engine/
     SceneNode.cs               Base scene node with a local transform

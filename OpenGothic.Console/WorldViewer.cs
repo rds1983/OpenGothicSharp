@@ -156,7 +156,19 @@ internal sealed class WorldViewer : Game
 		if (keyboard.IsKeyDown(Keys.A)) direction -= _camera.PlanarRight;
 
 		_player.Move(direction, delta, keyboard.IsKeyDown(Keys.LeftShift));
+		ResolveCollision();
 		ApplyGravity(delta);
+	}
+
+	private void ResolveCollision()
+	{
+		if (_world?.Collision == null)
+		{
+			return;
+		}
+
+		var feet = _player.Position.Y - Player.HalfHeight;
+		_world.Collision.ResolveWalls(ref _player.Position, Player.Radius, feet, feet + Player.HalfHeight * 2.0f, Player.StepHeight);
 	}
 
 	private void ApplyGravity(float delta)

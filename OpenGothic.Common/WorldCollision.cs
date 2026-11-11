@@ -5,24 +5,36 @@ using System.Collections.Generic;
 namespace OpenGothic;
 
 /// <summary>
-/// CPU collision built from the world's static polygons. For now it only answers ground
-/// queries: find the highest surface under a point, below a given height.
+/// CPU collision built from the world's static polygons and static vob meshes.
+/// It answers ground queries (highest surface under a point) and pushes a vertical
+/// cylinder out of walls and object sides.
 /// </summary>
 public sealed class WorldCollision
 {
 	private const int Resolution = 256;
+
+	/// <summary>Triangles at least this flat are walkable and left to the gravity code.</summary>
+	private const float WalkableNormalY = 0.5f;
+
+	private const int ResolveIterations = 3;
 
 	private readonly struct Triangle
 	{
 		public readonly Vector3 A;
 		public readonly Vector3 B;
 		public readonly Vector3 C;
+		public readonly Vector3 Normal;
+		public readonly float MinY;
+		public readonly float MaxY;
 
-		public Triangle(Vector3 a, Vector3 b, Vector3 c)
+		public Triangle(Vector3 a, Vector3 b, Vector3 c, Vector3 normal)
 		{
 			A = a;
 			B = b;
 			C = c;
+			Normal = normal;
+			MinY = MathF.Min(a.Y, MathF.Min(b.Y, c.Y));
+			MaxY = MathF.Max(a.Y, MathF.Max(b.Y, c.Y));
 		}
 	}
 
@@ -40,12 +52,14 @@ public sealed class WorldCollision
 
 	public void AddTriangle(Vector3 a, Vector3 b, Vector3 c)
 	{
-		// Vertical (or degenerate) triangles project to a line and can never be walked on.
-		var area = (b.X - a.X) * (c.Z - a.Z) - (c.X - a.X) * (b.Z - a.Z);
-		if (MathF.Abs(area) < 1e-4f)
+		var normal = Vector3.Cross(b - a, c - a);
+		var length = normal.Length();
+		if (length < 1e-4f)
 		{
 			return;
 		}
+
+		normal /= length;
 
 		var minX = MathF.Min(a.X, MathF.Min(b.X, c.X));
 		var maxX = MathF.Max(a.X, MathF.Max(b.X, c.X));
@@ -57,7 +71,7 @@ public sealed class WorldCollision
 		var z0 = CellIndex(minZ, _bounds.Min.Z, _cellDepth);
 		var z1 = CellIndex(maxZ, _bounds.Min.Z, _cellDepth);
 
-		var triangle = new Triangle(a, b, c);
+		var triangle = new Triangle(a, b, c, normal);
 		for (var z = z0; z <= z1; ++z)
 		{
 			for (var x = x0; x <= x1; ++x)
@@ -96,6 +110,191 @@ public sealed class WorldCollision
 
 		return found;
 	}
+
+	/// <summary>
+	/// Pushes <paramref name="position"/> (the centre of a vertical cylinder) out of steep
+	/// triangles overlapping its height span. Flat surfaces are ignored because gravity
+	/// keeps the cylinder standing on them, and anything shorter than a step is walked over.
+	/// </summary>
+	public void ResolveWalls(ref Vector3 position, float radius, float bottomY, float topY, float stepHeight)
+	{
+		var point = new Vector2(position.X, position.Z);
+
+		for (var iteration = 0; iteration < ResolveIterations; ++iteration)
+		{
+			if (!PushOut(ref point, radius, bottomY, topY, stepHeight))
+			{
+				break;
+			}
+		}
+
+		position.X = point.X;
+		position.Z = point.Y;
+	}
+
+	private bool PushOut(ref Vector2 point, float radius, float bottomY, float topY, float stepHeight)
+	{
+		var minX = CellIndex(point.X - radius, _bounds.Min.X, _cellWidth);
+		var maxX = CellIndex(point.X + radius, _bounds.Min.X, _cellWidth);
+		var minZ = CellIndex(point.Y - radius, _bounds.Min.Z, _cellDepth);
+		var maxZ = CellIndex(point.Y + radius, _bounds.Min.Z, _cellDepth);
+
+		var pushed = false;
+		for (var z = minZ; z <= maxZ; ++z)
+		{
+			for (var x = minX; x <= maxX; ++x)
+			{
+				var cell = _cells[z * Resolution + x];
+				if (cell == null)
+				{
+					continue;
+				}
+
+				foreach (var triangle in cell)
+				{
+					if (triangle.Normal.Y > WalkableNormalY)
+					{
+						continue;
+					}
+
+					if (triangle.MaxY <= bottomY + stepHeight)
+					{
+						continue;
+					}
+
+					if (triangle.MinY >= topY)
+					{
+						continue;
+					}
+
+					if (PushOutOfTriangle(ref point, radius, triangle))
+					{
+						pushed = true;
+					}
+				}
+			}
+		}
+
+		return pushed;
+	}
+
+	private static bool PushOutOfTriangle(ref Vector2 point, float radius, in Triangle triangle)
+	{
+		var a = new Vector2(triangle.A.X, triangle.A.Z);
+		var b = new Vector2(triangle.B.X, triangle.B.Z);
+		var c = new Vector2(triangle.C.X, triangle.C.Z);
+
+		var area = Cross(b - a, c - a);
+		var inside = MathF.Abs(area) > 1e-6f && PointInTriangle(point, a, b, c);
+
+		if (inside)
+		{
+			// The cylinder centre projects inside the triangle: leave through the nearest edge.
+			var centroid = (a + b + c) / 3.0f;
+			var bestDistance = float.MaxValue;
+			var bestClosest = point;
+
+			AccumulateEdge(point, a, b, ref bestDistance, ref bestClosest);
+			AccumulateEdge(point, b, c, ref bestDistance, ref bestClosest);
+			AccumulateEdge(point, c, a, ref bestDistance, ref bestClosest);
+
+			var outward = bestClosest - centroid;
+			if (outward.LengthSquared() < 1e-6f)
+			{
+				outward = point - centroid;
+			}
+
+			outward.Normalize();
+			point += outward * (bestDistance + radius);
+			return true;
+		}
+
+		var closest = ClosestPointOnSegment(point, a, b);
+		var distanceSquared = Vector2.DistanceSquared(point, closest);
+
+		var onBC = ClosestPointOnSegment(point, b, c);
+		var bcDistanceSquared = Vector2.DistanceSquared(point, onBC);
+		if (bcDistanceSquared < distanceSquared)
+		{
+			closest = onBC;
+			distanceSquared = bcDistanceSquared;
+		}
+
+		var onCA = ClosestPointOnSegment(point, c, a);
+		var caDistanceSquared = Vector2.DistanceSquared(point, onCA);
+		if (caDistanceSquared < distanceSquared)
+		{
+			closest = onCA;
+			distanceSquared = caDistanceSquared;
+		}
+
+		var distance = MathF.Sqrt(distanceSquared);
+		if (distance >= radius)
+		{
+			return false;
+		}
+
+		Vector2 direction;
+		if (distance > 1e-4f)
+		{
+			direction = (point - closest) / distance;
+		}
+		else
+		{
+			// Centre sits exactly on the wall: push towards the side the face normal points at.
+			direction = new Vector2(triangle.Normal.X, triangle.Normal.Z);
+			if (direction.LengthSquared() < 1e-6f)
+			{
+				direction = new Vector2(1.0f, 0.0f);
+			}
+			else
+			{
+				direction.Normalize();
+			}
+		}
+
+		point += direction * (radius - distance);
+		return true;
+	}
+
+	private static void AccumulateEdge(Vector2 point, Vector2 a, Vector2 b, ref float bestDistance, ref Vector2 bestClosest)
+	{
+		var closest = ClosestPointOnSegment(point, a, b);
+		var distance = Vector2.Distance(point, closest);
+		if (distance >= bestDistance)
+		{
+			return;
+		}
+
+		bestDistance = distance;
+		bestClosest = closest;
+	}
+
+	private static bool PointInTriangle(Vector2 p, Vector2 a, Vector2 b, Vector2 c)
+	{
+		var d1 = Cross(b - a, p - a);
+		var d2 = Cross(c - b, p - b);
+		var d3 = Cross(a - c, p - c);
+
+		var hasNegative = d1 < 0.0f || d2 < 0.0f || d3 < 0.0f;
+		var hasPositive = d1 > 0.0f || d2 > 0.0f || d3 > 0.0f;
+		return !(hasNegative && hasPositive);
+	}
+
+	private static Vector2 ClosestPointOnSegment(Vector2 point, Vector2 a, Vector2 b)
+	{
+		var edge = b - a;
+		var lengthSquared = edge.LengthSquared();
+		if (lengthSquared < 1e-6f)
+		{
+			return a;
+		}
+
+		var t = Math.Clamp(Vector2.Dot(point - a, edge) / lengthSquared, 0.0f, 1.0f);
+		return a + edge * t;
+	}
+
+	private static float Cross(Vector2 a, Vector2 b) => a.X * b.Y - a.Y * b.X;
 
 	private List<Triangle> CellAt(float x, float z)
 	{

@@ -137,7 +137,7 @@ namespace OpenGothic
 
 				// Static collision: walkable world polygons only (not ghost occluders or water).
 				var collisionMaterial = materials[polygon.MaterialIndex];
-				if (!polygon.IsGhostOccluder && collisionMaterial.Group != MaterialGroup.Water)
+				if (!polygon.IsGhostOccluder && collisionMaterial.Group != MaterialGroup.Water && !collisionMaterial.DisableCollision)
 				{
 					for (var t = 2; t < ps.Count; ++t)
 					{
@@ -338,6 +338,12 @@ namespace OpenGothic
 				{
 					var n = Path.ChangeExtension(asMesh.Name, "MRM");
 					var mesh = GetMultiMesh(device, n);
+
+					// Objects with static collision block the player and can be walked on.
+					if (vob.CdStatic)
+					{
+						AddMultiMeshCollision(n, transform, collision);
+					}
 
 					var bb = mesh.BoundingBox.Transform(ref transform);
 

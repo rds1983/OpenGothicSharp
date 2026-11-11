@@ -394,6 +394,55 @@ partial class Assets
 		return modelInfo.Model;
 	}
 
+	private readonly Dictionary<string, Vector3[]> _collisionTriangles = new Dictionary<string, Vector3[]>();
+
+	/// <summary>Adds the mesh's triangles, transformed into world space, to the collision grid.</summary>
+	public void AddMultiMeshCollision(string name, Matrix transform, WorldCollision collision)
+	{
+		name = name.ToUpper();
+		if (!_collisionTriangles.TryGetValue(name, out var triangles))
+		{
+			var record = GetLastRecord(name);
+			var zkMesh = new MultiResolutionMesh(record.Node.Buffer);
+			triangles = BuildCollisionTriangles(zkMesh);
+			_collisionTriangles[name] = triangles;
+		}
+
+		for (var i = 0; i < triangles.Length; i += 3)
+		{
+			collision.AddTriangle(
+				Vector3.Transform(triangles[i], transform),
+				Vector3.Transform(triangles[i + 1], transform),
+				Vector3.Transform(triangles[i + 2], transform));
+		}
+	}
+
+	private static Vector3[] BuildCollisionTriangles(IMultiResolutionMesh zkMesh)
+	{
+		var result = new List<Vector3>();
+		var positions = zkMesh.Positions;
+
+		foreach (var subMesh in zkMesh.SubMeshes)
+		{
+			if (subMesh.Material != null && subMesh.Material.DisableCollision)
+			{
+				continue;
+			}
+
+			var wedges = subMesh.Wedges;
+			var triangles = subMesh.Triangles;
+			for (var i = 0; i < triangles.Count; ++i)
+			{
+				var triangle = triangles[i];
+				result.Add(positions[wedges[triangle.Wedge0].Index].ToXna());
+				result.Add(positions[wedges[triangle.Wedge1].Index].ToXna());
+				result.Add(positions[wedges[triangle.Wedge2].Index].ToXna());
+			}
+		}
+
+		return result.ToArray();
+	}
+
 	private DrMesh LoadMultiMesh(GraphicsDevice device, string name)
 	{
 		var record = GetLastRecord(name);
