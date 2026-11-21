@@ -17,6 +17,7 @@ Planned inside `OpenGothic.Common`:
 |---|---|
 | `Assets*` | VDFS mounting, resource index, loaders, cache |
 | `Engine/` | scene nodes, materials, mesh parts (render-agnostic where possible) |
+| `Rendering/` | `ForwardRenderer`: effects and low-level 3D drawing |
 | `World/` | world container, cells, spatial index, vob tree |
 | `World/Vobs/` | vob types (`Vob`, `StaticObj`, `Npc`, `Interactive`, triggers) |
 | `Game/` | game session, time, scripts, AI, inventory, combat |

@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using OpenGothic.Engine;
+using OpenGothic.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -11,8 +12,8 @@ using System.Diagnostics;
 namespace OpenGothic.Tools;
 
 /// <summary>
-/// Interactive world viewer: loads the requested .ZEN, draws every mesh with stock
-/// MonoGame effects (BasicEffect/SkinnedEffect) and lets the hero run over it.
+/// Interactive world viewer: loads the requested .ZEN, culls, and hands the visible geometry to
+/// <see cref="ForwardRenderer"/>; also drives the hero over the world.
 /// The mesh loader needs a live GraphicsDevice, which is why this is a Game host.
 /// </summary>
 internal sealed class WorldViewer : Game
@@ -39,8 +40,7 @@ internal sealed class WorldViewer : Game
 	private DrModelBone _heroHeadBone;
 	private DrModelBone _heroRootBone;
 	private bool _heroMoving;
-	private BasicEffect _effect;
-	private SkinnedEffect _skinnedEffect;
+	private ForwardRenderer _renderer;
 	private Matrix _projection = Matrix.Identity;
 	private int _viewportWidth;
 	private int _viewportHeight;
@@ -103,37 +103,11 @@ internal sealed class WorldViewer : Game
 			Console.WriteLine("  Escape          quit");
 			Console.WriteLine();
 
-			_effect = new BasicEffect(GraphicsDevice)
+			_renderer = new ForwardRenderer(GraphicsDevice, SkyColor)
 			{
-				TextureEnabled = true,
-				LightingEnabled = true,
-				PreferPerPixelLighting = false,
-				DiffuseColor = Vector3.One,
-				SpecularColor = Vector3.Zero,
+				FogStart = Constants.MaxShadowDistance,
+				FogEnd = FarPlane * 0.8f,
 			};
-
-			_effect.EnableDefaultLighting();
-			_effect.AmbientLightColor = new Vector3(0.45f, 0.45f, 0.45f);
-			_effect.DirectionalLight0.Direction = Vector3.Normalize(new Vector3(-0.4f, -1.0f, -0.3f));
-
-			_effect.FogEnabled = true;
-			_effect.FogColor = SkyColor.ToVector3();
-			_effect.FogStart = Constants.MaxShadowDistance;
-			_effect.FogEnd = FarPlane * 0.8f;
-
-			_skinnedEffect = new SkinnedEffect(GraphicsDevice)
-			{
-				PreferPerPixelLighting = false,
-			};
-
-			_skinnedEffect.EnableDefaultLighting();
-			_skinnedEffect.AmbientLightColor = new Vector3(0.45f, 0.45f, 0.45f);
-			_skinnedEffect.DirectionalLight0.Direction = Vector3.Normalize(new Vector3(-0.4f, -1.0f, -0.3f));
-
-			_skinnedEffect.FogEnabled = true;
-			_skinnedEffect.FogColor = SkyColor.ToVector3();
-			_skinnedEffect.FogStart = Constants.MaxShadowDistance;
-			_skinnedEffect.FogEnd = FarPlane * 0.8f;
 
 			// The hero's starting outfit. In Gothic's naming S_RUN is the standing idle and
 			// S_RUNL is the actual run cycle.
@@ -286,10 +260,6 @@ internal sealed class WorldViewer : Game
 		}
 
 		device.Clear(SkyColor);
-		device.DepthStencilState = DepthStencilState.Default;
-		device.BlendState = BlendState.Opaque;
-		device.RasterizerState = RasterizerState.CullCounterClockwise;
-		device.SamplerStates[0] = SamplerState.LinearWrap;
 
 		if (_world == null)
 		{
@@ -298,11 +268,11 @@ internal sealed class WorldViewer : Game
 		}
 
 		var view = _camera.GetView(_player.Position);
-		_effect.View = view;
-		_effect.Projection = _projection;
+		_renderer.View = view;
+		_renderer.Projection = _projection;
+		_renderer.BeginFrame();
 
 		var frustum = new BoundingFrustum(view * _projection);
-		var drawCalls = 0;
 
 		foreach (var cell in _world.Cells)
 		{
@@ -318,8 +288,7 @@ internal sealed class WorldViewer : Game
 					case MeshNode mesh:
 						if (mesh.Mesh != null && IsVisible(mesh.Mesh, ref mesh.Transform, frustum))
 						{
-							DrawPart(mesh.Mesh, mesh.Material, mesh.Transform);
-							++drawCalls;
+							_renderer.DrawMeshPart(mesh.Mesh, mesh.Material, mesh.Transform);
 						}
 						break;
 
@@ -334,8 +303,7 @@ internal sealed class WorldViewer : Game
 							var world = instanced.InstancesTransforms[i];
 							if (IsVisible(instanced.Mesh, ref world, frustum))
 							{
-								DrawPart(instanced.Mesh, instanced.Material, world);
-								++drawCalls;
+								_renderer.DrawMeshPart(instanced.Mesh, instanced.Material, world);
 							}
 						}
 						break;
@@ -343,31 +311,28 @@ internal sealed class WorldViewer : Game
 			}
 		}
 
-		drawCalls += DrawHero();
+		DrawHero();
 
 		_titleUpdateTimer += gameTime.ElapsedGameTime.TotalSeconds;
 		if (_titleUpdateTimer >= 0.25)
 		{
 			_titleUpdateTimer = 0.0;
-			Window.Title = $"OpenGothic viewer | {_worldName} | {drawCalls} draws | player {_player.Position.X:0},{_player.Position.Y:0},{_player.Position.Z:0} | camera {_camera.Distance:0}";
+			Window.Title = $"OpenGothic viewer | {_worldName} | {_renderer.DrawCalls} draws | {_renderer.DrawnTriangles} tris | player {_player.Position.X:0},{_player.Position.Y:0},{_player.Position.Z:0} | camera {_camera.Distance:0}";
 		}
 
 		base.Draw(gameTime);
 	}
 
-	private int DrawHero()
+	private void DrawHero()
 	{
 		if (_hero == null)
 		{
-			return 0;
+			return;
 		}
 
-		var device = GraphicsDevice;
 		var feet = _player.Position - Vector3.Up * Player.HalfHeight;
 		var world = Matrix.CreateRotationY(_player.Yaw) * Matrix.CreateTranslation(feet);
 
-		_skinnedEffect.View = _effect.View;
-		_skinnedEffect.Projection = _effect.Projection;		var drawCalls = 0;
 		foreach (var mesh in _hero.Meshes)
 		{
 			foreach (var part in mesh.MeshParts)
@@ -379,16 +344,7 @@ internal sealed class WorldViewer : Game
 
 				// Skinned vertices are already baked into the model's bind pose, so only the hero
 				// transform is needed here; the skeleton comes from the animated bone matrices.
-				_skinnedEffect.World = world;
-				_skinnedEffect.SetBoneTransforms(_heroInstance.GetSkinTransforms(part.Skin.SkinIndex));
-				_skinnedEffect.Texture = part.Material?.DiffuseTexture;
-				_skinnedEffect.DiffuseColor = part.Material?.DiffuseColor.ToVector3() ?? Vector3.One;
-				_skinnedEffect.CurrentTechnique.Passes[0].Apply();
-
-				device.SetVertexBuffer(part.VertexBuffer);
-				device.Indices = part.IndexBuffer;
-				device.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, part.PrimitiveCount);
-				++drawCalls;
+				_renderer.DrawMeshPart(part, null, world, _heroInstance.GetSkinTransforms(part.Skin.SkinIndex));
 			}
 		}
 
@@ -399,38 +355,11 @@ internal sealed class WorldViewer : Game
 				? _heroInstance.GetBoneGlobalTransform(_heroHeadBone.Index) * world
 				: world;
 
-			_effect.World = headWorld;
 			foreach (var part in _heroHead.MeshParts)
 			{
-				_effect.Texture = part.Material?.DiffuseTexture;
-				_effect.TextureEnabled = _effect.Texture != null;
-				_effect.DiffuseColor = part.Material?.DiffuseColor.ToVector3() ?? Vector3.One;
-				_effect.CurrentTechnique.Passes[0].Apply();
-
-				device.SetVertexBuffer(part.VertexBuffer);
-				device.Indices = part.IndexBuffer;
-				device.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, part.PrimitiveCount);
-				++drawCalls;
+				_renderer.DrawMeshPart(part, null, headWorld);
 			}
 		}
-
-		return drawCalls;
-	}
-
-	private void DrawPart(DrMeshPart part, Material material, Matrix world)
-	{
-		var texture = material?.DiffuseTexture;
-
-		_effect.World = world;
-		_effect.Texture = texture;
-		_effect.TextureEnabled = texture != null;
-		_effect.DiffuseColor = material.DiffuseColor.ToVector3();
-		_effect.CurrentTechnique.Passes[0].Apply();
-
-		var device = GraphicsDevice;
-		device.SetVertexBuffer(part.VertexBuffer);
-		device.Indices = part.IndexBuffer;
-		device.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, part.PrimitiveCount);
 	}
 
 	private bool IsVisible(DrMeshPart part, ref Matrix world, BoundingFrustum frustum)
@@ -484,6 +413,9 @@ internal sealed class WorldViewer : Game
 	protected override void UnloadContent()
 	{
 		base.UnloadContent();
+
+		_renderer?.Dispose();
+		_renderer = null;
 	}
 
 	private void CenterMouse()
