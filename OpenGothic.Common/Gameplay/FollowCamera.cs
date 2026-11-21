@@ -1,11 +1,11 @@
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 
-namespace OpenGothic.Tools;
+namespace OpenGothic.Gameplay;
 
 /// <summary>
 /// Third-person orbit camera: yaw/pitch around a target, at a configurable distance.
 /// </summary>
-internal sealed class FollowCamera
+public sealed class FollowCamera
 {
 	private const float MaxPitch = MathHelper.PiOver2 - 0.01f;
 	private const float MinPitch = -MathHelper.PiOver2 + 0.01f;

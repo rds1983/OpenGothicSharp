@@ -1,13 +1,16 @@
+﻿using Microsoft.Xna.Framework;
 using System;
-using Microsoft.Xna.Framework;
 
-namespace OpenGothic.Tools;
+namespace OpenGothic.Gameplay;
 
 /// <summary>
 /// Minimal player avatar: a capsule that collides with steep world geometry and is kept
 /// on the ground by gravity. <see cref="Position"/> is the centre of the capsule.
 /// </summary>
-internal sealed class Player
+/// <remarks>
+/// This is a placeholder until T-012 replaces it with a BepuPhysics2 kinematic character.
+/// </remarks>
+public sealed class Player
 {
 	public const float Radius = 30.0f;
 

@@ -9,7 +9,8 @@ No game assets and no original Gothic code ship with this repository — you mus
 
 > **Status: early.** A world viewer loads `NEWWORLD.ZEN`, draws the world and a hero model with
 > stock MonoGame effects, and lets you walk around with gravity and simple wall collision.
-> Nothing is playable yet.
+> Nothing is playable yet. The console app is a thin host around the engine-side `GameCore`; see
+> [Design/Architecture.md](Design/Architecture.md).
 
 ## Documentation
 

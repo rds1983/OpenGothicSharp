@@ -1,59 +1,28 @@
-using DigitalRiseModel;
-using DigitalRiseModel.Animation;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using OpenGothic.Engine;
-using OpenGothic.Rendering;
+using OpenGothic.Gameplay;
 using OpenGothic.UI;
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 
 namespace OpenGothic.Tools;
 
 /// <summary>
-/// Interactive world viewer: loads the requested .ZEN, culls, and hands the visible geometry to
-/// <see cref="ForwardRenderer"/>; also drives the hero over the world.
-/// The mesh loader needs a live GraphicsDevice, which is why this is a Game host.
+/// Interactive world viewer. This type is only a host: it owns the window, polls input and
+/// captures the mouse. Loading, simulation and drawing all live in <see cref="GameCore"/>.
 /// </summary>
-internal sealed class WorldViewer : Game
+internal sealed class WorldViewer : Microsoft.Xna.Framework.Game
 {
-	private const float FieldOfView = MathHelper.Pi / 3.0f;
-	private const float NearPlane = 5.0f;
-	private const float FarPlane = 90000.0f;
-
 	private readonly GraphicsDeviceManager _graphics;
 	private readonly string _folder;
 	private readonly string _worldName;
-	private readonly FollowCamera _camera = new FollowCamera();
-	private readonly Player _player = new Player();
-	private readonly Dictionary<DrMeshPart, BoundingSphere> _boundsCache = new Dictionary<DrMeshPart, BoundingSphere>();
 
-	private WorldGrid _world;
-	private const string HeroIdleClip = "S_RUN";
-	private const string HeroRunClip = "S_RUNL";
-
-	private DrModel _hero;
-	private DrModelInstance _heroInstance;
-	private AnimationController _heroAnimations;
-	private DrMesh _heroHead;
-	private DrModelBone _heroHeadBone;
-	private DrModelBone _heroRootBone;
-	private bool _heroMoving;
-	private ForwardRenderer _renderer;
-	private Hud _hud;
+	private GameCore _core;
 	private bool _toggleWasDown;
-	private Matrix _projection = Matrix.Identity;
-	private int _viewportWidth;
-	private int _viewportHeight;
-
-	private bool _succeeded;
 	private int _lastScrollValue;
-	private double _titleUpdateTimer;
 
 	/// <summary>True once the world has been loaded and shown.</summary>
-	public bool Succeeded => _succeeded;
+	public bool Succeeded { get; private set; }
 
 	public WorldViewer(string folder, string worldName)
 	{
@@ -82,82 +51,40 @@ internal sealed class WorldViewer : Game
 		{
 			OG.GraphicsDevice = GraphicsDevice;
 
-			Console.WriteLine($"OpenGothicSharp {OG.Version}");
-			Console.WriteLine($"Game folder: {_folder}");
-			Console.WriteLine($"World:       {_worldName}");
-			Console.WriteLine();
+			OG.LogInfo($"OpenGothicSharp {OG.Version}");
+			OG.LogInfo($"Game folder: {_folder}");
+			OG.LogInfo($"World:       {_worldName}");
+			OG.LogInfo(string.Empty);
 
-			var assets = new Assets(_folder);
-			Console.WriteLine();
-			Console.WriteLine($"Indexed {assets.Keys.Length} files.");
+			_core = new GameCore(this, _folder, _worldName);
+			_core.Load();
 
-			var stopwatch = Stopwatch.StartNew();
-			_world = assets.GetWorld(GraphicsDevice, _worldName);
-			stopwatch.Stop();
-
-			PrintWorld(_world);
-			Console.WriteLine($"World loaded in {stopwatch.Elapsed.TotalMilliseconds:F0} ms.");
-			Console.WriteLine();
-			Console.WriteLine("Controls:");
-			Console.WriteLine("  W/A/S/D         run");
-			Console.WriteLine("  Left Shift      sprint");
-			Console.WriteLine("  Mouse           orbit camera");
-			Console.WriteLine("  Mouse wheel     camera distance");
-			Console.WriteLine($"  {Hud.ToggleDebugKey,-15} toggle debug overlay");
-			Console.WriteLine("  Escape          quit");
-			Console.WriteLine();
-
-			_hud = new Hud(this);
-			_hud.DebugOverlayVisible = true;
-
-			_renderer = new ForwardRenderer(GraphicsDevice, SkyColor)
-			{
-				FogStart = Constants.MaxShadowDistance,
-				FogEnd = FarPlane * 0.8f,
-			};
-
-			// The hero's starting outfit. In Gothic's naming S_RUN is the standing idle and
-			// S_RUNL is the actual run cycle.
-			_hero = assets.GetModel(GraphicsDevice, "HUMANS.MSB", "ARMOR_PRISONER.MDM", HeroIdleClip, HeroRunClip);
-			_heroHead = assets.GetMorphMesh(GraphicsDevice, "HUM_HEAD_PONY.MMB");
-			_heroHeadBone = _hero.FindBoneByName("BIP01 HEAD");
-
-			foreach (var bone in _hero.Bones)
-			{
-				if (bone.Parent == _hero.Root && bone.Mesh == null)
-				{
-					_heroRootBone = bone;
-					break;
-				}
-			}
-
-			_heroInstance = new DrModelInstance(_hero);
-			_heroAnimations = new AnimationController(_heroInstance);
-			_heroAnimations.StartClip(HeroIdleClip, AnimationFlags.Looped);
-
-			Console.WriteLine($"Hero model:      {_hero.Meshes.Length} meshes, {_hero.Bones.Length} bones, head {(_heroHeadBone != null ? "attached" : "missing")}");
-			Console.WriteLine($"Hero clips:      {string.Join(", ", _hero.Animations.Keys)}");
-
-			var viewport = GraphicsDevice.Viewport;
-			_viewportWidth = viewport.Width;
-			_viewportHeight = viewport.Height;
-			_projection = Matrix.CreatePerspectiveFieldOfView(FieldOfView, (float)Math.Max(1, _viewportWidth) / Math.Max(1, _viewportHeight), NearPlane, FarPlane);
-
-			PlacePlayer(_world);
+			PrintControls();
 			CenterMouse();
 
-			_succeeded = true;
+			Succeeded = true;
 		}
 		catch (Exception ex)
 		{
-			Console.Error.WriteLine($"Failed to load '{_worldName}':");
-			Console.Error.WriteLine(ex);
-			_succeeded = false;
+			OG.LogError($"Failed to load '{_worldName}':");
+			OG.LogError(ex.ToString());
+			Succeeded = false;
 			Exit();
 		}
 	}
 
-	private static Color SkyColor => new Color(92, 118, 148);
+	private static void PrintControls()
+	{
+		OG.LogInfo(string.Empty);
+		OG.LogInfo("Controls:");
+		OG.LogInfo("  W/A/S/D         run");
+		OG.LogInfo("  Left Shift      sprint");
+		OG.LogInfo("  Mouse           orbit camera");
+		OG.LogInfo("  Mouse wheel     camera distance");
+		OG.LogInfo($"  {Hud.ToggleDebugKey,-15} toggle debug overlay");
+		OG.LogInfo("  Escape          quit");
+		OG.LogInfo(string.Empty);
+	}
 
 	protected override void Update(GameTime gameTime)
 	{
@@ -170,327 +97,87 @@ internal sealed class WorldViewer : Game
 			return;
 		}
 
-		// Rising edge only, otherwise holding the key would flicker the overlay.
-		var toggleDown = keyboard.IsKeyDown(Hud.ToggleDebugKey);
-		if (toggleDown && !_toggleWasDown)
-		{
-			_hud?.ToggleDebugOverlay();
-		}
-		_toggleWasDown = toggleDown;
-
-		UpdateMouseLook();
-
-		var delta = (float)gameTime.ElapsedGameTime.TotalSeconds;
-		var direction = Vector3.Zero;
-
-		if (keyboard.IsKeyDown(Keys.W)) direction += _camera.PlanarForward;
-		if (keyboard.IsKeyDown(Keys.S)) direction -= _camera.PlanarForward;
-		if (keyboard.IsKeyDown(Keys.D)) direction += _camera.PlanarRight;
-		if (keyboard.IsKeyDown(Keys.A)) direction -= _camera.PlanarRight;
-
-		UpdateHeroAnimation(delta, direction != Vector3.Zero);
-
-		_player.Move(direction, delta, keyboard.IsKeyDown(Keys.LeftShift));
-		ResolveCollision();
-		ApplyGravity(delta);
-	}
-
-	private void UpdateHeroAnimation(float delta, bool moving)
-	{
-		if (_heroAnimations == null)
+		if (_core == null)
 		{
 			return;
 		}
 
-		if (moving != _heroMoving)
-		{
-			_heroMoving = moving;
-			_heroAnimations.CrossfadeToClip(moving ? HeroRunClip : HeroIdleClip, TimeSpan.FromSeconds(0.25), AnimationFlags.Looped);
-		}
-
-		_heroAnimations.Update(TimeSpan.FromSeconds(delta));
-
-		// Gothic run clips animate the root bone forward (S_RUNL moves it hundreds of units).
-		// The player position is authoritative, so keep the root at its default pose.
-		if (_heroRootBone != null)
-		{
-			_heroInstance.SetBoneLocalTransform(_heroRootBone.Index, _heroInstance.GetDefaultPose(_heroRootBone.Index).ToMatrix());
-		}
+		_core.Update(gameTime, ReadInput(keyboard));
 	}
 
-	private void ResolveCollision()
-	{
-		if (_world?.Collision == null)
-		{
-			return;
-		}
-
-		var feet = _player.Position.Y - Player.HalfHeight;
-		_world.Collision.ResolveWalls(ref _player.Position, Player.Radius, feet, feet + Player.HalfHeight * 2.0f, Player.StepHeight);
-	}
-
-	private void ApplyGravity(float delta)
-	{
-		var feet = _player.Position.Y - Player.HalfHeight;
-		float? groundY = null;
-
-		if (_world?.Collision != null
-			&& _world.Collision.TryGetGround(_player.Position.X, _player.Position.Z, feet + Player.StepHeight, out var ground))
-		{
-			groundY = ground;
-		}
-
-		_player.ApplyGravity(delta, groundY);
-	}
-
-	private void UpdateMouseLook()
+	/// <summary>
+	/// Turns raw device state into engine intent. Mouse look is derived from the distance from the
+	/// window centre, because the cursor is recentred every frame.
+	/// </summary>
+	private GameInput ReadInput(KeyboardState keyboard)
 	{
 		var mouse = Mouse.GetState();
-		var center = new Point(_viewportWidth > 0 ? _viewportWidth / 2 : 640, _viewportHeight > 0 ? _viewportHeight / 2 : 360);
+		var center = new Point(
+			GraphicsDevice.Viewport.Width / 2,
+			GraphicsDevice.Viewport.Height / 2);
 
-		_camera.Look(mouse.X - center.X, mouse.Y - center.Y);
+		var lookDeltaX = mouse.X - center.X;
+		var lookDeltaY = mouse.Y - center.Y;
 
-		var wheel = mouse.ScrollWheelValue;
-		if (wheel != _lastScrollValue)
-		{
-			_camera.Zoom(Math.Sign(wheel - _lastScrollValue));
-			_lastScrollValue = wheel;
-		}
+		// Wheel reports an absolute value, so track the previous frame to get a delta.
+		var wheelDelta = mouse.ScrollWheelValue - _lastScrollValue;
+		_lastScrollValue = mouse.ScrollWheelValue;
+
+		// Rising edge only, otherwise holding the key would flicker the overlay.
+		var toggleDown = keyboard.IsKeyDown(Hud.ToggleDebugKey);
+		var toggle = toggleDown && !_toggleWasDown;
+		_toggleWasDown = toggleDown;
 
 		Mouse.SetPosition(center.X, center.Y);
+
+		return new GameInput(
+			MoveAxis(keyboard, Keys.W, Keys.S),
+			MoveAxis(keyboard, Keys.D, Keys.A),
+			keyboard.IsKeyDown(Keys.LeftShift),
+			lookDeltaX,
+			lookDeltaY,
+			wheelDelta,
+			toggle);
+	}
+
+	private static float MoveAxis(KeyboardState keyboard, Keys positive, Keys negative)
+	{
+		var value = 0.0f;
+		if (keyboard.IsKeyDown(positive)) value += 1.0f;
+		if (keyboard.IsKeyDown(negative)) value -= 1.0f;
+		return value;
 	}
 
 	protected override void Draw(GameTime gameTime)
 	{
-		var device = GraphicsDevice;
-		var viewport = device.Viewport;
+		GraphicsDevice.Clear(GameCore.SkyColor);
 
-		if (viewport.Width != _viewportWidth || viewport.Height != _viewportHeight)
+		if (_core != null)
 		{
-			_viewportWidth = viewport.Width;
-			_viewportHeight = viewport.Height;
-			var aspect = (float)Math.Max(1, viewport.Width) / Math.Max(1, viewport.Height);
-			_projection = Matrix.CreatePerspectiveFieldOfView(FieldOfView, aspect, NearPlane, FarPlane);
-			_lastScrollValue = Mouse.GetState().ScrollWheelValue;
-		}
+			_core.Draw(gameTime);
 
-		device.Clear(SkyColor);
-
-		if (_world == null)
-		{
-			base.Draw(gameTime);
-			return;
-		}
-
-		var view = _camera.GetView(_player.Position);
-		_renderer.View = view;
-		_renderer.Projection = _projection;
-		_renderer.BeginFrame();
-
-		var frustum = new BoundingFrustum(view * _projection);
-
-		foreach (var cell in _world.Cells)
-		{
-			if (cell.Children.Count == 0 || !frustum.Intersects(cell.BoundingBox))
+			if (_core.ShouldUpdateTitle(gameTime))
 			{
-				continue;
+				Window.Title = _core.GetTitleText();
 			}
-
-			foreach (var node in cell.Children)
-			{
-				switch (node)
-				{
-					case MeshNode mesh:
-						if (mesh.Mesh != null && IsVisible(mesh.Mesh, ref mesh.Transform, frustum))
-						{
-							_renderer.DrawMeshPart(mesh.Mesh, mesh.Material, mesh.Transform);
-						}
-						break;
-
-					case InstancedMeshNode instanced:
-						if (instanced.Mesh == null)
-						{
-							break;
-						}
-
-						for (var i = 0; i < instanced.InstancesTransforms.Count; ++i)
-						{
-							var world = instanced.InstancesTransforms[i];
-							if (IsVisible(instanced.Mesh, ref world, frustum))
-							{
-								_renderer.DrawMeshPart(instanced.Mesh, instanced.Material, world);
-							}
-						}
-						break;
-				}
-			}
-		}
-
-		DrawHero();
-
-		_hud.Update(gameTime, _renderer.DrawCalls, _renderer.DrawnTriangles);
-		_hud.Render();
-
-		_titleUpdateTimer += gameTime.ElapsedGameTime.TotalSeconds;
-		if (_titleUpdateTimer >= 0.25)
-		{
-			_titleUpdateTimer = 0.0;
-			Window.Title = $"OpenGothic viewer | {_worldName} | {_renderer.DrawCalls} draws | {_renderer.DrawnTriangles} tris | player {_player.Position.X:0},{_player.Position.Y:0},{_player.Position.Z:0} | camera {_camera.Distance:0}";
 		}
 
 		base.Draw(gameTime);
-	}
-
-	private void DrawHero()
-	{
-		if (_hero == null)
-		{
-			return;
-		}
-
-		var feet = _player.Position - Vector3.Up * Player.HalfHeight;
-		var world = Matrix.CreateRotationY(_player.Yaw) * Matrix.CreateTranslation(feet);
-
-		foreach (var mesh in _hero.Meshes)
-		{
-			foreach (var part in mesh.MeshParts)
-			{
-				if (part.Skin == null)
-				{
-					continue;
-				}
-
-				// Skinned vertices are already baked into the model's bind pose, so only the hero
-				// transform is needed here; the skeleton comes from the animated bone matrices.
-				_renderer.DrawMeshPart(part, null, world, _heroInstance.GetSkinTransforms(part.Skin.SkinIndex));
-			}
-		}
-
-		if (_heroHead != null)
-		{
-			// The head is a morph mesh without morphing for now; its vertices live in head-bone space.
-			var headWorld = _heroHeadBone != null
-				? _heroInstance.GetBoneGlobalTransform(_heroHeadBone.Index) * world
-				: world;
-
-			foreach (var part in _heroHead.MeshParts)
-			{
-				_renderer.DrawMeshPart(part, null, headWorld);
-			}
-		}
-	}
-
-	private bool IsVisible(DrMeshPart part, ref Matrix world, BoundingFrustum frustum)
-	{
-		if (!_boundsCache.TryGetValue(part, out var sphere))
-		{
-			var box = part.BoundingBox;
-			var center = (box.Min + box.Max) * 0.5f;
-			sphere = new BoundingSphere(center, (box.Max - box.Min).Length() * 0.5f);
-			_boundsCache[part] = sphere;
-		}
-
-		sphere.Transform(ref world, out var transformed);
-		return frustum.Intersects(transformed);
-	}
-
-	private void PlacePlayer(WorldGrid world)
-	{
-		_camera.Yaw = 0.0f;
-		_camera.Pitch = -0.25f;
-		_camera.Distance = 250.0f;
-		_player.Yaw = 0.0f;
-
-		// The world's zCVobStartpoint marks where a new game begins (Xardas' tower in NEWWORLD).
-		if (world.PlayerStart is Vector3 start)
-		{
-			// The marker sits on the floor, while the capsule is centered on its position.
-			_player.Position = start + Vector3.Up * Player.HalfHeight;
-			Console.WriteLine($"Player start:    {Format(start)}");
-			return;
-		}
-
-		BoundingBox? bounds = null;
-		foreach (var cell in world.Cells)
-		{
-			if (cell.Children.Count == 0)
-			{
-				continue;
-			}
-
-			bounds = bounds.HasValue ? BoundingBox.CreateMerged(bounds.Value, cell.BoundingBox) : cell.BoundingBox;
-		}
-
-		var box = bounds ?? new BoundingBox(Vector3.Zero, Vector3.Zero);
-		var center = (box.Min + box.Max) * 0.5f;
-
-		_player.Position = new Vector3(center.X, box.Max.Y + 1500.0f, center.Z);
-		Console.WriteLine("Player start:    no startpoint in world, using world centre");
 	}
 
 	protected override void UnloadContent()
 	{
 		base.UnloadContent();
 
-		_hud?.Dispose();
-		_hud = null;
-
-		_renderer?.Dispose();
-		_renderer = null;
+		_core?.Dispose();
+		_core = null;
 	}
 
 	private void CenterMouse()
 	{
 		var viewport = GraphicsDevice.Viewport;
-		Mouse.SetPosition(viewport.Width / 2, viewport.Height / 2);
+		var center = new Point(viewport.Width / 2, viewport.Height / 2);
+		Mouse.SetPosition(center.X, center.Y);
 		_lastScrollValue = Mouse.GetState().ScrollWheelValue;
 	}
-
-	private static void PrintWorld(WorldGrid world)
-	{
-		var usedCells = 0;
-		var meshNodes = 0;
-		var instancedNodes = 0;
-		var instances = 0;
-		BoundingBox? bounds = null;
-
-		foreach (var cell in world.Cells)
-		{
-			if (cell.Children.Count == 0)
-			{
-				continue;
-			}
-
-			++usedCells;
-			bounds = bounds.HasValue ? BoundingBox.CreateMerged(bounds.Value, cell.BoundingBox) : cell.BoundingBox;
-
-			foreach (var node in cell.Children)
-			{
-				switch (node)
-				{
-					case InstancedMeshNode instanced:
-						++instancedNodes;
-						instances += instanced.InstancesTransforms.Count;
-						break;
-
-					case MeshNode:
-						++meshNodes;
-						break;
-				}
-			}
-		}
-
-		Console.WriteLine($"Grid:            {Constants.GridSize}x{Constants.GridSize} ({usedCells} non-empty cells)");
-		Console.WriteLine($"Mesh nodes:      {meshNodes}");
-		Console.WriteLine($"Instanced nodes: {instancedNodes} ({instances} instances)");
-		Console.WriteLine($"Scene nodes:     {meshNodes + instances}");
-
-		if (bounds.HasValue)
-		{
-			var b = bounds.Value;
-			Console.WriteLine($"Bounds:          min {Format(b.Min)}, max {Format(b.Max)}");
-		}
-	}
-
-	private static string Format(Vector3 v) => $"({v.X:0.##}, {v.Y:0.##}, {v.Z:0.##})";
 }

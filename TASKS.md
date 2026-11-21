@@ -22,11 +22,8 @@ Non-negotiables while doing all of it:
 
 ## Phase 0 — Foundation
 
-- [ ] **T-003 Introduce an engine-level `Game`/`GameHost` split.** Move host-independent code out
-      of `OpenGothic.Console` into `Common` so a future game executable shares it. Keep the viewer
-      working.
-- [ ] **T-004 Restructure `Common` into the planned folders** (`World/`, `World/Vobs/`, `Game/`,
-      `Physics/`, `UI/`). Pure moves + namespace updates, no behaviour change.
+- [ ] **T-004 Restructure `Common` into the planned folders** (`World/`, `World/Vobs/`, `Physics/`,
+      `UI/`). Pure moves + namespace updates, no behaviour change. `Gameplay/` already exists.
 
 ## Phase 1 — Physics and movement (prerequisite for everything active)
 
@@ -174,6 +171,10 @@ Non-negotiables while doing all of it:
 
 ## Completed
 
+- **T-003 Extract an engine-level `GameCore` from the world viewer.** `Gameplay/GameCore` owns
+  assets, world, hero, camera, player and drawing; the console host only polls input and captures
+  the mouse. `GameInput` is the boundary; `FollowCamera` and `Player` moved to `Common` and gained
+  tests (1 → 13). Verified by running the viewer and capturing a frame.
 - **T-002 Add CI build + test workflow.** `.github/workflows/ci.yml` restores, builds and tests on
   Windows and Linux with a NuGet cache. Both legs ran clean on a clean tree; the first push is the
   first real run. [Design/CI.md](Design/CI.md) added.

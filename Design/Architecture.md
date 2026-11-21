@@ -3,13 +3,36 @@
 ## Layering
 
 ```
-OpenGothic.Console     executable: window, camera, input, debug output
-OpenGothic.Common      engine: assets, world, scene graph, physics, gameplay
+OpenGothic.Console     host: window, input polling, exit codes
+OpenGothic.Common      engine: assets, world, scene graph, gameplay, physics
 OpenGothic.Tests       xUnit test project (see Design/Testing.md)
 ```
 
 `OpenGothic.Common` is the whole engine. The console app is a *host*, not the engine; anything
 that a future game executable would also need must live in `Common`.
+
+## Host and engine
+
+The split introduced by T-003 is deliberately narrow: the host owns the window and the devices,
+the engine owns everything downstream of them.
+
+| | Belongs to | Examples |
+|---|---|---|
+| **Host** | `OpenGothic.Console` | `Game` subclass, window setup, keyboard/mouse polling, mouse capture, exit codes |
+| **Engine** | `OpenGothic.Common` | assets, world loading, simulation, camera, player, culling, drawing, HUD |
+
+The boundary is a single type: `Gameplay/GameCore`. The host turns raw device state into a
+`GameInput` (movement axes, run flag, look delta, wheel delta, debug-toggle edge) and calls
+`GameCore.Update`; `GameCore` never reads `Keyboard` or `Mouse` itself. Drawing follows the same
+rule — the host clears the back buffer with `GameCore.SkyColor`, calls `GameCore.Draw`, and only
+syncs the window title.
+
+`GameCore` deliberately does **not** derive from MonoGame's `Game`. That type is the host's, and a
+future game executable has to drive the same engine from its own loop.
+
+> **Naming trap.** `Game` is unusable as a namespace here: `OpenGothic.Game` would shadow
+> `Microsoft.Xna.Framework.Game`, and every file touching both would need full qualification. The
+> gameplay namespace is therefore `OpenGothic.Gameplay`. Do not reintroduce `OpenGothic.Game`.
 
 Planned inside `OpenGothic.Common`:
 
@@ -17,10 +40,10 @@ Planned inside `OpenGothic.Common`:
 |---|---|
 | `Assets*` | VDFS mounting, resource index, loaders, cache |
 | `Engine/` | scene nodes, materials, mesh parts (render-agnostic where possible) |
+| `Gameplay/` | game session (`GameCore`), input intent, camera, player |
 | `Rendering/` | `ForwardRenderer`: effects and low-level 3D drawing |
 | `World/` | world container, cells, spatial index, vob tree |
 | `World/Vobs/` | vob types (`Vob`, `StaticObj`, `Npc`, `Interactive`, triggers) |
-| `Game/` | game session, time, scripts, AI, inventory, combat |
 | `Physics/` | BepuPhysics2 integration |
 | `UI/` | Myra widgets and screens |
 | `Utility/` | math, buffers, misc |
