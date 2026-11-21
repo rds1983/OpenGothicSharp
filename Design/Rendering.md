@@ -19,6 +19,13 @@
   `BoundingSphere` tests. This is the "one performance improvement" we allow early.
 - Opaque rendering only. No alpha blending, no shadows, no lighting from the world.
 
+## Coordinate space
+
+All geometry reaching this layer is already right-handed MonoGame space — the loaders convert
+Gothic's left-handed data once, at load time (see
+[Architecture.md](Architecture.md#coordinates-gothic-lhs--monogame-rhs)). The renderer must not
+apply any further axis swaps or UV flips; if a model looks mirrored, the bug is in a loader.
+
 ## Planned
 
 | Stage | What | Notes |

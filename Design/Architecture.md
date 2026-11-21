@@ -29,13 +29,34 @@ Planned inside `OpenGothic.Common`:
 
 - .NET 8, file-scoped namespaces, tabs, `var`, one partial `Assets` file per domain.
 - Engine code is data-driven: no hard-coded asset names, no hard-coded world names.
-- Gothic coordinates are left-handed; the engine converts once at load time to MonoGame's
-  right-handed convention. Everything downstream of a loader is right-handed.
+- Gothic coordinates are left-handed (LHS) and MonoGame uses right-handed (RHS); the engine converts
+  once at load time. See [Coordinates](#coordinates-gothic-lhs--monogame-rhs). Everything downstream
+  of a loader is right-handed.
 - Prefer small, testable classes over god objects. The reference project's `World` and `Npc` are
   thousands of lines each; split by concern here.
 
-## Coordinates
+## Coordinates: Gothic LHS → MonoGame RHS
 
-Gothic stores left-handed data. On load we negate `Z`, conjugate matrices with the L↔R matrix,
-reverse triangle winding and mirror texture U (`1 - u`). This is already implemented in the
-asset loaders and must stay in one place: `Utility/Mathematics.cs` and the loaders.
+**Gothic data is left-handed (LHS). MonoGame is right-handed (RHS).** The engine converts once,
+at load time, and everything downstream of a loader is right-handed.
+
+The conversion is a fixed three-part recipe, applied by the loaders via
+`Utility/Mathematics.cs` (`ToXna`) and `Utility/MeshBuilder.cs` (`CreateMeshPart`):
+
+| Step | Rule | Why |
+|---|---|---|
+| Position | negate `Z` | flips the forward axis, turning LHS into RHS |
+| Matrix | conjugate with the L↔R matrix (`LTR * m * LTR`) | same flip applied to rotations/translations |
+| Winding | reverse triangle order (`0,1,2` → `2,1,0`) | negating `Z` mirrors geometry, which inverts the facing direction |
+
+**UVs are used verbatim.** Negating `Z` already mirrors the model, and the winding reversal keeps
+faces front-facing, so the texture lookup needs no correction. Do **not** additionally mirror U
+(`1 - u`).
+
+> This is a real bug we shipped and fixed: `MeshBuilder` used to apply `U = 1 - U` on top of the
+> `Z` negation. Two mirrors cancel, so every triangle sampled the opposite side of its texture
+> sheet — the hero's body smeared the skin atlas and it looked like broken UV mapping. If a model
+> appears to have "wrong UVs", check this first.
+
+These rules must stay in one place. Never apply a conversion twice, and never add a
+per-loader or per-draw correction.

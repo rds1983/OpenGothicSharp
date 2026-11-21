@@ -30,6 +30,13 @@ applied, and bone indices remapped per mesh through the hierarchy.
 
 Only the clips actually wanted are imported — a model script may list hundreds.
 
+### Coordinates and UVs
+
+Gothic data is left-handed; MonoGame is right-handed. Loaders convert **once** here: negate `Z`,
+conjugate matrices with the L↔R matrix, reverse triangle winding — and leave UVs untouched.
+See [Architecture.md](Architecture.md#coordinates-gothic-lhs--monogame-rhs) before touching vertex
+or texture-coordinate code.
+
 ## World
 
 `.ZEN` parsing:
