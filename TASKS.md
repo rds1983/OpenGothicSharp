@@ -22,10 +22,9 @@ Non-negotiables while doing all of it:
 
 ## Phase 0 — Foundation
 
-- [ ] **T-001 Set up `OpenGothic.Tests` (xUnit).** New project in the solution, `dotnet test`
-      works, one smoke test. Reference: none. Update [Design/Testing.md](Design/Testing.md).
 - [ ] **T-002 Add CI build + test workflow.** GitHub Actions: restore, build, test on Windows and
-      Linux. Cache NuGet.
+      Linux. Cache NuGet. Linux should build and test only; the DesktopGL host may need native
+      dependencies a plain image lacks.
 - [ ] **T-003 Introduce an engine-level `Game`/`GameHost` split.** Move host-independent code out
       of `OpenGothic.Console` into `Common` so a future game executable shares it. Keep the viewer
       working.
@@ -147,9 +146,9 @@ Non-negotiables while doing all of it:
 
 ## Phase 5 — UI (Myra)
 
-- [ ] **T-100 Myra integration in the host.** Renderer, input mapping, scaling, DPI. See
-      [Design/UI.md](Design/UI.md).
-- [ ] **T-101 Debug overlay:** FPS, draw calls, position, current cell, physics stats.
+- [ ] **T-101 Extend the debug overlay** with hero position, current grid cell and physics stats
+      (body count, active contacts). FPS, draw calls and polygons are already shown. Physics stats
+      wait for T-010.
 - [ ] **T-102 Gothic font loading.** `.FNT` → Myra bitmap font. Reference: `utils/gthfont.cpp`.
 - [ ] **T-103 Main menu and world/load selection.**
 - [ ] **T-104 HUD:** health/mana/swim bars, focus name, item pickups.
@@ -178,4 +177,6 @@ Non-negotiables while doing all of it:
 
 ## Completed
 
-_(Move finished tasks here with the commit that finished them.)_
+- **T-001 Set up `OpenGothic.Tests` (xUnit).** `OpenGothic.Tests` added to the solution, test
+  packages pinned in `Directory.Build.props`, one smoke test; `dotnet test` green in Debug and
+  Release. [Design/Testing.md](Design/Testing.md) updated.

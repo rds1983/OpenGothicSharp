@@ -2,7 +2,17 @@
 
 ## Layout
 
-`OpenGothic.Tests` (created by T-001) is an xUnit project referencing `OpenGothic.Common`.
+`OpenGothic.Tests` is an xUnit project targeting `$(MonoGameTargetFramework)` and referencing
+`OpenGothic.Common`. It also references `MonoGame.Framework.DesktopGL` directly: `OpenGothic.Common`
+marks that package `PrivateAssets="All"`, so without the direct reference the test project would not
+compile against MonoGame types.
+
+Test packages are pinned once in `Directory.Build.props` (`XunitVersion`,
+`XunitRunnerVisualStudioVersion`, `MicrosoftNETTestSdkVersion`) like every other dependency; do not
+put versions in the test `.csproj`.
+
+`SmokeTests` only proves the plumbing (project reference resolves, MonoGame types load, tests are
+discovered). Real coverage belongs in per-subsystem files, e.g. `Utility/MathematicsTests.cs`.
 
 ## Rules
 

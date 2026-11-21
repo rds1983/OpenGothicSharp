@@ -14,5 +14,8 @@
     <DigitalRiseModelVersion>0.7.7</DigitalRiseModelVersion>
     <MyraVersion>1.6.8</MyraVersion>
     <ZenKitVersion>0.1.13</ZenKitVersion>
+    <XunitVersion>2.9.3</XunitVersion>
+    <XunitRunnerVisualStudioVersion>2.8.2</XunitRunnerVisualStudioVersion>
+    <MicrosoftNETTestSdkVersion>17.14.1</MicrosoftNETTestSdkVersion>
   </PropertyGroup>
 </Project>
