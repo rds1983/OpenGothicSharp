@@ -11,6 +11,7 @@ purpose; anything that explains *how* or *why* lives here.
 | [Physics.md](Physics.md) | BepuPhysics2 plan and how it replaces the current collision |
 | [UI.md](UI.md) | Myra-based UI policy |
 | [Testing.md](Testing.md) | xUnit layout and what must be covered |
+| [CI.md](CI.md) | GitHub Actions workflow, platforms, caching |
 | [Porting.md](Porting.md) | How the C++ OpenGothic reference project is used |
 
 ## Reference project

@@ -22,9 +22,6 @@ Non-negotiables while doing all of it:
 
 ## Phase 0 — Foundation
 
-- [ ] **T-002 Add CI build + test workflow.** GitHub Actions: restore, build, test on Windows and
-      Linux. Cache NuGet. Linux should build and test only; the DesktopGL host may need native
-      dependencies a plain image lacks.
 - [ ] **T-003 Introduce an engine-level `Game`/`GameHost` split.** Move host-independent code out
       of `OpenGothic.Console` into `Common` so a future game executable shares it. Keep the viewer
       working.
@@ -177,6 +174,9 @@ Non-negotiables while doing all of it:
 
 ## Completed
 
+- **T-002 Add CI build + test workflow.** `.github/workflows/ci.yml` restores, builds and tests on
+  Windows and Linux with a NuGet cache. Both legs ran clean on a clean tree; the first push is the
+  first real run. [Design/CI.md](Design/CI.md) added.
 - **T-001 Set up `OpenGothic.Tests` (xUnit).** `OpenGothic.Tests` added to the solution, test
   packages pinned in `Directory.Build.props`, one smoke test; `dotnet test` green in Debug and
   Release. [Design/Testing.md](Design/Testing.md) updated.

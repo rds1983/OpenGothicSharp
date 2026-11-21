@@ -55,6 +55,8 @@ cd OpenGothicSharp
 dotnet build OpenGothic.MonoGame.sln -c Release
 ```
 
+CI builds and tests the solution on Windows and Linux; see [Design/CI.md](Design/CI.md).
+
 ## Run the world viewer
 
 ```bash

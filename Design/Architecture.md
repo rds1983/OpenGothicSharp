@@ -5,7 +5,7 @@
 ```
 OpenGothic.Console     executable: window, camera, input, debug output
 OpenGothic.Common      engine: assets, world, scene graph, physics, gameplay
-OpenGothic.Tests       xUnit test project (planned, see T-001)
+OpenGothic.Tests       xUnit test project (see Design/Testing.md)
 ```
 
 `OpenGothic.Common` is the whole engine. The console app is a *host*, not the engine; anything
