@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="ZenKit" Version="$(ZenKitVersion)" />
     <PackageReference Include="DigitalRiseModel.MonoGame" Version="$(DigitalRiseModelVersion)" />
+    <PackageReference Include="Myra" Version="$(MyraVersion)" />
     <PackageReference Include="MonoGame.Framework.DesktopGL" PrivateAssets="All" Version="$(MonoGameVersion)" />
   </ItemGroup>
 </Project>

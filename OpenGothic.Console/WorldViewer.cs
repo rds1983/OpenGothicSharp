@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using OpenGothic.Engine;
 using OpenGothic.Rendering;
+using OpenGothic.UI;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -41,6 +42,8 @@ internal sealed class WorldViewer : Game
 	private DrModelBone _heroRootBone;
 	private bool _heroMoving;
 	private ForwardRenderer _renderer;
+	private Hud _hud;
+	private bool _toggleWasDown;
 	private Matrix _projection = Matrix.Identity;
 	private int _viewportWidth;
 	private int _viewportHeight;
@@ -100,8 +103,12 @@ internal sealed class WorldViewer : Game
 			Console.WriteLine("  Left Shift      sprint");
 			Console.WriteLine("  Mouse           orbit camera");
 			Console.WriteLine("  Mouse wheel     camera distance");
+			Console.WriteLine($"  {Hud.ToggleDebugKey,-15} toggle debug overlay");
 			Console.WriteLine("  Escape          quit");
 			Console.WriteLine();
+
+			_hud = new Hud(this);
+			_hud.DebugOverlayVisible = true;
 
 			_renderer = new ForwardRenderer(GraphicsDevice, SkyColor)
 			{
@@ -162,6 +169,14 @@ internal sealed class WorldViewer : Game
 			Exit();
 			return;
 		}
+
+		// Rising edge only, otherwise holding the key would flicker the overlay.
+		var toggleDown = keyboard.IsKeyDown(Hud.ToggleDebugKey);
+		if (toggleDown && !_toggleWasDown)
+		{
+			_hud?.ToggleDebugOverlay();
+		}
+		_toggleWasDown = toggleDown;
 
 		UpdateMouseLook();
 
@@ -313,6 +328,9 @@ internal sealed class WorldViewer : Game
 
 		DrawHero();
 
+		_hud.Update(gameTime, _renderer.DrawCalls, _renderer.DrawnTriangles);
+		_hud.Render();
+
 		_titleUpdateTimer += gameTime.ElapsedGameTime.TotalSeconds;
 		if (_titleUpdateTimer >= 0.25)
 		{
@@ -413,6 +431,9 @@ internal sealed class WorldViewer : Game
 	protected override void UnloadContent()
 	{
 		base.UnloadContent();
+
+		_hud?.Dispose();
+		_hud = null;
 
 		_renderer?.Dispose();
 		_renderer = null;

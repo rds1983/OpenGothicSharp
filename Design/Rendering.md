@@ -27,6 +27,8 @@
 - Collects frame statistics: `DrawCalls` and `DrawnTriangles`, reset by `BeginFrame()`.
 - Clearing the back buffer stays with the host, because it owns the sky colour.
 
+The 2D HUD is drawn after the 3D frame by `UI/Hud.cs`, which reads `DrawCalls`/`DrawnTriangles` off
+the renderer and renders on top of the back buffer. See [UI.md](UI.md).
 
 The viewer (`OpenGothic.Console/WorldViewer.cs`) only walks the scene, culls, and calls
 `DrawMeshPart`:

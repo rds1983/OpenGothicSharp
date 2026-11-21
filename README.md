@@ -70,10 +70,12 @@ dotnet run --project OpenGothic.Console -- "C:\\GOG Games\\Gothic II" ADDONWORLD
 | `Left Shift` | Sprint |
 | Mouse | Orbit the camera |
 | Mouse wheel | Camera distance |
+| `F1` | Toggle the debug overlay |
 | `Escape` | Quit |
 
-Loading, rendering and the current limitations are documented in
-[Design/Assets.md](Design/Assets.md) and [Design/Rendering.md](Design/Rendering.md).
+Loading, rendering, the HUD and the current limitations are documented in
+[Design/Assets.md](Design/Assets.md), [Design/Rendering.md](Design/Rendering.md) and
+[Design/UI.md](Design/UI.md).
 
 ## Legal
 

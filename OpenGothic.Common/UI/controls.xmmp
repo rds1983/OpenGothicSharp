@@ -1,0 +1,12 @@
+<Project>
+  <Project.ExportOptions Namespace="OpenGothic.UI" Class="Controls" FieldsVisibility="Private" />
+  <Panel Background="#000000AA" Padding="8" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+    <VerticalStackPanel Spacing="2">
+      <Label Text="Controls" TextColor="#FFD700" />
+      <HorizontalStackPanel Spacing="12">
+        <Label Text="F1" TextColor="#9CD3FFFF" Id="_labelToggleDebugKey" />
+        <Label Text="Toggle debug overlay" />
+      </HorizontalStackPanel>
+    </VerticalStackPanel>
+  </Panel>
+</Project>
