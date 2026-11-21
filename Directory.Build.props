@@ -11,7 +11,7 @@
     <RuntimeIdentifiers>win-x64;linux-x64;osx-x64</RuntimeIdentifiers>
     <Version>0.1.0</Version>
     <MonoGameVersion>3.8.6.1</MonoGameVersion>
-    <DigitalRiseModelVersion>0.7.5</DigitalRiseModelVersion>
+    <DigitalRiseModelVersion>0.7.7</DigitalRiseModelVersion>
     <MyraVersion>1.6.8</MyraVersion>
     <ZenKitVersion>0.1.13</ZenKitVersion>
   </PropertyGroup>
