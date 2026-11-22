@@ -271,3 +271,6 @@ log.txt
 
 # Launch profiles contain machine-specific Gothic paths; each dev creates their own.
 /OpenGothic/Properties/launchSettings.json
+
+# Agent tooling session data
+.commandcode/

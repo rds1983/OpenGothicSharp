@@ -1,6 +1,9 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using Myra;
+using Myra.Graphics2D.UI;
+using OpenGothic.UI;
 using System;
 
 namespace OpenGothic;
@@ -12,6 +15,9 @@ public class OgGame : Game
 	private WorldRenderer _worldRenderer;
 	private Assets _assets;
 	private WorldGrid _world;
+	private Desktop _desktop;
+	private Hud _hud;
+	private KeyboardState _previousKeyboard;
 
 	public Camera Camera { get; } = new Camera();
 
@@ -29,6 +35,11 @@ public class OgGame : Game
 		OG.GraphicsDevice = GraphicsDevice;
 		_renderer = new Renderer(GraphicsDevice);
 		_worldRenderer = new WorldRenderer(GraphicsDevice);
+
+		MyraEnvironment.Game = this;
+		_desktop = new Desktop();
+		_hud = new Hud();
+		_desktop.Root = _hud;
 
 		Camera.FieldOfView = OG.Settings?.CameraFov ?? Camera.FieldOfView;
 		Camera.SetViewport(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
@@ -67,11 +78,21 @@ public class OgGame : Game
 
 	protected override void Update(GameTime gameTime)
 	{
+		var keyboard = Keyboard.GetState();
+
 		if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed ||
-			Keyboard.GetState().IsKeyDown(Keys.Escape))
+			keyboard.IsKeyDown(Keys.Escape))
 		{
 			Exit();
 		}
+
+		// Edge-detect so holding the key toggles once rather than every frame.
+		if (keyboard.IsKeyDown(Keys.F1) && _previousKeyboard.IsKeyUp(Keys.F1))
+		{
+			_hud.ToggleDebugOverlay();
+		}
+
+		_previousKeyboard = keyboard;
 
 		base.Update(gameTime);
 	}
@@ -79,6 +100,14 @@ public class OgGame : Game
 	protected override void Draw(GameTime gameTime)
 	{
 		_worldRenderer.Draw(_renderer, Camera, _world);
+
+		if (_hud.DebugOverlay.Visible)
+		{
+			// Read the counters after the world draw: BeginFrame resets them per frame.
+			_hud.DebugOverlay.Update(gameTime, Camera, _renderer);
+		}
+
+		_desktop.Render();
 
 		base.Draw(gameTime);
 	}

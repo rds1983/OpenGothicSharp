@@ -141,13 +141,16 @@ viewport from the graphics device. Near/far come from `Constants.NearPlane`/`Far
 Rendering is split three ways:
 
 - **`Renderer`** (`OpenGothic/Renderer.cs`) is a low-level drawing service and owns no
-  scene content. Public surface: `Clear()`, `BeginFrame(camera)`,
-  `DrawMeshPart(DrMeshPart, Matrix, Material? customMaterial)`. It owns the
+  scene content. Public surface: `BeginFrame(camera)`, `Clear()`,
+  `DrawMeshPart(DrMeshPart, Matrix, Material? customMaterial)`, `EndFrame()`. It owns the
   `BasicEffect`, device blend/depth/rasterizer state, vertex/index-buffer binding and the
-  draw call. It also exposes per-frame stats — `DrawnParts`, `DrawCalls`, `Triangles` —
-  reset in `BeginFrame`.
+  draw call. It also exposes per-frame stats — `DrawCalls`, `Triangles` — reset in
+  `BeginFrame`.
+  `BeginFrame` **saves** the device state and installs the renderer's own (opaque blend,
+  default depth, back-face culling, `LinearWrap` sampler, full-viewport scissor);
+  `EndFrame` **restores** what it saved. Everything in between can assume world defaults.
 - **`WorldRenderer`** owns the `WorldGrid` traversal and frustum culling, and drives the
-  frame (`Clear` → `BeginFrame` → sky → cells).
+  frame: `BeginFrame` → `Clear` → sky → cells → `EndFrame`.
 - **`Sky`** owns its own geometry, gradient texture and material, and submits its
   `DrMeshPart` like any other object.
 
@@ -190,3 +193,58 @@ A custom shader system and visual parity are deliberately deferred; see
 ## UI
 
 Built with Myra. Usability first; parity is deferred to milestone M.
+
+All UI code and `.xmmp` layouts live in `OpenGothic/UI/`. Screens are authored as `.xmmp`
+and exported to C# rather than written by hand:
+
+```
+cd OpenGothic/UI
+myra-export DebugOverlay.xmmp
+```
+
+`myra-export` (a global .NET tool) writes two files per layout:
+`<Name>.Generated.cs` holds `BuildUI()` and the widget fields and is regenerated on every
+export; `<Name>.cs` holds the partial class and is written **once** — re-exporting does not
+touch it, so user code belongs there. Never edit a `.Generated.cs` by hand.
+
+`OgGame.Initialize` sets `MyraEnvironment.Game`, creates a single `Desktop`, and assigns the
+root widget. `Draw` renders the world, updates the overlay from the frame's counters, then
+calls `Desktop.Render()`.
+
+Myra ships its default skin and `Inter-Regular.ttf` as embedded resources, so no UI assets
+need to be copied into the project.
+
+**Device state leaks across the UI/world boundary**, so the save/restore in
+`BeginFrame`/`EndFrame` is load-bearing, not defensive. Myra enables scissor testing, leaves
+its small rectangle set and binds a clamping sampler; `BasicEffect` sets neither. Without
+the reset, `Clear` clips to the UI's rectangle and terrain textures — whose UVs run well
+outside 0..1 — smear into long streaks.
+
+### HUD
+
+The HUD is three layouts in `OpenGothic/UI/`:
+
+- **`Hud`** — the `Desktop` root. A stretched `Panel`, so each block anchors to its own
+  corner: `DebugOverlay` top-left, `Controls` bottom-right, both inset 8px.
+- **`Controls`** — always visible, bottom-right. Lists the current key bindings.
+- **`DebugOverlay`** — toggleable, top-left. FPS, camera position, draw calls, triangles.
+
+Anchoring relies on `Widget.Left`/`Top` being **additive offsets applied after alignment**,
+so a bottom-right block uses `Alignment = Right/Bottom` with *negative* offsets.
+`Hud.xmmp` cannot express this: the exporter drops `Stretch` because it equals the property
+default, and it does not emit per-child layout for a bare `Panel`. The alignment and offsets
+therefore live in `Hud.cs`, not the `.xmmp`.
+
+Both blocks are styled in their own `.xmmp`: a 65% black background (`#000000A6`), 10×6
+padding and a gold `#FFCC66` header. **Myra's 8-digit hex is `RRGGBBAA`, not `AARRGGBB`** —
+the alpha goes last. Writing `#A6000000` yields near-transparent red.
+
+`UI/DebugOverlay.cs` computes FPS from `GameTime` over a half-second window and pulls the
+render counters from `Renderer`, formatted with thousands separators.
+
+`OgGame` edge-detects F1 (comparing against the previous frame's `KeyboardState`, so holding
+the key toggles once) and calls `Hud.ToggleDebugOverlay`. While the debug block is hidden it
+is not updated at all, so no label text is refreshed.
+
+Bindings are hand-maintained: when one is added to `OgGame.Update`, add its line to
+`Controls.xmmp` and re-export.

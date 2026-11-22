@@ -37,30 +37,32 @@ public class WorldRenderer : IDisposable
 			throw new ArgumentNullException(nameof(camera));
 		}
 
-		renderer.Clear();
+		// BeginFrame installs the renderer's device state (including the scissor rect), so
+		// the clear must happen after it — otherwise it is clipped by whatever the UI left.
 		renderer.BeginFrame(camera);
+		renderer.Clear();
 
 		Sky.Draw(renderer, camera);
 
-		if (world == null)
+		if (world != null)
 		{
-			return;
-		}
+			_frustum.Matrix = camera.ViewProjection;
 
-		_frustum.Matrix = camera.ViewProjection;
-
-		foreach (var cell in world.Cells)
-		{
-			if (!_frustum.Intersects(cell.BoundingBox))
+			foreach (var cell in world.Cells)
 			{
-				continue;
-			}
+				if (!_frustum.Intersects(cell.BoundingBox))
+				{
+					continue;
+				}
 
-			foreach (var node in cell.Children)
-			{
-				DrawNode(renderer, node);
+				foreach (var node in cell.Children)
+				{
+					DrawNode(renderer, node);
+				}
 			}
 		}
+
+		renderer.EndFrame();
 	}
 
 	private static void DrawNode(Renderer renderer, SceneNode node)

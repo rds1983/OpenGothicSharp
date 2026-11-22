@@ -1,0 +1,10 @@
+<Project>
+  <Project.ExportOptions Namespace="OpenGothic.UI" Class="DebugOverlay" FieldsVisibility="Private" />
+  <VerticalStackPanel Id="_panelRoot" Spacing="2" Background="#000000A6" Padding="10,6">
+    <Label Id="_labelHeader" Text="Debug Overlay" TextColor="#FFCC66" />
+    <Label Id="_labelFps" Text="FPS: 0" TextColor="#E8E8E8" />
+    <Label Id="_labelPosition" Text="Position: 0.0, 0.0, 0.0" TextColor="#E8E8E8" />
+    <Label Id="_labelDrawCalls" Text="Draw calls: 0" TextColor="#E8E8E8" />
+    <Label Id="_labelTriangles" Text="Triangles: 0" TextColor="#E8E8E8" />
+  </VerticalStackPanel>
+</Project>

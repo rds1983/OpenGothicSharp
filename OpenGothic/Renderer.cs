@@ -16,6 +16,12 @@ public class Renderer : IDisposable
 	private readonly BasicEffect _effect;
 	private Texture2D _fallbackTexture;
 
+	private BlendState _savedBlendState;
+	private DepthStencilState _savedDepthStencilState;
+	private RasterizerState _savedRasterizerState;
+	private SamplerState _savedSamplerState;
+	private Rectangle _savedScissorRectangle;
+
 	public Renderer(GraphicsDevice device)
 	{
 		_device = device ?? throw new ArgumentNullException(nameof(device));
@@ -56,9 +62,6 @@ public class Renderer : IDisposable
 		_fallbackTexture.SetData(new[] { Color.White });
 	}
 
-	/// <summary>Mesh parts submitted during the current frame.</summary>
-	public int DrawnParts { get; private set; }
-
 	/// <summary>Draw calls issued during the current frame.</summary>
 	public int DrawCalls { get; private set; }
 
@@ -71,7 +74,10 @@ public class Renderer : IDisposable
 		_device.Clear(Constants.SkyHorizonColor);
 	}
 
-	/// <summary>Begins a frame with the camera's view and projection.</summary>
+	/// <summary>
+	/// Begins a frame: saves the device state, installs the renderer's own state and
+	/// resets the counters. Must be paired with <see cref="EndFrame"/>.
+	/// </summary>
 	public void BeginFrame(Camera camera)
 	{
 		if (camera == null)
@@ -79,13 +85,38 @@ public class Renderer : IDisposable
 			throw new ArgumentNullException(nameof(camera));
 		}
 
-		DrawnParts = 0;
+		_savedBlendState = _device.BlendState;
+		_savedDepthStencilState = _device.DepthStencilState;
+		_savedRasterizerState = _device.RasterizerState;
+		_savedSamplerState = _device.SamplerStates[0];
+		_savedScissorRectangle = _device.ScissorRectangle;
+
 		DrawCalls = 0;
 		Triangles = 0;
 
 		_effect.View = camera.View;
 		_effect.Projection = camera.Projection;
 		_effect.Texture = _fallbackTexture;
+
+		// Device state is global and UI rendering leaves its own behind: Myra enables
+		// scissor testing with a small rectangle and binds a clamping sampler.
+		// BasicEffect sets neither, so both would corrupt the world (a partially cleared
+		// target and terrain textures smearing into streaks).
+		_device.BlendState = BlendState.Opaque;
+		_device.DepthStencilState = DepthStencilState.Default;
+		_device.RasterizerState = RasterizerState.CullCounterClockwise;
+		_device.SamplerStates[0] = SamplerState.LinearWrap;
+		_device.ScissorRectangle = _device.Viewport.Bounds;
+	}
+
+	/// <summary>Restores the device state saved by <see cref="BeginFrame"/>.</summary>
+	public void EndFrame()
+	{
+		_device.BlendState = _savedBlendState;
+		_device.DepthStencilState = _savedDepthStencilState;
+		_device.RasterizerState = _savedRasterizerState;
+		_device.SamplerStates[0] = _savedSamplerState;
+		_device.ScissorRectangle = _savedScissorRectangle;
 	}
 
 	/// <summary>
@@ -122,7 +153,6 @@ public class Renderer : IDisposable
 			part.StartIndex,
 			part.PrimitiveCount);
 
-		++DrawnParts;
 		++DrawCalls;
 		Triangles += PrimitiveCountToTriangles(part.PrimitiveType, part.PrimitiveCount);
 

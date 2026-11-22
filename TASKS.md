@@ -29,7 +29,11 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   content and reports per-frame draw-call/triangle counts; `WorldRenderer` owns frustum
   culling and traversal, `Sky` owns its own mesh part. Materials live on the mesh part's
   `DrMeshPartTag`, so `customMaterial` is normally null. No vertex/texture UV flips.
-- No input, physics, UI, audio, or scripting yet.
+- No input, physics, audio, or scripting yet.
+- UI exists: Myra `Desktop` rooted at a `Hud` panel with two independently anchored blocks
+  — an always-visible `Controls` list (bottom-right) and a toggleable `DebugOverlay`
+  (top-left, F1) showing FPS, camera position, draw-call and triangle counts. Layouts are
+  `.xmmp` exported with `myra-export`; all UI lives in `OpenGothic/UI/`.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
   Current milestone: **C — Models and animation**.
 
@@ -91,10 +95,15 @@ story (the renderer currently uses a fixed two-light rig with specular disabled;
 `Documentation/`).
 **Done when:** the world looks grounded rather than floating in a void.
 
-### B4. Debug overlay
+### B4. Debug overlay — DONE
 Wire an on-screen debug overlay (FPS, camera position, and the `Renderer` frame stats
-`DrawnParts`/`DrawCalls`/`Triangles`) plus optional wireframe/bbox draw.
+`DrawCalls`/`Triangles`) plus optional wireframe/bbox draw.
 **Done when:** stats are visible on screen and toggleable.
+
+### B5. Wireframe and bounds debug draw
+Draw wireframe and cell/vob bounding boxes through `Renderer`'s `customMaterial` override,
+toggled alongside the debug overlay.
+**Done when:** wireframe and bounds can be toggled while walking a level.
 
 ---
 

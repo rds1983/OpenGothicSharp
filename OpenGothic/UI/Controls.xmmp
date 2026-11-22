@@ -1,0 +1,8 @@
+<Project>
+  <Project.ExportOptions Namespace="OpenGothic.UI" Class="Controls" FieldsVisibility="Private" />
+  <VerticalStackPanel Id="_panelRoot" Spacing="2" Background="#000000A6" Padding="10,6">
+    <Label Id="_labelHeader" Text="Controls" TextColor="#FFCC66" />
+    <Label Id="_labelEscape" Text="Escape - Exit" TextColor="#E8E8E8" />
+    <Label Id="_labelToggleOverlay" Text="F1 - Toggle debug overlay" TextColor="#E8E8E8" />
+  </VerticalStackPanel>
+</Project>
