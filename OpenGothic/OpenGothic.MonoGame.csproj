@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <OutputType>Exe</OutputType>
     <TargetFramework>$(MonoGameTargetFramework)</TargetFramework>
     <RootNamespace>OpenGothic</RootNamespace>
     <OutputPath>bin\MonoGame\$(Configuration)</OutputPath>
