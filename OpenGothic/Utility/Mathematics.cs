@@ -17,8 +17,6 @@ internal static class Mathematics
 			0, 0, -1, 0,
 			0, 0, 0, 1);
 
-	private readonly static Vector3[] _corners = new Vector3[8];
-
 	/// <summary>
 	/// Compares two floating point numbers based on an epsilon zero tolerance.
 	/// </summary>
@@ -148,16 +146,23 @@ internal static class Mathematics
 			source.Min.Z + (source.Max.Z - source.Min.Z) / 2);
 	}
 
+	/// <summary>
+	/// Bounding box of this box transformed by <paramref name="matrix"/>. For an affine
+	/// matrix this equals transforming all eight corners and taking their extents, but
+	/// without materialising the corners: the centre moves as a point and each extent
+	/// component scales by the summed absolute basis rows.
+	/// </summary>
 	public static BoundingBox Transform(this BoundingBox source, ref Matrix matrix)
 	{
-		source.GetCorners(_corners);
+		var center = (source.Min + source.Max) * 0.5f;
+		var extent = (source.Max - source.Min) * 0.5f;
 
-		for (var i = 0; i < _corners.Length; ++i)
-		{
-			Vector3.Transform(ref _corners[i], ref matrix, out Vector3 v);
-			_corners[i] = v;
+		var newCenter = Vector3.Transform(center, matrix);
+		var newExtent = new Vector3(
+			Math.Abs(matrix.M11) * extent.X + Math.Abs(matrix.M21) * extent.Y + Math.Abs(matrix.M31) * extent.Z,
+			Math.Abs(matrix.M12) * extent.X + Math.Abs(matrix.M22) * extent.Y + Math.Abs(matrix.M32) * extent.Z,
+			Math.Abs(matrix.M13) * extent.X + Math.Abs(matrix.M23) * extent.Y + Math.Abs(matrix.M33) * extent.Z);
 
-		}
-		return BoundingBox.CreateFromPoints(_corners);
+		return new BoundingBox(newCenter - newExtent, newCenter + newExtent);
 	}
 }

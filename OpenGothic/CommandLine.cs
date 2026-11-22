@@ -13,6 +13,13 @@ public class CommandLine
 	public bool NoMenu { get; private set; }
 	public bool DevMode { get; private set; }
 
+	/// <summary>
+	/// Whether per-part frustum culling is on. Null when the flag was not passed, so
+	/// <see cref="Apply"/> leaves <see cref="DebugSettings"/> alone rather than silently
+	/// resetting a value something else chose.
+	/// </summary>
+	public bool? Cull { get; private set; }
+
 	private bool _invalid;
 
 	public static CommandLine Parse(string[] args)
@@ -41,6 +48,10 @@ public class CommandLine
 					result.DevMode = true;
 					break;
 
+				case "-nocull":
+					result.Cull = false;
+					break;
+
 				default:
 					if (arg.StartsWith("-game:", StringComparison.OrdinalIgnoreCase))
 					{
@@ -50,6 +61,10 @@ public class CommandLine
 							Log.Error("Option '-game:' requires a value.");
 							result._invalid = true;
 						}
+					}
+					else if (arg.StartsWith("-cull:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.Cull = result.ParseBool(arg.Substring("-cull:".Length), arg);
 					}
 					else
 					{
@@ -61,6 +76,15 @@ public class CommandLine
 
 		Instance = result;
 		return result;
+	}
+
+	/// <summary>Pushes the parsed debug switches into <see cref="DebugSettings"/>.</summary>
+	public void Apply()
+	{
+		if (Cull.HasValue)
+		{
+			DebugSettings.CullEnabled = Cull.Value;
+		}
 	}
 
 	public bool Validate()
@@ -95,7 +119,24 @@ public class CommandLine
 	}
 
 	private const string Usage =
-		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode]";
+		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull]";
+
+	private bool? ParseBool(string value, string option)
+	{
+		if (bool.TryParse(value, out var result))
+		{
+			return result;
+		}
+
+		if (value == "1" || value == "0")
+		{
+			return value == "1";
+		}
+
+		Log.Error($"Option '{option}' requires true or false.");
+		_invalid = true;
+		return null;
+	}
 
 	private string TakeValue(string[] args, ref int i, string option)
 	{

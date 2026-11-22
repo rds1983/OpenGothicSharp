@@ -19,6 +19,9 @@ public class OgGame : Game
 	private Hud _hud;
 	private KeyboardState _previousKeyboard;
 
+	/// <summary>Toggleable debug views drawn on top of the world.</summary>
+	public DebugDraw DebugDraw { get; } = new DebugDraw();
+
 	public Camera Camera { get; } = new Camera();
 
 	public OgGame()
@@ -92,6 +95,16 @@ public class OgGame : Game
 			_hud.ToggleDebugOverlay();
 		}
 
+		if (keyboard.IsKeyDown(Keys.F2) && _previousKeyboard.IsKeyUp(Keys.F2))
+		{
+			DebugDraw.Wireframe = !DebugDraw.Wireframe;
+		}
+
+		if (keyboard.IsKeyDown(Keys.F3) && _previousKeyboard.IsKeyUp(Keys.F3))
+		{
+			DebugDraw.Bounds = !DebugDraw.Bounds;
+		}
+
 		_previousKeyboard = keyboard;
 
 		base.Update(gameTime);
@@ -99,12 +112,12 @@ public class OgGame : Game
 
 	protected override void Draw(GameTime gameTime)
 	{
-		_worldRenderer.Draw(_renderer, Camera, _world);
+		_worldRenderer.Draw(_renderer, Camera, _world, DebugDraw);
 
 		if (_hud.DebugOverlay.Visible)
 		{
 			// Read the counters after the world draw: BeginFrame resets them per frame.
-			_hud.DebugOverlay.Update(gameTime, Camera, _renderer);
+			_hud.DebugOverlay.Update(gameTime, Camera, _renderer, DebugDraw);
 		}
 
 		_desktop.Render();

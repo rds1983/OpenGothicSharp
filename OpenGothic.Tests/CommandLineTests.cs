@@ -111,4 +111,75 @@ public class CommandLineTests
 
 		Assert.Equal(@"C:\Gothic", result.GothicPath);
 	}
+
+	[Fact]
+	public void Parse_CullIsUnsetByDefault()
+	{
+		var result = CommandLine.Parse(Array.Empty<string>());
+
+		Assert.Null(result.Cull);
+	}
+
+	[Fact]
+	public void Parse_NoCull_DisablesCulling()
+	{
+		var result = CommandLine.Parse(new[] { "-nocull" });
+
+		Assert.False(result.Cull);
+	}
+
+	[Theory]
+	[InlineData("true", true)]
+	[InlineData("false", false)]
+	[InlineData("1", true)]
+	[InlineData("0", false)]
+	public void Parse_CullValue_IsRead(string value, bool expected)
+	{
+		var result = CommandLine.Parse(new[] { $"-cull:{value}" });
+
+		Assert.Equal(expected, result.Cull);
+	}
+
+	[Fact]
+	public void Parse_InvalidCullValue_IsRejected()
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-cull:maybe" });
+
+		Assert.Null(result.Cull);
+		Assert.False(result.Validate());
+	}
+
+	[Fact]
+	public void Apply_LeavesCullAloneWhenUnset()
+	{
+		DebugSettings.CullEnabled = false;
+
+		try
+		{
+			CommandLine.Parse(Array.Empty<string>()).Apply();
+
+			Assert.False(DebugSettings.CullEnabled);
+		}
+		finally
+		{
+			DebugSettings.CullEnabled = true;
+		}
+	}
+
+	[Fact]
+	public void Apply_PushesCullToDebugSettings()
+	{
+		DebugSettings.CullEnabled = true;
+
+		try
+		{
+			CommandLine.Parse(new[] { "-nocull" }).Apply();
+
+			Assert.False(DebugSettings.CullEnabled);
+		}
+		finally
+		{
+			DebugSettings.CullEnabled = true;
+		}
+	}
 }

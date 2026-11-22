@@ -1,3 +1,4 @@
+using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using OpenGothic.Scene;
@@ -25,7 +26,7 @@ public class WorldRenderer : IDisposable
 		Sky = new Sky(device);
 	}
 
-	public void Draw(Renderer renderer, Camera camera, WorldGrid world)
+	public void Draw(Renderer renderer, Camera camera, WorldGrid world, DebugDraw debug = null)
 	{
 		if (renderer == null)
 		{
@@ -57,7 +58,25 @@ public class WorldRenderer : IDisposable
 
 				foreach (var node in cell.Children)
 				{
-					DrawNode(renderer, node);
+					DrawNode(renderer, node, debug);
+				}
+
+				// Drawn after the cell's contents so the lines blend over its geometry.
+				if (debug?.Bounds == true)
+				{
+					renderer.DrawBoundingBox(cell.BoundingBox, debug.CellBoundsColor);
+
+					// One box per vob. Drawing one per mesh part would flood the screen:
+					// a single vob is a handful of parts, and a level has thousands.
+					foreach (var objectBounds in cell.ObjectBounds)
+					{
+						if (!_frustum.Intersects(objectBounds))
+						{
+							continue;
+						}
+
+						renderer.DrawBoundingBox(objectBounds, debug.ObjectBoundsColor);
+					}
 				}
 			}
 		}
@@ -65,21 +84,33 @@ public class WorldRenderer : IDisposable
 		renderer.EndFrame();
 	}
 
-	private static void DrawNode(Renderer renderer, SceneNode node)
+	private static void DrawNode(Renderer renderer, SceneNode node, DebugDraw debug)
 	{
 		switch (node)
 		{
 			case InstancedMeshNode instanced:
 				foreach (var transform in instanced.InstancesTransforms)
 				{
-					renderer.DrawMeshPart(instanced.Mesh, transform);
+					DrawMeshPart(renderer, instanced.Mesh, transform, debug);
 				}
 
 				break;
 
 			case MeshNode mesh:
-				renderer.DrawMeshPart(mesh.Mesh, mesh.Transform);
+				DrawMeshPart(renderer, mesh.Mesh, mesh.Transform, debug);
 				break;
+		}
+	}
+
+	private static void DrawMeshPart(Renderer renderer, DrMeshPart part, Matrix transform, DebugDraw debug)
+	{
+		if (debug?.Wireframe == true)
+		{
+			renderer.DrawMeshPartWireframe(part, transform, debug.WireframeColor);
+		}
+		else
+		{
+			renderer.DrawMeshPart(part, transform);
 		}
 	}
 

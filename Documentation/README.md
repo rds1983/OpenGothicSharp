@@ -28,10 +28,18 @@ exits. Window title carries `OG.Version`.
 
 `CommandLine` (`OpenGothic/CommandLine.cs`) parses startup arguments and exposes them via
 `CommandLine.Instance`: `-g <path>` (Gothic installation), `-game:<modfile.ini>` (mod
-manifest), `-w <world.zen>` (startup world), `-nomenu` (skip main menu), and `-devmode`.
+manifest), `-w <world.zen>` (startup world), `-nomenu` (skip main menu), `-devmode`,
+`-nocull` / `-cull:true|false` (per-part frustum culling, see "Frustum culling").
 Unknown arguments are logged as warnings. `Validate()` checks that `-g` was given and that
-the folder contains a `Data` directory. `Main` logs the parsed values, and returns exit
-code 1 with an actionable error if validation fails.
+the folder contains a `Data` directory. `Main` logs the parsed values, applies the debug
+switches with `CommandLine.Apply()`, and returns exit code 1 with an actionable error if
+validation fails.
+
+Options that are only for diagnosing a subsystem live in `DebugSettings`
+(`OpenGothic/DebugSettings.cs`) as static properties rather than in `Settings`, which owns
+the game's INI files. They are startup diagnostics, not user preferences. A switch that
+changes what is on screen is also reflected in the `DebugOverlay`, so a screenshot says
+which switches were active.
 
 ### Settings
 
@@ -142,17 +150,23 @@ Rendering is split three ways:
 
 - **`Renderer`** (`OpenGothic/Renderer.cs`) is a low-level drawing service and owns no
   scene content. Public surface: `BeginFrame(camera)`, `Clear()`,
-  `DrawMeshPart(DrMeshPart, Matrix, Material? customMaterial)`, `EndFrame()`. It owns the
-  `BasicEffect`, device blend/depth/rasterizer state, vertex/index-buffer binding and the
-  draw call. It also exposes per-frame stats — `DrawCalls`, `Triangles` — reset in
-  `BeginFrame`.
+  `DrawMeshPart(DrMeshPart, Matrix, Material? customMaterial, bool cull = true)`,
+  `DrawBoundingBox(BoundingBox, Color)`, `DrawMeshPartWireframe(DrMeshPart, Matrix, Color)`,
+  `EndFrame()`. It owns the `BasicEffect`, device blend/depth/rasterizer state,
+  vertex/index-buffer binding and the draw call. It also exposes per-frame stats —
+  `DrawCalls`, `Triangles` — reset in `BeginFrame`.
   `BeginFrame` **saves** the device state and installs the renderer's own (opaque blend,
   default depth, back-face culling, `LinearWrap` sampler, full-viewport scissor);
   `EndFrame` **restores** what it saved. Everything in between can assume world defaults.
-- **`WorldRenderer`** owns the `WorldGrid` traversal and frustum culling, and drives the
-  frame: `BeginFrame` → `Clear` → sky → cells → `EndFrame`.
+  `BeginFrame`/`EndFrame` must be properly nested: `_frameBegin` tracks the open frame, and
+  `Clear`/`DrawMeshPart`/`EndFrame` throw without one. The frustum, both debug `Material`s
+  and the box mesh are created once and reused, because these run thousands of times per
+  frame.
+- **`WorldRenderer`** owns the `WorldGrid` traversal and the cell-level culling early-out,
+  and drives the frame: `BeginFrame` → `Clear` → sky → cells → `EndFrame`.
 - **`Sky`** owns its own geometry, gradient texture and material, and submits its
-  `DrMeshPart` like any other object.
+  `DrMeshPart` like any other object. It passes `cull: false`, because the dome encloses
+  the camera and a background must always draw.
 
 **Materials live on the mesh part**, in `DrMeshPartTag(Scene.Material)`. `DrawMeshPart`
 reads the tag and only uses `customMaterial` when explicitly passed — it is expected to be
@@ -168,6 +182,71 @@ be found logs a warning and renders untextured rather than aborting the world lo
 **Vertex data is used verbatim.** `MeshBuilder` swaps triangle indices (because mirroring Z
 reverses winding) but never flips or mirrors U/V. An earlier U-mirror (`1 - u`) corrupted
 every texture; the reference implementation also copies `texture.x`/`texture.y` unchanged.
+The swap is skipped for non-triangle primitives: `CreateMeshPart` takes a `PrimitiveType`
+and a line list has no winding to fix.
+
+### Debug views
+
+`DebugDraw` (`OpenGothic/DebugDraw.cs`) holds the toggles and colours for the two debug
+views. It is **independent of the text overlay**: F1 shows/hides the `DebugOverlay` labels,
+F2 toggles `Wireframe`, F3 toggles `Bounds`. Both default to off.
+
+- **Wireframe** (`DrawMeshPartWireframe`) keeps the part's fog and depth state but replaces
+  lighting and texture with `WireframeColor`, so edges stay readable. Sampling the level's
+  textures turns the wireframe into noise. It needs `FillMode.WireFrame`, which no stock
+  `RasterizerState` provides, so `Renderer` owns one.
+- **Bounds** (`DrawBoundingBox`) draws the twelve edges of a box using a shared unit-cube
+  `LineList` mesh scaled and translated onto the box — one draw call per box, no rebuilds.
+  Boxes are unlit, unfogged and `DepthStencilState.DepthRead`: they are occluded by
+  geometry but do not write depth, so overlapping boxes do not mask each other.
+
+Bounds draws **one box per cell and one per vob**, not one per mesh part. A vob becomes
+several parts (one per material) and a level has thousands of vobs, so per-part boxes
+roughly doubled the frame's draw calls and flooded the screen with lines.
+`WorldGridCell.ObjectBounds` stores the vob boxes computed during world load. They are
+tested against the frustum in `WorldRenderer` rather than relying on `DrawMeshPart`'s cull:
+`DrawBoundingBox` deliberately bypasses culling, because it scales a shared unit cube and
+the part's own box says nothing about where the result lands.
+
+`MeshBuilder.CreateMeshPart` accepts a `PrimitiveType` and derives `primitiveCount` from
+it, so line lists and triangle lists both go through the same path.
+
+### Frustum culling
+
+Culling happens at two levels:
+
+1. **Cells** — `WorldRenderer` tests the 16 `WorldGridCell` boxes and skips everything
+   inside a hidden cell. This is the cheap early-out that rejects most of the level.
+2. **Mesh parts** — `DrawMeshPart` transforms `part.BoundingBox` by the caller's transform
+   and tests it against the frustum installed by `BeginFrame`. Because the test lives in
+   `Renderer`, it covers `InstancedMeshNode` instances individually: previously an instance
+   was drawn whenever its *cell* was visible, even if it stood far outside the view.
+
+Consequences worth knowing:
+
+- `DrawMeshPart`, `Clear` and `EndFrame` **throw** `InvalidOperationException` if no frame is
+  open, and `BeginFrame` throws if one already is. A draw outside a frame would use a stale
+  camera and a stale frustum, so it is a caller bug rather than something to tolerate
+  silently. A single `_frameBegin` flag tracks this; `BeginFrame` sets it, `EndFrame`
+  clears it.
+- `DrawBoundingBox` and the sky opt out with `cull: false`. Debug boxes are already
+  frustum-tested by the caller, and the sky dome must always draw.
+- `part.BoundingBox` is the **bind-pose** box. That is exact for static geometry, but an
+  animated limb (C2) can swing outside it. Skinned models will need a padded or
+  skeleton-derived box, or `cull: false`.
+- `DebugSettings.CullEnabled` (default true) turns the per-part test off globally. Pass
+  `-nocull` on the command line to see whether a missing object is a culling bug or a
+  loading bug: it restores the unculled counts, and the overlay shows "(no cull)". Cell-level
+  culling is unaffected.
+
+`Mathematics.Transform(BoundingBox, ref Matrix)` uses the centre/extent form rather than
+transforming eight corners: for an affine matrix the results are identical, but it avoids
+materialising the corners. This runs once per part per frame, so it matters.
+
+Measured effect on a full `newworld.zen` frame at the default viewpoint: **11,937 → 2,005
+draw calls** and **1.39M → 386k triangles**. An A/B capture with culling forced off
+restored the original counts and produced a **pixel-identical image** outside the HUD,
+confirming the discards were all invisible geometry.
 
 ### Sky, fog and lighting
 
@@ -183,7 +262,8 @@ Lighting is a fixed two-directional-light rig with specular disabled and a raise
 term. Gothic's textures bake their own shading, so `EnableDefaultLighting()` produces
 blown-out specular smears on flat surfaces.
 
-For reference, a full `newworld.zen` frame is roughly **12k draw calls / 1.4M triangles** —
+For reference, a full `newworld.zen` frame is roughly **2k draw calls / 386k triangles** at
+the default viewpoint after per-part frustum culling (it was ~12k / 1.4M before). There is
 no batching or instancing yet; milestone M4 covers that.
 
 Uses stock MonoGame effects (`BasicEffect`, `SkinnedEffect`, …) until gameplay is polished.
@@ -227,7 +307,8 @@ The HUD is three layouts in `OpenGothic/UI/`:
 - **`Hud`** — the `Desktop` root. A stretched `Panel`, so each block anchors to its own
   corner: `DebugOverlay` top-left, `Controls` bottom-right, both inset 8px.
 - **`Controls`** — always visible, bottom-right. Lists the current key bindings.
-- **`DebugOverlay`** — toggleable, top-left. FPS, camera position, draw calls, triangles.
+- **`DebugOverlay`** — toggleable, top-left. FPS, camera position, draw calls, triangles,
+  and the active debug views.
 
 Anchoring relies on `Widget.Left`/`Top` being **additive offsets applied after alignment**,
 so a bottom-right block uses `Alignment = Right/Bottom` with *negative* offsets.
@@ -244,7 +325,8 @@ render counters from `Renderer`, formatted with thousands separators.
 
 `OgGame` edge-detects F1 (comparing against the previous frame's `KeyboardState`, so holding
 the key toggles once) and calls `Hud.ToggleDebugOverlay`. While the debug block is hidden it
-is not updated at all, so no label text is refreshed.
+is not updated at all, so no label text is refreshed. F2 and F3 use the same edge-detection
+and flip `DebugDraw.Wireframe` / `DebugDraw.Bounds`.
 
 Bindings are hand-maintained: when one is added to `OgGame.Update`, add its line to
 `Controls.xmmp` and re-export.

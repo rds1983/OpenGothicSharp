@@ -34,7 +34,10 @@ internal static class Program
 				Log.Info($"World: {commandLine.World}");
 			}
 
+			commandLine.Apply();
+
 			Log.Info($"NoMenu: {commandLine.NoMenu}, DevMode: {commandLine.DevMode}");
+			Log.Info($"Cull: {DebugSettings.CullEnabled}");
 
 			var settings = new Settings();
 			settings.Load(commandLine.GothicPath, Directory.GetCurrentDirectory());

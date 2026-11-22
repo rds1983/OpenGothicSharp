@@ -17,23 +17,29 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   `OG.GraphicsDevice`.
 - Logging exists: `Log.Info/Warning/Error` to console and `log.txt`, with ZenKit
   messages routed in.
-- Command line parsed and validated: `-g`, `-game:`, `-w`, `-nomenu`, `-devmode`
-  exposed via `CommandLine.Instance`.
+- Command line parsed and validated: `-g`, `-game:`, `-w`, `-nomenu`, `-devmode`,
+  `-nocull`/`-cull:` exposed via `CommandLine.Instance`. Debug switches are pushed into the
+  static `DebugSettings`.
 - Settings load from `SystemPack.ini`/`Gothic.ini` plus a user override file, with
   typed accessors and persistence.
 - Unit test project (`OpenGothic.Tests`, xunit) covers INI, settings and command line;
   hermetic, no game installation required.
 - Camera exists: view/projection from FOV and near/far, RHS world space.
 - Static world renders with a gradient sky dome and distance fog. `Renderer` is a
-  low-level drawing service (`Clear`, `BeginFrame`, `DrawMeshPart`) that owns no scene
-  content and reports per-frame draw-call/triangle counts; `WorldRenderer` owns frustum
+  low-level drawing service (`BeginFrame`, `Clear`, `DrawMeshPart`, `EndFrame`) that owns no
+  scene content and reports per-frame draw-call/triangle counts; it also does per-part
+  frustum culling, and throws if drawn outside a frame. `WorldRenderer` owns the cell-level
   culling and traversal, `Sky` owns its own mesh part. Materials live on the mesh part's
-  `DrMeshPartTag`, so `customMaterial` is normally null. No vertex/texture UV flips.
+  `DrMeshPartTag`, so `customMaterial` is usually null except for debug drawing. No
+  vertex/texture UV flips. Reused state, no per-frame allocations.
 - No input, physics, audio, or scripting yet.
 - UI exists: Myra `Desktop` rooted at a `Hud` panel with two independently anchored blocks
   — an always-visible `Controls` list (bottom-right) and a toggleable `DebugOverlay`
-  (top-left, F1) showing FPS, camera position, draw-call and triangle counts. Layouts are
-  `.xmmp` exported with `myra-export`; all UI lives in `OpenGothic/UI/`.
+  (top-left, F1) showing FPS, camera position, draw-call and triangle counts and the active
+  debug views. Layouts are `.xmmp` exported with `myra-export`; all UI lives in
+  `OpenGothic/UI/`.
+- Debug views: F2 toggles wireframe, F3 toggles bounding boxes; independent of F1 and off by
+  default.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
   Current milestone: **C — Models and animation**.
 
@@ -100,9 +106,11 @@ Wire an on-screen debug overlay (FPS, camera position, and the `Renderer` frame 
 `DrawCalls`/`Triangles`) plus optional wireframe/bbox draw.
 **Done when:** stats are visible on screen and toggleable.
 
-### B5. Wireframe and bounds debug draw
+### B5. Wireframe and bounds debug draw — DONE
 Draw wireframe and cell/vob bounding boxes through `Renderer`'s `customMaterial` override,
-toggled alongside the debug overlay.
+toggled alongside the debug overlay. Wireframe replaces lighting/texture with a debug
+colour so edges stay readable; bounds draw one box per cell plus one per vob. Independently
+toggleable (F2/F3), off by default, with the active views reported in the overlay.
 **Done when:** wireframe and bounds can be toggled while walking a level.
 
 ---
@@ -113,6 +121,22 @@ toggled alongside the debug overlay.
 Render `DrModel` hierarchies with `SkinnedEffect`/`BasicEffect`; map `DrMeshPart` +
 `DrMeshPartTag` material to effects.
 **Done when:** a static MDL model appears correctly placed and scaled in a world.
+
+Known from measuring real data (see `Documentation/` before starting):
+
+- `ISoftSkinWeight.NodeIndex` is a **hierarchy** node index, not an index into
+  `ISoftSkinMesh.Nodes`.
+- Weight positions are bone-local and all weights of one vertex resolve to the same
+  model-space point, so the bind position must be rebuilt from the weights.
+- `SoftSkinMesh.Mesh.Positions` is unreliable for skinned meshes (garbage bounding boxes),
+  so it cannot supply the bind position.
+- `DrModel` composes `local * parentWorld`, and `DrModelInstance` expects
+  `InverseBindTransform * worldBone`; the inverse bind must be the *inverted* bind
+  transform, not identity.
+- `SkinnedEffect` supports 72 bones; a skeleton beyond that needs a custom effect.
+
+Skinned parts also need a culling story: `part.BoundingBox` is the bind-pose box, so an
+animated limb can leave it. Expect a padded or skeleton-derived box, or `cull: false`.
 
 ### C2. Animation playback
 Play `AnimationClip`s from loaded models with correct looping and blending between

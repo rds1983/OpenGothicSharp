@@ -64,8 +64,41 @@ without breaking one, stop and ask the developer.
   the index swap), and any additional UV flip corrupts every texture.
 - Follow existing code style and patterns. No comments unless they clarify non-obvious
   logic.
+- **Do not allocate per frame in hot paths.** Drawing runs 2k+ times per frame, so a `new`
+  inside a draw call becomes tens of thousands of short-lived objects per second and shows
+  up as GC hitching. Create small mutable state — transforms, `Material`s, frustums,
+  scratch lists — once as a field and reassign its properties. Reuse buffers instead of
+  `ToArray()`/`ToList()` per frame. Allocation at load time is free; allocation in
+  `Draw`/`Update` is not.
 - New subsystems get a short note in `Documentation/`; format/behavior findings go in
   `Documentation/Specifications/`.
+
+## Command line options
+
+Feel free to add command line options. They are cheap, they are not part of the public
+interface, and they are the easiest way to expose a switch that helps debug a subsystem.
+
+When you add one:
+
+1. Parse it in `CommandLine.Parse` and expose it as a property on `CommandLine`. Follow the
+   existing shapes: a bare flag (`-nomenu`) for an on/off switch, `-name:value` for a
+   value. Leave the property **null** when the option is absent so "not specified" is
+   distinguishable from "specified as false", and so a default chosen elsewhere is not
+   silently overwritten.
+2. Add it to the `Usage` string in `CommandLine.cs`.
+3. Push it where it is consumed — `CommandLine.Apply()` for process-wide settings such as
+   `DebugSettings`, or a property read in `OgGame` for game-specific state.
+4. Log the effective value in `Program.Main` alongside the other parsed options, so a log
+   from a bug report states exactly which switches were active.
+5. Cover the parsing in `OpenGothic.Tests/CommandLineTests.cs`. These tests are hermetic:
+   no game installation.
+6. Document it in `Documentation/README.md` under "Command line".
+
+Debug-only switches belong in `DebugSettings` (`OpenGothic/DebugSettings.cs`) as static
+properties; they are startup diagnostics, not user preferences, so they do not belong in
+`Settings`, which reads and writes the game's INI files. Anything surfaced through
+`DebugSettings` that changes what is on screen should also be visible in the `DebugOverlay`
+so a screenshot is self-describing.
 
 ## Development order
 

@@ -321,6 +321,8 @@ namespace OpenGothic
 					var cell = result.FindCellByBox(bb);
 					if (cell != null)
 					{
+						cell.ObjectBounds.Add(bb);
+
 						Dictionary<string, List<InstancedMeshNode>> groupedMultiMeshes;
 						if (cell.Tag == null)
 						{

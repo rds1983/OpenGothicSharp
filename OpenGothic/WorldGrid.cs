@@ -7,7 +7,16 @@ namespace OpenGothic;
 public class WorldGridCell
 {
 	public List<SceneNode> Children { get; } = new List<SceneNode>();
+
+	/// <summary>
+	/// World-space boxes of the virtual objects in this cell, one per vob. Kept separately
+	/// from <see cref="Children"/> because a single vob becomes many mesh parts (one per
+	/// material), and the debug view wants one box per object, not per part.
+	/// </summary>
+	public List<BoundingBox> ObjectBounds { get; } = new List<BoundingBox>();
+
 	public BoundingBox BoundingBox { get; internal set; }
+
 	public object Tag { get; set; }
 
 	public override string ToString() => $"{Children.Count} meshes";

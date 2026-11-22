@@ -123,7 +123,9 @@ public class Sky : IDisposable
 			throw new ArgumentNullException(nameof(camera));
 		}
 
-		renderer.DrawMeshPart(_meshPart, Matrix.CreateTranslation(camera.Position));
+		// The dome encloses the camera; its box can never fail a frustum test, and culling
+		// the background would leave a cleared void. Skip the test explicitly.
+		renderer.DrawMeshPart(_meshPart, Matrix.CreateTranslation(camera.Position), cull: false);
 	}
 
 	public void Dispose()

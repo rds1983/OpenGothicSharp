@@ -2,6 +2,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using OpenGothic.Vertices;
+using System;
 using System.Collections.Generic;
 
 namespace OpenGothic.Utility;
@@ -15,7 +16,7 @@ internal interface IMeshBuilder
 	int GetIndex(int index);
 	int[] CreateIndicesArray();
 	void ClearIndices();
-	DrMeshPart CreateMeshPart(GraphicsDevice graphicsDevice, bool toLeftHanded);
+	DrMeshPart CreateMeshPart(GraphicsDevice graphicsDevice, bool toLeftHanded, PrimitiveType primitiveType = PrimitiveType.TriangleList);
 }
 
 internal abstract class MeshBuilder<T> : IMeshBuilder where T : IVertexType
@@ -56,7 +57,7 @@ internal abstract class MeshBuilder<T> : IMeshBuilder where T : IVertexType
 		_uses32BitIndices = false;
 	}
 
-	public DrMeshPart CreateMeshPart(GraphicsDevice graphicsDevice, bool toLeftHanded)
+	public DrMeshPart CreateMeshPart(GraphicsDevice graphicsDevice, bool toLeftHanded, PrimitiveType primitiveType = PrimitiveType.TriangleList)
 	{
 		if (toLeftHanded)
 		{
@@ -64,11 +65,15 @@ internal abstract class MeshBuilder<T> : IMeshBuilder where T : IVertexType
 			// front face stays front-facing in right-handed space.
 			// Texture coordinates are copied verbatim, matching the reference
 			// implementation, which never inverts U or V when building vertices.
-			for (var i = 0; i < _indices.Count; i += 3)
+			// Line lists have no winding, so they are left alone.
+			if (primitiveType == PrimitiveType.TriangleList)
 			{
-				var temp = _indices[i];
-				_indices[i] = _indices[i + 2];
-				_indices[i + 2] = temp;
+				for (var i = 0; i < _indices.Count; i += 3)
+				{
+					var temp = _indices[i];
+					_indices[i] = _indices[i + 2];
+					_indices[i + 2] = temp;
+				}
 			}
 		}
 
@@ -90,7 +95,30 @@ internal abstract class MeshBuilder<T> : IMeshBuilder where T : IVertexType
 
 		var vertexBuffer = CreateVertexBuffer(graphicsDevice, Vertices.ToArray());
 
-		return new DrMeshPart(vertexBuffer, indexBuffer, CreateBoundingBox(Vertices));
+		var primitiveCount = _indices.Count / VerticesPerPrimitive(primitiveType);
+
+		return new DrMeshPart(
+			vertexBuffer,
+			indexBuffer,
+			CreateBoundingBox(Vertices),
+			primitiveType,
+			Vertices.Count,
+			primitiveCount);
+	}
+
+	private static int VerticesPerPrimitive(PrimitiveType primitiveType)
+	{
+		switch (primitiveType)
+		{
+			case PrimitiveType.LineList:
+				return 2;
+
+			case PrimitiveType.TriangleList:
+				return 3;
+
+			default:
+				throw new NotSupportedException($"Primitive type {primitiveType} is not supported by the mesh builder.");
+		}
 	}
 
 	protected abstract VertexBuffer CreateVertexBuffer(GraphicsDevice device, T[] vertices);

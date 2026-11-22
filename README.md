@@ -24,7 +24,8 @@ dotnet build OpenGothic.MonoGame.sln
 dotnet run --project OpenGothic/OpenGothic.MonoGame.csproj -- -g "<path-to-gothic>"
 ```
 
-Planned flags: `-g <path>`, `-game:<modfile.ini>`, `-w <world.zen>`, `-nomenu`, `-devmode`.
+Flags: `-g <path>`, `-game:<modfile.ini>`, `-w <world.zen>`, `-nomenu`, `-devmode`,
+`-nocull` / `-cull:true|false`. See [Documentation/](Documentation/README.md).
 
 ## Development approach
 

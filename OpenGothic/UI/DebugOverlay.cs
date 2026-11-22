@@ -24,7 +24,7 @@ namespace OpenGothic.UI
 			NumberGroupSizes = new[] { 3 }
 		};
 
-		public void Update(GameTime gameTime, Camera camera, Renderer renderer)
+		public void Update(GameTime gameTime, Camera camera, Renderer renderer, DebugDraw debug = null)
 		{
 			_elapsed += (float)gameTime.ElapsedGameTime.TotalSeconds;
 			++_frames;
@@ -42,6 +42,31 @@ namespace OpenGothic.UI
 			_labelPosition.Text = Format("Position: {0:0.0}, {1:0.0}, {2:0.0}", position.X, position.Y, position.Z);
 			_labelDrawCalls.Text = Format("Draw calls: {0:N0}", renderer.DrawCalls);
 			_labelTriangles.Text = Format("Triangles: {0:N0}", renderer.Triangles);
+
+			if (debug != null)
+			{
+				var views = "none";
+				if (debug.Wireframe && debug.Bounds)
+				{
+					views = "wireframe, bounds";
+				}
+				else if (debug.Wireframe)
+				{
+					views = "wireframe";
+				}
+				else if (debug.Bounds)
+				{
+					views = "bounds";
+				}
+
+				var text = Format("Views: {0}", views);
+				if (!DebugSettings.CullEnabled)
+				{
+					text += " (no cull)";
+				}
+
+				_labelDebugViews.Text = text;
+			}
 		}
 
 		private static string Format(string format, params object[] args)
