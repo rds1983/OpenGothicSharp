@@ -1,5 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
-using OpenGothic.Engine;
+using OpenGothic.Scene;
 using System.Collections.Generic;
 
 namespace OpenGothic;

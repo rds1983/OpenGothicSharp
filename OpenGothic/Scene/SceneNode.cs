@@ -1,6 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
 
-namespace OpenGothic.Engine;
+namespace OpenGothic.Scene;
 
 public class SceneNode
 {

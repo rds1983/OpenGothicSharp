@@ -1,6 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using OpenGothic.Engine;
+using OpenGothic.Scene;
 using OpenGothic.Utility;
 using System;
 using System.Collections.Generic;
@@ -8,7 +8,7 @@ using System.IO;
 using ZenKit;
 using ZenKit.Vobs;
 
-using Material = OpenGothic.Engine.Material;
+using Material = OpenGothic.Scene.Material;
 
 namespace OpenGothic
 {
@@ -348,8 +348,7 @@ namespace OpenGothic
 							{
 								var mm = new InstancedMeshNode
 								{
-									Mesh = part,
-									Material = MaterialFactory.Create(part.Material)
+									Mesh = part
 								};
 
 								multiMeshes.Add(mm);
@@ -396,7 +395,6 @@ namespace OpenGothic
 									var meshNode = new MeshNode
 									{
 										Mesh = mm.Mesh,
-										Material = mm.Material,
 										Transform = transform
 									};
 

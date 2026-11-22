@@ -139,10 +139,10 @@ partial class Assets
 			meshBuilder.AddIndex(triangle.Wedge2);
 		}
 
-		DrMaterial material = null;
+		Scene.Material material = null;
 		if (zkSubMesh.Material != null)
 		{
-			material = new DrMaterial
+			material = new Scene.Material
 			{
 				DiffuseColor = Color.White
 			};
@@ -154,7 +154,7 @@ partial class Assets
 		}
 
 		var result = meshBuilder.CreateMeshPart(device, true);
-		result.Material = material;
+		result.Tag = new DrMeshPartTag(material);
 
 		return result;
 	}

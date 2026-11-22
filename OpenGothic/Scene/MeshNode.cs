@@ -1,6 +1,6 @@
 ﻿using DigitalRiseModel;
 
-namespace OpenGothic.Engine;
+namespace OpenGothic.Scene;
 
 public class MeshNode: SceneNode
 {
