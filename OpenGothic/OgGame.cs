@@ -9,6 +9,7 @@ public class OgGame : Game
 {
 	private readonly GraphicsDeviceManager _graphics;
 	private Renderer _renderer;
+	private WorldRenderer _worldRenderer;
 	private Assets _assets;
 	private WorldGrid _world;
 
@@ -27,6 +28,7 @@ public class OgGame : Game
 
 		OG.GraphicsDevice = GraphicsDevice;
 		_renderer = new Renderer(GraphicsDevice);
+		_worldRenderer = new WorldRenderer(GraphicsDevice);
 
 		Camera.FieldOfView = OG.Settings?.CameraFov ?? Camera.FieldOfView;
 		Camera.SetViewport(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
@@ -76,9 +78,7 @@ public class OgGame : Game
 
 	protected override void Draw(GameTime gameTime)
 	{
-		GraphicsDevice.Clear(Color.CornflowerBlue);
-
-		_renderer.Draw(Camera, _world);
+		_worldRenderer.Draw(_renderer, Camera, _world);
 
 		base.Draw(gameTime);
 	}
@@ -87,6 +87,9 @@ public class OgGame : Game
 	{
 		_renderer?.Dispose();
 		_renderer = null;
+
+		_worldRenderer?.Dispose();
+		_worldRenderer = null;
 
 		base.UnloadContent();
 	}

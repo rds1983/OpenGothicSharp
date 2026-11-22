@@ -276,10 +276,11 @@ namespace OpenGothic
 						{
 
 							var meshPart = meshBuilder.CreateMeshPart(device, true);
+							meshPart.Tag = new DrMeshPartTag(pair.Value.Item1);
+
 							var meshNode = new MeshNode
 							{
-								Mesh = meshPart,
-								Material = pair.Value.Item1
+								Mesh = meshPart
 							};
 
 							cell.Children.Add(meshNode);

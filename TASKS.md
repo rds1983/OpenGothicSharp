@@ -24,10 +24,14 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - Unit test project (`OpenGothic.Tests`, xunit) covers INI, settings and command line;
   hermetic, no game installation required.
 - Camera exists: view/projection from FOV and near/far, RHS world space.
-- Static world renders: `Renderer` draws frustum-culled `WorldGrid` cells with
-  `BasicEffect` and diffuse textures. No vertex/texture UV flips — coordinates are
-  copied verbatim from the data. No input, physics, UI, audio, or scripting yet.
-- Milestone A (Foundation) complete. Current milestone: **B — Static world rendering**.
+- Static world renders with a gradient sky dome and distance fog. `Renderer` is a
+  low-level drawing service (`Clear`, `BeginFrame`, `DrawMeshPart`) that owns no scene
+  content and reports per-frame draw-call/triangle counts; `WorldRenderer` owns frustum
+  culling and traversal, `Sky` owns its own mesh part. Materials live on the mesh part's
+  `DrMeshPartTag`, so `customMaterial` is normally null. No vertex/texture UV flips.
+- No input, physics, UI, audio, or scripting yet.
+- Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
+  Current milestone: **C — Models and animation**.
 
 ---
 
@@ -81,15 +85,16 @@ Draw `WorldGrid` cells using `BasicEffect` with the loaded diffuse textures.
 Only draw cells in the view frustum.
 **Done when:** a ZEN world renders recognizable textured terrain and static props.
 
-### B3. Sky, fog and lighting
+### B3. Sky, fog and lighting — DONE
 Sky color/background, distance fog matching `Constants.Fog*`, and finish the lighting
 story (the renderer currently uses a fixed two-light rig with specular disabled; see
 `Documentation/`).
 **Done when:** the world looks grounded rather than floating in a void.
 
-### B4. Debug drawing & stats
-Wire a debug overlay (FPS, position, cell counts) and optional wireframe/bbox draw.
-**Done when:** stats are visible and toggleable.
+### B4. Debug overlay
+Wire an on-screen debug overlay (FPS, camera position, and the `Renderer` frame stats
+`DrawnParts`/`DrawCalls`/`Triangles`) plus optional wireframe/bbox draw.
+**Done when:** stats are visible on screen and toggleable.
 
 ---
 

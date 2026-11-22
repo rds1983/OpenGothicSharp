@@ -138,11 +138,24 @@ viewport from the graphics device. Near/far come from `Constants.NearPlane`/`Far
 
 ### Mesh renderer
 
-`Renderer` (`OpenGothic/Renderer.cs`) draws the static world with `BasicEffect`. It sets
-the camera's view/projection, builds a `BoundingFrustum` from `ViewProjection`, and skips
-cells whose bounds do not intersect it. `MeshNode` and `InstancedMeshNode` both go through
-the same `DrawMeshPart` path; the material comes from the node when present, otherwise from
-the part's `DrMeshPartTag`.
+Rendering is split three ways:
+
+- **`Renderer`** (`OpenGothic/Renderer.cs`) is a low-level drawing service and owns no
+  scene content. Public surface: `Clear()`, `BeginFrame(camera)`,
+  `DrawMeshPart(DrMeshPart, Matrix, Material? customMaterial)`. It owns the
+  `BasicEffect`, device blend/depth/rasterizer state, vertex/index-buffer binding and the
+  draw call. It also exposes per-frame stats — `DrawnParts`, `DrawCalls`, `Triangles` —
+  reset in `BeginFrame`.
+- **`WorldRenderer`** owns the `WorldGrid` traversal and frustum culling, and drives the
+  frame (`Clear` → `BeginFrame` → sky → cells).
+- **`Sky`** owns its own geometry, gradient texture and material, and submits its
+  `DrMeshPart` like any other object.
+
+**Materials live on the mesh part**, in `DrMeshPartTag(Scene.Material)`. `DrawMeshPart`
+reads the tag and only uses `customMaterial` when explicitly passed — it is expected to be
+null in normal rendering and exists for rare cases such as debug drawing. `Material`
+carries `DiffuseColor`, `DiffuseTexture`, and the render state it needs
+(`LightingEnabled`, `FogEnabled`, `DepthStencilState`, `RasterizerState`).
 
 Materials without a texture fall back to a 1x1 white texture. Textures in compressed
 formats (DXT1/3/5) are uploaded from the raw mip chain; palettized and uncompressed formats
@@ -153,9 +166,22 @@ be found logs a warning and renders untextured rather than aborting the world lo
 reverses winding) but never flips or mirrors U/V. An earlier U-mirror (`1 - u`) corrupted
 every texture; the reference implementation also copies `texture.x`/`texture.y` unchanged.
 
+### Sky, fog and lighting
+
+`Sky` draws a gradient dome (8 rings × 16 segments) built from a 1×64 colour ramp between
+`Constants.SkyHorizonColor` and `SkyZenithColor`. It is unlit, unfogged, depth-test
+disabled and cull-none, and follows the camera. The reference's LUT/cloud sky is deferred
+to the shader milestone.
+
+Fog is `BasicEffect`'s linear fog using `Constants.FogStart`/`FogEnd`, with the fog colour
+set to the sky horizon so distant geometry dissolves into the backdrop.
+
 Lighting is a fixed two-directional-light rig with specular disabled and a raised ambient
 term. Gothic's textures bake their own shading, so `EnableDefaultLighting()` produces
-blown-out specular smears on flat surfaces. Proper sky/fog/lighting is milestone B3.
+blown-out specular smears on flat surfaces.
+
+For reference, a full `newworld.zen` frame is roughly **12k draw calls / 1.4M triangles** —
+no batching or instancing yet; milestone M4 covers that.
 
 Uses stock MonoGame effects (`BasicEffect`, `SkinnedEffect`, …) until gameplay is polished.
 A custom shader system and visual parity are deliberately deferred; see

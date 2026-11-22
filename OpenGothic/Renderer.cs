@@ -6,14 +6,14 @@ using System;
 namespace OpenGothic;
 
 /// <summary>
-/// Draws the static world with stock MonoGame effects.
+/// Low-level 3D drawing service: effects, device state and draw calls.
+/// It owns no scene content — callers supply the meshes, transforms and camera.
 /// A custom shader system is deferred; see TASKS.md milestone M.
 /// </summary>
 public class Renderer : IDisposable
 {
 	private readonly GraphicsDevice _device;
 	private readonly BasicEffect _effect;
-	private readonly BoundingFrustum _frustum = new BoundingFrustum(Matrix.Identity);
 	private Texture2D _fallbackTexture;
 
 	public Renderer(GraphicsDevice device)
@@ -31,7 +31,13 @@ public class Renderer : IDisposable
 			// strong specular term that smears highlights across flat surfaces.
 			SpecularColor = Vector3.Zero,
 			SpecularPower = 1f,
-			AmbientLightColor = new Vector3(0.45f)
+			AmbientLightColor = new Vector3(0.45f),
+
+			// Fog fades distant geometry into the sky's horizon color.
+			FogEnabled = true,
+			FogColor = Constants.SkyHorizonColor.ToVector3(),
+			FogStart = Constants.FogStart,
+			FogEnd = Constants.FogEnd
 		};
 
 		// Lights travel downward and away from the camera, so surfaces facing the viewer
@@ -50,91 +56,59 @@ public class Renderer : IDisposable
 		_fallbackTexture.SetData(new[] { Color.White });
 	}
 
+	/// <summary>Mesh parts submitted during the current frame.</summary>
 	public int DrawnParts { get; private set; }
 
-	public void Draw(Camera camera, WorldGrid world)
+	/// <summary>Draw calls issued during the current frame.</summary>
+	public int DrawCalls { get; private set; }
+
+	/// <summary>Triangles submitted during the current frame.</summary>
+	public int Triangles { get; private set; }
+
+	/// <summary>Clears the backbuffer to the sky's horizon color.</summary>
+	public void Clear()
+	{
+		_device.Clear(Constants.SkyHorizonColor);
+	}
+
+	/// <summary>Begins a frame with the camera's view and projection.</summary>
+	public void BeginFrame(Camera camera)
 	{
 		if (camera == null)
 		{
 			throw new ArgumentNullException(nameof(camera));
 		}
 
-		if (world == null)
-		{
-			return;
-		}
-
 		DrawnParts = 0;
-
-		_frustum.Matrix = camera.ViewProjection;
-
-		_device.BlendState = BlendState.Opaque;
-		_device.DepthStencilState = DepthStencilState.Default;
-		_device.RasterizerState = RasterizerState.CullCounterClockwise;
+		DrawCalls = 0;
+		Triangles = 0;
 
 		_effect.View = camera.View;
 		_effect.Projection = camera.Projection;
 		_effect.Texture = _fallbackTexture;
-
-		foreach (var pass in _effect.CurrentTechnique.Passes)
-		{
-			pass.Apply();
-
-			foreach (var cell in world.Cells)
-			{
-				if (!_frustum.Intersects(cell.BoundingBox))
-				{
-					continue;
-				}
-
-				foreach (var node in cell.Children)
-				{
-					DrawNode(node);
-				}
-			}
-		}
-	}
-
-	private void DrawNode(SceneNode node)
-	{
-		switch (node)
-		{
-			case InstancedMeshNode instanced:
-				foreach (var transform in instanced.InstancesTransforms)
-				{
-					DrawMeshPart(instanced.Mesh, ResolveMaterial(instanced.Mesh, null), transform);
-				}
-
-				break;
-
-			case MeshNode mesh:
-				DrawMeshPart(mesh.Mesh, ResolveMaterial(mesh.Mesh, mesh.Material), mesh.Transform);
-				break;
-		}
 	}
 
 	/// <summary>
-	/// Mesh parts carry their material in <see cref="DrMeshPartTag"/>; explicit node
-	/// materials take precedence when present.
+	/// Draws a single mesh part. Materials normally come from the part's own
+	/// <see cref="DrMeshPartTag"/>; <paramref name="customMaterial"/> is an override for
+	/// rare cases such as debug drawing and is expected to be null otherwise.
 	/// </summary>
-	private static Material ResolveMaterial(DigitalRiseModel.DrMeshPart part, Material explicitMaterial)
-	{
-		if (explicitMaterial != null)
-		{
-			return explicitMaterial;
-		}
-
-		return (part?.Tag as DrMeshPartTag)?.material;
-	}
-
-	private void DrawMeshPart(DigitalRiseModel.DrMeshPart part, Material material, Matrix world)
+	public void DrawMeshPart(DigitalRiseModel.DrMeshPart part, Matrix transform, Material customMaterial = null)
 	{
 		if (part == null || part.VertexBuffer == null || part.IndexBuffer == null)
 		{
 			return;
 		}
 
-		_effect.World = world;
+		var material = customMaterial ?? (part.Tag as DrMeshPartTag)?.material;
+
+		_device.BlendState = BlendState.Opaque;
+		_device.DepthStencilState = material?.DepthStencilState ?? DepthStencilState.Default;
+		_device.RasterizerState = material?.RasterizerState ?? RasterizerState.CullCounterClockwise;
+
+		_effect.LightingEnabled = material?.LightingEnabled ?? true;
+		_effect.FogEnabled = material?.FogEnabled ?? true;
+		_effect.World = transform;
 		_effect.Texture = material?.DiffuseTexture ?? _fallbackTexture;
 		_effect.DiffuseColor = material != null ? material.DiffuseColor.ToVector3() : Vector3.One;
 		_effect.CurrentTechnique.Passes[0].Apply();
@@ -149,6 +123,27 @@ public class Renderer : IDisposable
 			part.PrimitiveCount);
 
 		++DrawnParts;
+		++DrawCalls;
+		Triangles += PrimitiveCountToTriangles(part.PrimitiveType, part.PrimitiveCount);
+
+		// Restore the frame defaults so the next part is unaffected.
+		_effect.LightingEnabled = true;
+		_effect.FogEnabled = true;
+	}
+
+	private static int PrimitiveCountToTriangles(PrimitiveType primitiveType, int primitiveCount)
+	{
+		switch (primitiveType)
+		{
+			case PrimitiveType.TriangleList:
+				return primitiveCount;
+
+			case PrimitiveType.TriangleStrip:
+				return Math.Max(0, primitiveCount - 2);
+
+			default:
+				return 0;
+		}
 	}
 
 	public void Dispose()
