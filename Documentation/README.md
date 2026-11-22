@@ -24,6 +24,15 @@ the window and `GraphicsDeviceManager`. On `Initialize` it publishes the device 
 through every call. `Update`/`Draw` form the main loop; Escape or the gamepad Back button
 exits. Window title carries `OG.Version`.
 
+### Command line
+
+`CommandLine` (`OpenGothic/CommandLine.cs`) parses startup arguments and exposes them via
+`CommandLine.Instance`: `-g <path>` (Gothic installation), `-game:<modfile.ini>` (mod
+manifest), `-w <world.zen>` (startup world), `-nomenu` (skip main menu), and `-devmode`.
+Unknown arguments are logged as warnings. `Validate()` checks that `-g` was given and that
+the folder contains a `Data` directory. `Main` logs the parsed values, and returns exit
+code 1 with an actionable error if validation fails.
+
 ### Logging
 
 `Log` (`OpenGothic/Log.cs`) is the single logging entry point and exposes `Log.Info`,

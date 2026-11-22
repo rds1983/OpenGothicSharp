@@ -17,6 +17,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   `OG.GraphicsDevice`.
 - Logging exists: `Log.Info/Warning/Error` to console and `log.txt`, with ZenKit
   messages routed in.
+- Command line parsed and validated: `-g`, `-game:`, `-w`, `-nomenu`, `-devmode`
+  exposed via `CommandLine.Instance`.
 - No renderer, input, physics, UI, audio, or scripting yet.
 - Current milestone: **A — Foundation**.
 
@@ -35,7 +37,7 @@ Provide `Log.Info/Warning/Error` writing to console and `log.txt`. Initialize th
 logger and ZenKit logging before other subsystems.
 **Done when:** startup and asset-load lines appear in `log.txt`.
 
-### A3. Command line
+### A3. Command line — DONE
 Parse and expose `-g <path>`, `-game:<modfile.ini>`, `-w <world.zen>`, `-nomenu`,
 `-devmode`. Validate the Gothic data folder exists and fail with a clear message
 (logged and on console).
