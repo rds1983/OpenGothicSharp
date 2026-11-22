@@ -262,3 +262,6 @@ __pycache__/
 
 # Machine-specific notes (local game/reference paths). Never commit.
 LOCAL_PATHS.md
+
+# Runtime log output
+log.txt

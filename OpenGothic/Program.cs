@@ -7,11 +7,27 @@ internal static class Program
 {
 	static void Main(string[] args)
 	{
-		AMBConfiguration.Logger = Console.WriteLine;
+		Log.Initialize();
 
-		using (var game = new OgGame())
+		try
 		{
-			game.Run();
+			AMBConfiguration.Logger = Log.Info;
+
+			Log.Info($"OpenGothicSharp {OG.Version} starting");
+
+			using (var game = new OgGame())
+			{
+				game.Run();
+			}
+		}
+		catch (Exception ex)
+		{
+			Log.Error($"Fatal error: {ex}");
+			throw;
+		}
+		finally
+		{
+			Log.Shutdown();
 		}
 	}
 }

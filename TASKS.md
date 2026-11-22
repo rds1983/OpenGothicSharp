@@ -15,6 +15,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   (`Assets.Model.cs`).
 - Application host exists: `OgGame` window + `Update`/`Draw` loop publishes
   `OG.GraphicsDevice`.
+- Logging exists: `Log.Info/Warning/Error` to console and `log.txt`, with ZenKit
+  messages routed in.
 - No renderer, input, physics, UI, audio, or scripting yet.
 - Current milestone: **A — Foundation**.
 
@@ -28,8 +30,8 @@ initializes `GraphicsDevice`, holds `OG.GraphicsDevice`, and runs a fixed
 `Update`/`Draw` loop with an exit hook.
 **Done when:** `dotnet run` opens a window that clears to a color and closes cleanly.
 
-### A2. Logging & diagnostics
-Route `OG.LogInfo/LogWarning/LogError` to console and `log.txt`. Initialize the
+### A2. Logging & diagnostics — DONE
+Provide `Log.Info/Warning/Error` writing to console and `log.txt`. Initialize the
 logger and ZenKit logging before other subsystems.
 **Done when:** startup and asset-load lines appear in `log.txt`.
 

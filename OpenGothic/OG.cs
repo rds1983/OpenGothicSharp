@@ -8,21 +8,6 @@ public static class OG
 {
 	private static GraphicsDevice _device;
 
-	/// <summary>
-	/// Gets or sets the action used for info-level logging.
-	/// </summary>
-	public static Action<string> LogInfo = Console.WriteLine;
-
-	/// <summary>
-	/// Gets or sets the action used for warning-level logging.
-	/// </summary>
-	public static Action<string> LogWarning = Console.WriteLine;
-
-	/// <summary>
-	/// Gets or sets the action used for error-level logging.
-	/// </summary>
-	public static Action<string> LogError = Console.WriteLine;
-
 	public static string Version
 	{
 		get
