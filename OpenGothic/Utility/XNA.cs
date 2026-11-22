@@ -43,10 +43,22 @@ internal static class XNA
 
 			case ZenKit.TextureFormat.Dxt3:
 				return SurfaceFormat.Dxt3;
+
+			case ZenKit.TextureFormat.Dxt5:
+				return SurfaceFormat.Dxt5;
 		}
 
 		throw new NotSupportedException($"Format {textureFormat} is not supported.");
 	}
+
+	/// <summary>
+	/// Whether the format can be uploaded to the GPU as-is. Formats that cannot are
+	/// decoded to RGBA by ZenKit instead. See <see cref="ToXNA"/>.
+	/// </summary>
+	public static bool IsCompressed(this ZenKit.TextureFormat textureFormat) =>
+		textureFormat == ZenKit.TextureFormat.Dxt1 ||
+		textureFormat == ZenKit.TextureFormat.Dxt3 ||
+		textureFormat == ZenKit.TextureFormat.Dxt5;
 
 	public static Color ToXna(this System.Drawing.Color color) => new Color(color.R, color.G, color.B, color.A);
 

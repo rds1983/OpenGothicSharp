@@ -60,18 +60,15 @@ internal abstract class MeshBuilder<T> : IMeshBuilder where T : IVertexType
 	{
 		if (toLeftHanded)
 		{
+			// Mirroring Z while loading reverses triangle winding; swap it back so the
+			// front face stays front-facing in right-handed space.
+			// Texture coordinates are copied verbatim, matching the reference
+			// implementation, which never inverts U or V when building vertices.
 			for (var i = 0; i < _indices.Count; i += 3)
 			{
 				var temp = _indices[i];
 				_indices[i] = _indices[i + 2];
 				_indices[i + 2] = temp;
-			}
-
-			for (var i = 0; i < Vertices.Count; ++i)
-			{
-				var v = Vertices[i];
-				InvertTextureX(ref v);
-				Vertices[i] = v;
 			}
 		}
 
@@ -96,18 +93,12 @@ internal abstract class MeshBuilder<T> : IMeshBuilder where T : IVertexType
 		return new DrMeshPart(vertexBuffer, indexBuffer, CreateBoundingBox(Vertices));
 	}
 
-	protected abstract void InvertTextureX(ref T v);
 	protected abstract VertexBuffer CreateVertexBuffer(GraphicsDevice device, T[] vertices);
 	protected abstract BoundingBox CreateBoundingBox(IEnumerable<T> vertices);
 }
 
 internal class MeshBuilderPNT : MeshBuilder<VertexPositionNormalTexture>
 {
-	protected override void InvertTextureX(ref VertexPositionNormalTexture v)
-	{
-		v.TextureCoordinate.X = 1.0f - v.TextureCoordinate.X;
-	}
-
 	protected override VertexBuffer CreateVertexBuffer(GraphicsDevice device, VertexPositionNormalTexture[] vertices) => vertices.CreateVertexBuffer(device);
 
 	protected override BoundingBox CreateBoundingBox(IEnumerable<VertexPositionNormalTexture> vertices) => BoundingBox.CreateFromPoints(vertices.GetPositions());
@@ -115,11 +106,6 @@ internal class MeshBuilderPNT : MeshBuilder<VertexPositionNormalTexture>
 
 internal class MeshBuilderS : MeshBuilder<VertexSkinned>
 {
-	protected override void InvertTextureX(ref VertexSkinned v)
-	{
-		v.TextureCoordinate.X = 1.0f - v.TextureCoordinate.X;
-	}
-
 	protected override VertexBuffer CreateVertexBuffer(GraphicsDevice device, VertexSkinned[] vertices) => vertices.CreateVertexBuffer(device);
 
 	protected override BoundingBox CreateBoundingBox(IEnumerable<VertexSkinned> vertices) => BoundingBox.CreateFromPoints(vertices.GetPositions());

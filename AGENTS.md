@@ -58,6 +58,10 @@ without breaking one, stop and ask the developer.
   conversion happens **once, while loading assets**, in `Mathematics.ToXna` (Z is mirrored).
   Everything past asset loading is right-handed. Do not add per-frame handedness flips in
   rendering code — if a conversion is missing, fix it where the asset is read.
+- **Vertex data is copied verbatim.** Positions, normals and texture coordinates are taken
+  from the file as-is; only the Z axis is mirrored during conversion. Do **not** flip or
+  mirror U/V in mesh builders — a Z mirror already reverses triangle winding (handled by
+  the index swap), and any additional UV flip corrupts every texture.
 - Follow existing code style and patterns. No comments unless they clarify non-obvious
   logic.
 - New subsystems get a short note in `Documentation/`; format/behavior findings go in

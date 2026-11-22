@@ -136,6 +136,27 @@ extreme pitch should be clamped by the caller (movement code, milestone D).
 `OgGame` creates one camera, takes its FOV from `OG.Settings.CameraFov`, and sets its
 viewport from the graphics device. Near/far come from `Constants.NearPlane`/`FarPlane`.
 
+### Mesh renderer
+
+`Renderer` (`OpenGothic/Renderer.cs`) draws the static world with `BasicEffect`. It sets
+the camera's view/projection, builds a `BoundingFrustum` from `ViewProjection`, and skips
+cells whose bounds do not intersect it. `MeshNode` and `InstancedMeshNode` both go through
+the same `DrawMeshPart` path; the material comes from the node when present, otherwise from
+the part's `DrMeshPartTag`.
+
+Materials without a texture fall back to a 1x1 white texture. Textures in compressed
+formats (DXT1/3/5) are uploaded from the raw mip chain; palettized and uncompressed formats
+are decoded to RGBA by ZenKit and uploaded as `SurfaceFormat.Color`. A texture that cannot
+be found logs a warning and renders untextured rather than aborting the world load.
+
+**Vertex data is used verbatim.** `MeshBuilder` swaps triangle indices (because mirroring Z
+reverses winding) but never flips or mirrors U/V. An earlier U-mirror (`1 - u`) corrupted
+every texture; the reference implementation also copies `texture.x`/`texture.y` unchanged.
+
+Lighting is a fixed two-directional-light rig with specular disabled and a raised ambient
+term. Gothic's textures bake their own shading, so `EnableDefaultLighting()` produces
+blown-out specular smears on flat surfaces. Proper sky/fog/lighting is milestone B3.
+
 Uses stock MonoGame effects (`BasicEffect`, `SkinnedEffect`, …) until gameplay is polished.
 A custom shader system and visual parity are deliberately deferred; see
 [TASKS.md](../TASKS.md) milestone M.

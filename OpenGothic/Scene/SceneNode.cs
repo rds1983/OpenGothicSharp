@@ -4,5 +4,5 @@ namespace OpenGothic.Scene;
 
 public class SceneNode
 {
-	public Matrix Transform;
+	public Matrix Transform = Matrix.Identity;
 }

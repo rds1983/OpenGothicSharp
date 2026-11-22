@@ -126,24 +126,42 @@ public partial class Assets
 			newName = Path.ChangeExtension(newName, "TEX");
 			if (!_allRecords.TryGetValue(newName, out records))
 			{
-				throw new Exception($"Unable to find texture '{name}'");
+				Log.Warning($"Unable to find texture '{name}', using a placeholder.");
+				return null;
 			}
 		}
 
 		var record = records[records.Count - 1];
 
 		var texture = new ZenKit.Texture(record.Node.Buffer);
-
 		var mipmapCount = texture.MipmapCount;
-		var result = new Texture2D(device, texture.Width, texture.Height, mipmapCount > 1, texture.Format.ToXNA());
 
-		var allMipmapsRaw = texture.AllMipmapsRaw;
-		for (var i = 0; i < mipmapCount; ++i)
+		// Compressed formats upload directly; everything else (including palettized
+		// formats) is decoded to RGBA by ZenKit.
+		if (texture.Format.IsCompressed())
 		{
-			result.SetData(i, null, allMipmapsRaw[i], 0, allMipmapsRaw[i].Length);
-		}
+			var result = new Texture2D(device, texture.Width, texture.Height, mipmapCount > 1, texture.Format.ToXNA());
 
-		return result;
+			var allMipmapsRaw = texture.AllMipmapsRaw;
+			for (var i = 0; i < mipmapCount; ++i)
+			{
+				result.SetData(i, null, allMipmapsRaw[i], 0, allMipmapsRaw[i].Length);
+			}
+
+			return result;
+		}
+		else
+		{
+			var result = new Texture2D(device, texture.Width, texture.Height, mipmapCount > 1, SurfaceFormat.Color);
+
+			var allMipmapsRgba = texture.AllMipmapsRgba;
+			for (var i = 0; i < mipmapCount; ++i)
+			{
+				result.SetData(i, null, allMipmapsRgba[i], 0, allMipmapsRgba[i].Length);
+			}
+
+			return result;
+		}
 	}
 
 

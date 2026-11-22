@@ -23,8 +23,10 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   typed accessors and persistence.
 - Unit test project (`OpenGothic.Tests`, xunit) covers INI, settings and command line;
   hermetic, no game installation required.
-- Camera exists: view/projection from FOV and near/far, RHS world space. No renderer,
-  input, physics, UI, audio, or scripting yet.
+- Camera exists: view/projection from FOV and near/far, RHS world space.
+- Static world renders: `Renderer` draws frustum-culled `WorldGrid` cells with
+  `BasicEffect` and diffuse textures. No vertex/texture UV flips — coordinates are
+  copied verbatim from the data. No input, physics, UI, audio, or scripting yet.
 - Milestone A (Foundation) complete. Current milestone: **B — Static world rendering**.
 
 ---
@@ -74,14 +76,15 @@ Implement a camera with `View`/`Projection` (FOV, near/far from `Constants`) and
 world transform convention (right-handed, Y-up, matching `Mathematics.ToXna`).
 **Done when:** the world grid can be viewed from an arbitrary position/orientation.
 
-### B2. Mesh renderer
+### B2. Mesh renderer — DONE
 Draw `WorldGrid` cells using `BasicEffect` with the loaded diffuse textures.
 Only draw cells in the view frustum.
 **Done when:** a ZEN world renders recognizable textured terrain and static props.
 
 ### B3. Sky, fog and lighting
-Sky color/background, distance fog matching `Constants.Fog*`, and a simple
-directional light for `BasicEffect`.
+Sky color/background, distance fog matching `Constants.Fog*`, and finish the lighting
+story (the renderer currently uses a fixed two-light rig with specular disabled; see
+`Documentation/`).
 **Done when:** the world looks grounded rather than floating in a void.
 
 ### B4. Debug drawing & stats

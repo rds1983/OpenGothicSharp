@@ -179,7 +179,7 @@ namespace OpenGothic
 
 							var mat = new Material
 							{
-								//						DiffuseColor = zkMaterial.Color.ToXna(),
+								DiffuseColor = Color.White,
 								DiffuseTexture = texture
 							};
 
