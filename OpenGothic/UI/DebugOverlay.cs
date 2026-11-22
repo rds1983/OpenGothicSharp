@@ -65,6 +65,11 @@ namespace OpenGothic.UI
 					text += " (no cull)";
 				}
 
+				if (!DebugSettings.ModelsEnabled)
+				{
+					text += " (no models)";
+				}
+
 				_labelDebugViews.Text = text;
 			}
 		}

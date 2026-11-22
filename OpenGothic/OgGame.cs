@@ -1,10 +1,14 @@
+using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Myra;
 using Myra.Graphics2D.UI;
+using OpenGothic.Scene;
+using OpenGothic.Utility;
 using OpenGothic.UI;
 using System;
+using System.IO;
 
 namespace OpenGothic;
 
@@ -18,6 +22,12 @@ public class OgGame : Game
 	private Desktop _desktop;
 	private Hud _hud;
 	private KeyboardState _previousKeyboard;
+
+	/// <summary>Frames drawn so far, used to time a <c>-screenshot</c> capture.</summary>
+	private int _framesDrawn;
+
+	/// <summary>Set once the requested screenshot has been written or abandoned.</summary>
+	private bool _screenshotDone;
 
 	/// <summary>Toggleable debug views drawn on top of the world.</summary>
 	public DebugDraw DebugDraw { get; } = new DebugDraw();
@@ -48,6 +58,57 @@ public class OgGame : Game
 		Camera.SetViewport(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
 
 		LoadWorld();
+		SpawnRequestedModel();
+	}
+
+	/// <summary>
+	/// Places the model named by <c>-model</c> straight in front of the camera so it can be
+	/// inspected without hunting for a vob that uses it. The scene is a plain list of nodes
+	/// per grid cell, so the node is attached to the cell the camera stands in.
+	/// </summary>
+	private void SpawnRequestedModel()
+	{
+		var name = CommandLine.Instance?.SpawnModel;
+		if (string.IsNullOrEmpty(name) || _assets == null || _world == null)
+		{
+			return;
+		}
+
+		DrModel model;
+		try
+		{
+			model = _assets.GetModel(GraphicsDevice, name);
+		}
+		catch (Exception ex)
+		{
+			Log.Error($"Unable to load model '{name}': {ex.Message}");
+			return;
+		}
+
+		var instance = new DrModelInstance(model);
+
+		var distance = CommandLine.Instance.SpawnDistance ?? 400f;
+		var position = Camera.Position + Camera.Forward * distance;
+		var transform = Matrix.CreateTranslation(position);
+
+		var node = new ModelNode
+		{
+			Instance = instance,
+			Transform = transform
+		};
+
+		var bounds = (instance.BoundingBox ?? new BoundingBox(position, position)).Transform(ref transform);
+		var cell = _world.FindCellByBox(bounds);
+		if (cell == null)
+		{
+			Log.Warning($"Unable to place spawn model '{name}': no grid cell contains it.");
+			return;
+		}
+
+		cell.ObjectBounds.Add(bounds);
+		cell.Children.Add(node);
+
+		Log.Info($"Spawned model '{name}' at {position} ({distance} units ahead).");
 	}
 
 	private void LoadWorld()
@@ -63,6 +124,29 @@ public class OgGame : Game
 			// Placeholder until the menu exists (milestone I): keep the camera at the
 			// world origin, looking straight ahead.
 			Camera.Position = Vector3.Zero;
+		}
+
+		// Diagnostic overrides: park the view on a known object instead of moving there.
+		if (CommandLine.Instance.CameraPosition.HasValue)
+		{
+			Camera.Position = CommandLine.Instance.CameraPosition.Value;
+		}
+
+		if (CommandLine.Instance.LookAtTarget.HasValue)
+		{
+			Camera.LookAt(CommandLine.Instance.LookAtTarget.Value);
+		}
+
+		// Debug views are usually toggled with F2/F3; starting them on makes a capture
+		// self-describing without needing synthetic keystrokes.
+		if (CommandLine.Instance.Wireframe.HasValue)
+		{
+			DebugDraw.Wireframe = CommandLine.Instance.Wireframe.Value;
+		}
+
+		if (CommandLine.Instance.Bounds.HasValue)
+		{
+			DebugDraw.Bounds = CommandLine.Instance.Bounds.Value;
 		}
 
 		var worldName = CommandLine.Instance.World ?? "newworld.zen";
@@ -122,7 +206,67 @@ public class OgGame : Game
 
 		_desktop.Render();
 
+		_framesDrawn++;
+		CaptureScreenshotIfDue();
+
 		base.Draw(gameTime);
+	}
+
+	/// <summary>
+	/// Writes the rendered frame to the path given by <c>-screenshot</c> once the requested
+	/// frame has been drawn, then exits. Reading the backbuffer directly is the only capture
+	/// that works here: an OS-level screenshot of the window comes back black because the
+	/// hardware-accelerated surface never passes through the desktop compositor.
+	/// </summary>
+	private void CaptureScreenshotIfDue()
+	{
+		var path = CommandLine.Instance?.ScreenshotPath;
+		if (path == null || _screenshotDone)
+		{
+			return;
+		}
+
+		var frame = CommandLine.Instance.ScreenshotFrame ?? 1;
+		if (_framesDrawn < frame)
+		{
+			return;
+		}
+
+		// Set first so a failed capture is not retried for the rest of the session.
+		_screenshotDone = true;
+
+		var width = GraphicsDevice.PresentationParameters.BackBufferWidth;
+		var height = GraphicsDevice.PresentationParameters.BackBufferHeight;
+
+		try
+		{
+			var colors = new Color[width * height];
+			GraphicsDevice.GetBackBufferData(colors);
+
+			using (var texture = new Texture2D(GraphicsDevice, width, height))
+			{
+				texture.SetData(colors);
+
+				var directory = Path.GetDirectoryName(path);
+				if (!string.IsNullOrEmpty(directory))
+				{
+					Directory.CreateDirectory(directory);
+				}
+
+				using (var stream = File.Create(path))
+				{
+					texture.SaveAsPng(stream, width, height);
+				}
+			}
+
+			Log.Info($"Screenshot written to '{path}' (frame {_framesDrawn}).");
+		}
+		catch (Exception ex)
+		{
+			Log.Error($"Unable to write screenshot '{path}': {ex.Message}");
+		}
+
+		Exit();
 	}
 
 	protected override void UnloadContent()

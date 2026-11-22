@@ -27,13 +27,41 @@ exits. Window title carries `OG.Version`.
 ### Command line
 
 `CommandLine` (`OpenGothic/CommandLine.cs`) parses startup arguments and exposes them via
-`CommandLine.Instance`: `-g <path>` (Gothic installation), `-game:<modfile.ini>` (mod
-manifest), `-w <world.zen>` (startup world), `-nomenu` (skip main menu), `-devmode`,
-`-nocull` / `-cull:true|false` (per-part frustum culling, see "Frustum culling").
-Unknown arguments are logged as warnings. `Validate()` checks that `-g` was given and that
-the folder contains a `Data` directory. `Main` logs the parsed values, applies the debug
-switches with `CommandLine.Apply()`, and returns exit code 1 with an actionable error if
-validation fails.
+`CommandLine.Instance`. Unknown arguments are logged as warnings. `Validate()` checks that
+`-g` was given and that the folder contains a `Data` directory. `Main` logs the parsed
+values, applies the debug switches with `CommandLine.Apply()`, and returns exit code 1 with
+an actionable error if validation fails.
+
+On/off switches accept a bare flag, which turns them on, or `-name:true|false`, which sets
+the value explicitly. Values left unset stay `null` so `Apply()` does not overwrite a
+default chosen elsewhere.
+
+| Option | Effect |
+| --- | --- |
+| `-g <path>` | Gothic installation (required). |
+| `-game:<modfile.ini>` | Mod manifest. |
+| `-w <world.zen>` | Startup world. |
+| `-nomenu` | Skip the main menu. |
+| `-devmode` | Developer mode. |
+| `-nocull` / `-cull:true\|false` | Per-part frustum culling; see "Frustum culling". |
+| `-nomodels` / `-models:true\|false` | Instantiate vobs that carry a model. Off shows the level without model geometry, which separates a model bug from a world one. |
+| `-wireframe` / `-bounds` | Start with the F2 / F3 debug views already on. |
+| `-cam:<x,y,z>` | Override the camera position. |
+| `-lookat:<x,y,z>` | Point the camera at a world position (implies yaw and pitch). |
+| `-model:<name>` | Spawn a model directly in front of the camera, with or without an extension. Reaches models no world vob uses. |
+| `-modeldist:<n>` | How far ahead to place `-model` (default 400). |
+| `-screenshot:<file.png>` | Write the rendered frame to a PNG once it is ready, then exit. |
+| `-screenshotframe:<n>` | Which frame to capture, counting from one (default 1). |
+
+Captures go through `-screenshot:` rather than an OS-level screenshot: the hardware
+surface never passes through the desktop compositor here, so an external capture of the
+window comes back **black** even though the frame renders. On this machine the same was
+true of `PrintWindow` and of the HUD; `GraphicsDevice.GetBackBufferData` is the only path
+that returns the image. Frame 90–120 is a safe choice while the world is still loading.
+
+The debugging trio — `-cam:`, `-lookat:` and `-model:` — is the quickest way to inspect a
+single asset without walking there: the camera starts at the world origin, so the nearest
+model vob in `newworld.zen` is over 300 units away and below eye level.
 
 Options that are only for diagnosing a subsystem live in `DebugSettings`
 (`OpenGothic/DebugSettings.cs`) as static properties rather than in `Settings`, which owns
@@ -150,9 +178,10 @@ Rendering is split three ways:
 
 - **`Renderer`** (`OpenGothic/Renderer.cs`) is a low-level drawing service and owns no
   scene content. Public surface: `BeginFrame(camera)`, `Clear()`,
-  `DrawMeshPart(DrMeshPart, Matrix, Material? customMaterial, bool cull = true)`,
-  `DrawBoundingBox(BoundingBox, Color)`, `DrawMeshPartWireframe(DrMeshPart, Matrix, Color)`,
-  `EndFrame()`. It owns the `BasicEffect`, device blend/depth/rasterizer state,
+  `DrawMeshPart(DrMeshPart, Matrix, Matrix[]? boneTransforms, Material? customMaterial, bool cull)`,
+  `DrawBoundingBox(BoundingBox, Color)`,
+  `DrawMeshPartWireframe(DrMeshPart, Matrix, Color, Matrix[]? boneTransforms)`, `EndFrame()`.
+  It owns the `BasicEffect`, the `SkinnedEffect`, device blend/depth/rasterizer state,
   vertex/index-buffer binding and the draw call. It also exposes per-frame stats —
   `DrawCalls`, `Triangles` — reset in `BeginFrame`.
   `BeginFrame` **saves** the device state and installs the renderer's own (opaque blend,
@@ -194,7 +223,9 @@ F2 toggles `Wireframe`, F3 toggles `Bounds`. Both default to off.
 - **Wireframe** (`DrawMeshPartWireframe`) keeps the part's fog and depth state but replaces
   lighting and texture with `WireframeColor`, so edges stay readable. Sampling the level's
   textures turns the wireframe into noise. It needs `FillMode.WireFrame`, which no stock
-  `RasterizerState` provides, so `Renderer` owns one.
+  `RasterizerState` provides, so `Renderer` owns one. A skinned part still deforms with the
+  bone transforms it is passed, so the edges show the posed geometry rather than the bind
+  pose.
 - **Bounds** (`DrawBoundingBox`) draws the twelve edges of a box using a shared unit-cube
   `LineList` mesh scaled and translated onto the box — one draw call per box, no rebuilds.
   Boxes are unlit, unfogged and `DepthStencilState.DepthRead`: they are occluded by
@@ -231,9 +262,12 @@ Consequences worth knowing:
   clears it.
 - `DrawBoundingBox` and the sky opt out with `cull: false`. Debug boxes are already
   frustum-tested by the caller, and the sky dome must always draw.
-- `part.BoundingBox` is the **bind-pose** box. That is exact for static geometry, but an
-  animated limb (C2) can swing outside it. Skinned models will need a padded or
-  skeleton-derived box, or `cull: false`.
+- `part.BoundingBox` is the box of the pose the mesh was built in. For a static part that is
+  exact. For a skinned part it is the **bind pose**, which is also exactly the box the
+  vertices form as loaded, so it is a valid cull test for a model that is not animated.
+  Animation moves vertices outside it, so when C2 plays clips it must grow each skinned
+  part's box to cover the clip it plays — otherwise a limb gets culled mid-swing. Culling is
+  not skipped for skinned parts in the meantime; the box is correct for what is drawn today.
 - `DebugSettings.CullEnabled` (default true) turns the per-part test off globally. Pass
   `-nocull` on the command line to see whether a missing object is a culling bug or a
   loading bug: it restores the unculled counts, and the overlay shows "(no cull)". Cell-level
@@ -247,6 +281,47 @@ Measured effect on a full `newworld.zen` frame at the default viewpoint: **11,93
 draw calls** and **1.39M → 386k triangles**. An A/B capture with culling forced off
 restored the original counts and produced a **pixel-identical image** outside the HUD,
 confirming the discards were all invisible geometry.
+
+With model vobs drawing, the same frame is **2,136 draw calls / 393,076 triangles**; with
+`-nomodels` it returns to **2,005 / 385,934**, so the model path adds roughly 6% to the
+frame. Forcing culling off (`-nocull`) gives **13,471 / 1,501,566** and a **pixel-identical
+image outside the HUD**, confirming every discard was invisible geometry — skinned parts
+included.
+
+### Models
+
+A model is a `DrModel` (skeleton plus meshes) placed in the world by a `ModelNode`
+(`OpenGothic/Scene/ModelNode.cs`), which holds a `DrModelInstance` and a world transform in
+`Transform`. `WorldRenderer.DrawModel` walks `instance.Model.Meshes` and dispatches per
+part:
+
+- **Static part** — drawn with the owning bone's global transform times the node
+  transform, exactly as a hand-authored prop expects.
+- **Skinned part** — has a `Skin`, so `DrawMeshPart` deforms it with
+  `instance.GetSkinTransforms(...)` before placing it with the node transform. MonoGame's
+  `SkinnedEffect` takes up to `SkinnedEffect.MaxBones` (72) transforms; a mesh here tops
+  out at 36 joints and a skeleton at 47 bones, so no model needs a custom effect. The draw
+  path throws if a caller hands it more bones than the effect supports, and throws if a
+  skinned part is drawn without its bone transforms.
+
+`Assets.GetModel(name, ...)` resolves a model name from the level (the authoring `.ASC` /
+`.MDS` name) to a file: `STEM.MDL` if present, otherwise the `STEM.MDH` + `STEM.MDM` pair.
+The loader builds absolute bind transforms in hierarchy order, reuses the hierarchy node
+indexing the weights use, and gives each skinned mesh a synthetic bone under a synthetic
+root so that a mesh can span many bones without one bone owning two meshes. The details —
+including why the root translation goes on the root bone's default pose rather than into the
+bind matrices — are in
+[Specifications/gothic-model-format.md](Specifications/gothic-model-format.md).
+
+`Assets.World.cs` creates a `ModelNode` for every `VisualModel` vob, using the vob rotation
+and position as its transform, and registers the instance's world bounds in the owning
+grid cell so debug bounds and the existing cell culling still apply. `-nomodels` skips this
+so a frame can be compared against the same world without model geometry.
+
+Model parts are **texture-driven the same way as static meshes**: the material comes from
+`DrMeshPartTag`, with the white fallback when a texture is missing. Wireframe and bounds
+both extend to models: `DrawMeshPartWireframe` still applies the skeleton, so the edges show
+the posed geometry rather than the bind pose.
 
 ### Sky, fog and lighting
 

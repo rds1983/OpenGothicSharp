@@ -2,7 +2,6 @@ using Microsoft.Xna.Framework;
 using OpenGothic;
 using System;
 using Xunit;
-
 namespace OpenGothic.Tests;
 
 public class CameraTests
@@ -143,5 +142,79 @@ public class CameraTests
 
 		Assert.True(camera.NearPlane > 0);
 		Assert.True(camera.FarPlane > camera.NearPlane);
+	}
+
+	[Theory]
+	[InlineData(0f, -1f)]
+	[InlineData(1f, 0f)]
+	[InlineData(-1f, 0.25f)]
+	[InlineData(0f, -2.5f)]
+	[InlineData(3f, 1f)]
+	public void LookAt_TargetLiesOnForwardAxis(float dx, float dz)
+	{
+		var camera = CreateCamera();
+		camera.Position = new Vector3(-5, 12, 40);
+		var target = camera.Position + new Vector3(dx, 0, dz);
+
+		camera.LookAt(target);
+
+		// The camera must actually look at the target, at any yaw.
+		Assert.True(Near(camera.Forward, Vector3.Normalize(target - camera.Position), 1e-3f));
+	}
+
+	[Fact]
+	public void LookAt_AboveTarget_LooksUp()
+	{
+		var camera = CreateCamera();
+		camera.Position = Vector3.Zero;
+
+		camera.LookAt(new Vector3(0, 10, -10));
+
+		Assert.True(camera.Pitch > 0);
+		Assert.True(camera.Forward.Y > 0);
+	}
+
+	[Theory]
+	[InlineData(1f)]
+	[InlineData(0f)]
+	[InlineData(0.5f)]
+	public void LookAt_KeepsBasisOrthonormal(float yawSeed)
+	{
+		var camera = CreateCamera();
+		camera.Yaw = yawSeed;
+		camera.Position = new Vector3(3, 4, 5);
+
+		camera.LookAt(new Vector3(-7, 1, 2));
+
+		var forward = camera.Forward;
+		var right = camera.Right;
+		var up = camera.Up;
+
+		Assert.True(Near(forward.Length(), 1f, 1e-3f));
+		Assert.True(Near(right.Length(), 1f, 1e-3f));
+		Assert.True(Near(up.Length(), 1f, 1e-3f));
+		Assert.True(Near(Vector3.Dot(forward, right), 0f, 1e-3f));
+		Assert.True(Near(Vector3.Dot(up, forward), 0f, 1e-3f));
+	}
+
+	[Fact]
+	public void LookAt_StraightDown_DoesNotProduceNaNs()
+	{
+		var camera = CreateCamera();
+
+		camera.LookAt(new Vector3(0, -50, 0));
+
+		Assert.False(float.IsNaN(camera.Yaw));
+		Assert.False(float.IsNaN(camera.Pitch));
+		Assert.True(Near(camera.Forward.Length(), 1f, 1e-3f));
+	}
+
+	[Fact]
+	public void LookAt_TargetAtCamera_Throws()
+	{
+		var camera = CreateCamera();
+		camera.Position = new Vector3(1, 2, 3);
+
+		Assert.Throws<ArgumentException>(() => camera.LookAt(new Vector3(1, 2, 3)));
 	}
 }

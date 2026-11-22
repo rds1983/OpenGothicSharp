@@ -50,6 +50,25 @@ public class Camera
 
 	public Matrix ViewProjection => View * Projection;
 
+	/// <summary>
+	/// Points the camera at <paramref name="target"/>. Inverse of <see cref="Forward"/>:
+	/// yaw 0 looks down -Z, so the horizontal heading is measured from -Z towards +X.
+	/// </summary>
+	public void LookAt(Vector3 target)
+	{
+		var direction = target - Position;
+		if (direction.LengthSquared() < 1e-8f)
+		{
+			throw new ArgumentException("Look-at target coincides with the camera position.", nameof(target));
+		}
+
+		direction.Normalize();
+
+		// Clamp so a target straight above or below does not produce a degenerate basis.
+		Pitch = MathF.Asin(Math.Clamp(direction.Y, -1f, 1f));
+		Yaw = MathF.Atan2(direction.X, -direction.Z);
+	}
+
 	public void SetViewport(int width, int height)
 	{
 		if (width <= 0)

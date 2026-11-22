@@ -13,4 +13,11 @@ public static class DebugSettings
 	/// missing object is a culling problem rather than a loading one. Defaults to true.
 	/// </summary>
 	public static bool CullEnabled { get; set; } = true;
+
+	/// <summary>
+	/// Whether ZEN vobs that carry a model are instantiated and drawn. Turning it off
+	/// leaves only the static world, which is useful for telling a model-loading problem
+	/// apart from a world-rendering one. Defaults to true.
+	/// </summary>
+	public static bool ModelsEnabled { get; set; } = true;
 }

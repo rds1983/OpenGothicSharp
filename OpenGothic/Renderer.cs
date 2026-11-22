@@ -16,6 +16,7 @@ public class Renderer : IDisposable
 {
 	private readonly GraphicsDevice _device;
 	private readonly BasicEffect _effect;
+	private readonly SkinnedEffect _skinnedEffect;
 	private readonly BoundingFrustum _frustum = new BoundingFrustum(Matrix.Identity);
 
 	// Reused across draws: these are per-frame hot paths, so allocating a Material per call
@@ -69,6 +70,31 @@ public class Renderer : IDisposable
 		_effect.DirectionalLight1.DiffuseColor = new Vector3(0.35f);
 
 		_effect.DirectionalLight2.Enabled = false;
+
+		// The skinned effect mirrors the static one so animated models sit in the same
+		// lighting and fog as the world around them.
+		_skinnedEffect = new SkinnedEffect(device)
+		{
+			PreferPerPixelLighting = true,
+			SpecularColor = Vector3.Zero,
+			SpecularPower = 1f,
+			AmbientLightColor = new Vector3(0.45f),
+
+			FogEnabled = true,
+			FogColor = Constants.SkyHorizonColor.ToVector3(),
+			FogStart = Constants.FogStart,
+			FogEnd = Constants.FogEnd
+		};
+
+		_skinnedEffect.DirectionalLight0.Enabled = true;
+		_skinnedEffect.DirectionalLight0.Direction = Vector3.Normalize(new Vector3(0.35f, -1f, -0.55f));
+		_skinnedEffect.DirectionalLight0.DiffuseColor = new Vector3(0.65f);
+
+		_skinnedEffect.DirectionalLight1.Enabled = true;
+		_skinnedEffect.DirectionalLight1.Direction = Vector3.Normalize(new Vector3(-0.6f, -0.4f, -0.45f));
+		_skinnedEffect.DirectionalLight1.DiffuseColor = new Vector3(0.35f);
+
+		_skinnedEffect.DirectionalLight2.Enabled = false;
 
 		_fallbackTexture = new Texture2D(device, 1, 1);
 		_fallbackTexture.SetData(new[] { Color.White });
@@ -131,6 +157,9 @@ public class Renderer : IDisposable
 		_effect.Projection = camera.Projection;
 		_effect.Texture = _fallbackTexture;
 
+		_skinnedEffect.View = camera.View;
+		_skinnedEffect.Projection = camera.Projection;
+
 		// Reuse the same instance; BeginFrame runs every frame, so allocating here would be
 		// pure garbage.
 		_frustum.Matrix = camera.ViewProjection;
@@ -166,6 +195,14 @@ public class Renderer : IDisposable
 	/// <see cref="DrMeshPartTag"/>; <paramref name="customMaterial"/> is an override for
 	/// rare cases such as debug drawing and is expected to be null otherwise.
 	/// <para>
+	/// The part decides how it is drawn: one with a <see cref="DrMeshPart.Skin"/> is
+	/// deformed by <paramref name="boneTransforms"/> (the skin's transforms, that is
+	/// inverse bind composed with the current bone pose) and then placed by
+	/// <paramref name="transform"/>; one without a skin is placed by
+	/// <paramref name="transform"/> alone. A skinned part without bone transforms is a
+	/// caller bug and throws.
+	/// </para>
+	/// <para>
 	/// Must be called between <see cref="BeginFrame"/> and <see cref="EndFrame"/>: the
 	/// effect's view/projection and the culling frustum both come from the frame's camera.
 	/// The part is frustum-culled using its bounding box transformed by
@@ -173,14 +210,42 @@ public class Renderer : IDisposable
 	/// must draw regardless, such as the sky dome or anything whose box does not describe
 	/// what is actually drawn.
 	/// </para>
+	/// <para>
+	/// A skinned part's box is the pose it was built in — for a model, the bind pose, which
+	/// is the box the vertices form as loaded. Animation moves vertices outside that box, so
+	/// whoever plays a clip is responsible for growing the box to cover it (see
+	/// <see cref="DrMeshPart.BoundingBox"/>); an unexpanded box culls a limb mid-swing.
+	/// </para>
 	/// </summary>
-	public void DrawMeshPart(DrMeshPart part, Matrix transform, Material customMaterial = null, bool cull = true)
+	public void DrawMeshPart(DrMeshPart part, Matrix transform, Matrix[] boneTransforms = null, Material customMaterial = null, bool cull = true)
 	{
 		EnsureFrameOpen(nameof(DrawMeshPart));
 
-		if (part == null || part.VertexBuffer == null || part.IndexBuffer == null)
+		if (!IsDrawable(part))
 		{
 			return;
+		}
+
+		var skinned = part.Skin != null;
+
+		// Validate before the cull test: a missing skin is a wiring bug and should be loud
+		// even when the part happens to be off screen.
+		if (skinned)
+		{
+			if (boneTransforms == null || boneTransforms.Length == 0)
+			{
+				throw new ArgumentException(
+					"A part with a skin needs its skin's bone transforms; pass them in boneTransforms.",
+					nameof(boneTransforms));
+			}
+
+			if (boneTransforms.Length > SkinnedEffect.MaxBones)
+			{
+				throw new ArgumentOutOfRangeException(
+					nameof(boneTransforms),
+					boneTransforms.Length,
+					$"SkinnedEffect supports at most {SkinnedEffect.MaxBones} bone transforms.");
+			}
 		}
 
 		if (cull && DebugSettings.CullEnabled)
@@ -194,17 +259,54 @@ public class Renderer : IDisposable
 
 		var material = customMaterial ?? (part.Tag as DrMeshPartTag)?.material;
 
+		ApplyMaterialState(material);
+
+		if (skinned)
+		{
+			_skinnedEffect.Texture = material?.DiffuseTexture ?? _fallbackTexture;
+			_skinnedEffect.DiffuseColor = material != null ? material.DiffuseColor.ToVector3() : Vector3.One;
+			_skinnedEffect.FogEnabled = material?.FogEnabled ?? true;
+			_skinnedEffect.World = transform;
+			_skinnedEffect.SetBoneTransforms(boneTransforms);
+			_skinnedEffect.CurrentTechnique.Passes[0].Apply();
+
+			DrawPrimitives(part);
+
+			// Restore the frame default so the next part is unaffected.
+			_skinnedEffect.FogEnabled = true;
+		}
+		else
+		{
+			_effect.LightingEnabled = material?.LightingEnabled ?? true;
+			_effect.FogEnabled = material?.FogEnabled ?? true;
+			_effect.World = transform;
+			_effect.Texture = material?.DiffuseTexture ?? _fallbackTexture;
+			_effect.DiffuseColor = material != null ? material.DiffuseColor.ToVector3() : Vector3.One;
+			_effect.CurrentTechnique.Passes[0].Apply();
+
+			DrawPrimitives(part);
+
+			// Restore the frame defaults so the next part is unaffected.
+			_effect.LightingEnabled = true;
+			_effect.FogEnabled = true;
+		}
+	}
+
+	private static bool IsDrawable(DrMeshPart part) => part != null && part.VertexBuffer != null && part.IndexBuffer != null;
+
+	/// <summary>
+	/// Installs the device state a part's material asks for. Both effects read lighting and
+	/// fog from their own properties, so those are applied separately.
+	/// </summary>
+	private void ApplyMaterialState(Material material)
+	{
 		_device.BlendState = BlendState.Opaque;
 		_device.DepthStencilState = material?.DepthStencilState ?? DepthStencilState.Default;
 		_device.RasterizerState = material?.RasterizerState ?? RasterizerState.CullCounterClockwise;
+	}
 
-		_effect.LightingEnabled = material?.LightingEnabled ?? true;
-		_effect.FogEnabled = material?.FogEnabled ?? true;
-		_effect.World = transform;
-		_effect.Texture = material?.DiffuseTexture ?? _fallbackTexture;
-		_effect.DiffuseColor = material != null ? material.DiffuseColor.ToVector3() : Vector3.One;
-		_effect.CurrentTechnique.Passes[0].Apply();
-
+	private void DrawPrimitives(DrMeshPart part)
+	{
 		_device.SetVertexBuffer(part.VertexBuffer);
 		_device.Indices = part.IndexBuffer;
 
@@ -216,10 +318,6 @@ public class Renderer : IDisposable
 
 		++DrawCalls;
 		Triangles += PrimitiveCountToTriangles(part.PrimitiveType, part.PrimitiveCount);
-
-		// Restore the frame defaults so the next part is unaffected.
-		_effect.LightingEnabled = true;
-		_effect.FogEnabled = true;
 	}
 
 	/// <summary>
@@ -239,7 +337,7 @@ public class Renderer : IDisposable
 
 		// The transform rescales a shared unit cube, so the part's own box says nothing
 		// about where the result lands; the caller has already decided this box is wanted.
-		DrawMeshPart(_boxLines, BuildBoxTransform(box), _boxMaterial, false);
+		DrawMeshPart(_boxLines, BuildBoxTransform(box), null, _boxMaterial, false);
 	}
 
 	/// <summary>
@@ -247,13 +345,15 @@ public class Renderer : IDisposable
 	/// still applies so depth reads correctly, but lighting and texture are replaced by
 	/// <paramref name="color"/> — sampling the level's textures turns the edges into noise.
 	/// Culling is left to the caller's own visibility decision, so the wireframe always
-	/// matches the geometry that would have been drawn.
+	/// matches the geometry that would have been drawn. A skinned part still deforms with
+	/// <paramref name="boneTransforms"/>, so the wireframe shows the posed geometry rather
+	/// than the bind pose.
 	/// </summary>
-	public void DrawMeshPartWireframe(DrMeshPart part, Matrix transform, Color color)
+	public void DrawMeshPartWireframe(DrMeshPart part, Matrix transform, Color color, Matrix[] boneTransforms = null)
 	{
 		EnsureFrameOpen(nameof(DrawMeshPartWireframe));
 
-		if (part == null || part.VertexBuffer == null || part.IndexBuffer == null)
+		if (!IsDrawable(part))
 		{
 			return;
 		}
@@ -267,7 +367,7 @@ public class Renderer : IDisposable
 		_wireframeMaterial.DepthStencilState = source?.DepthStencilState ?? DepthStencilState.Default;
 		_wireframeMaterial.RasterizerState = _wireframeRasterizerState;
 
-		DrawMeshPart(part, transform, _wireframeMaterial);
+		DrawMeshPart(part, transform, boneTransforms, _wireframeMaterial);
 	}
 
 	/// <summary>
@@ -358,6 +458,7 @@ public class Renderer : IDisposable
 	public void Dispose()
 	{
 		_effect.Dispose();
+		_skinnedEffect.Dispose();
 		_boxLines?.Dispose();
 		_boxLines = null;
 		_wireframeRasterizerState?.Dispose();

@@ -1,5 +1,4 @@
 ﻿using DigitalRiseModel;
-using DigitalRiseModel.Animation;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Graphics.PackedVector;
@@ -8,26 +7,13 @@ using OpenGothic.Vertices;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using ZenKit;
 
 namespace OpenGothic;
 
 partial class Assets
 {
-	private class ModelResult
-	{
-		public DrModel Model { get; }
-		public DrModelBone[] OriginalBones { get; }
-
-		public ModelResult(DrModel model, DrModelBone[] originalBones)
-		{
-			Model = model ?? throw new ArgumentNullException(nameof(model));
-			OriginalBones = originalBones;
-		}
-	}
-
-	private DrMeshPart CreatePart(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, IMultiResolutionSubMesh zkSubMesh, Matrix[] inverseBindMatrices = null)
+	private DrMeshPart CreatePart(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, IMultiResolutionSubMesh zkSubMesh, Matrix[] bindTransforms, Dictionary<int, int> skinMap)
 	{
 		IMeshBuilder meshBuilder;
 		if (zkSkinnedMesh == null)
@@ -49,84 +35,7 @@ partial class Assets
 		}
 		else
 		{
-			var skinMap = new Dictionary<int, int>();
-
-			var nodes = zkSkinnedMesh.Nodes;
-			for (var i = 0; i < nodes.Count; ++i)
-			{
-				skinMap[nodes[i]] = i;
-			}
-
-			var mb = new MeshBuilderS();
-
-			var wedges = zkSubMesh.Wedges;
-			var zkWeights = zkSkinnedMesh.Weights;
-			for (var i = 0; i < wedges.Count; ++i)
-			{
-				var wedge = wedges[i];
-
-				var blendIndices = Vector4.Zero;
-				var blendWeights = Vector4.Zero;
-				var pos0 = Vector3.Zero;
-				var pos1 = Vector3.Zero;
-				var pos2 = Vector3.Zero;
-				var pos3 = Vector3.Zero;
-
-				var weight = zkWeights[wedge.Index];
-
-				pos0 = weight[0].Position.ToXna();
-				pos0 = Vector3.Transform(pos0, inverseBindMatrices[weight[0].NodeIndex]);
-				blendIndices.X = skinMap[weight[0].NodeIndex];
-				blendWeights.X = weight[0].Weight;
-
-				if (weight.Count > 1)
-				{
-					pos1 = weight[1].Position.ToXna();
-					pos1 = Vector3.Transform(pos1, inverseBindMatrices[weight[1].NodeIndex]);
-					blendIndices.Y = skinMap[weight[1].NodeIndex];
-					blendWeights.Y = weight[1].Weight;
-				}
-
-				if (weight.Count > 2)
-				{
-					pos2 = weight[2].Position.ToXna();
-					pos2 = Vector3.Transform(pos2, inverseBindMatrices[weight[2].NodeIndex]);
-					blendIndices.Z = skinMap[weight[2].NodeIndex];
-					blendWeights.Z = weight[2].Weight;
-				}
-
-				if (weight.Count > 3)
-				{
-					pos3 = weight[3].Position.ToXna();
-					pos3 = Vector3.Transform(pos3, inverseBindMatrices[weight[3].NodeIndex]);
-					blendIndices.W = skinMap[weight[3].NodeIndex];
-					blendWeights.W = weight[3].Weight;
-				}
-
-				var sum = blendWeights.X + blendWeights.Y + blendWeights.Z + blendWeights.W;
-				blendWeights.X /= sum;
-				blendWeights.Y /= sum;
-				blendWeights.Z /= sum;
-				blendWeights.W /= sum;
-
-				var blendedPosition = pos0 * blendWeights.X + pos1 * blendWeights.Y + pos2 * blendWeights.Z + pos3 * blendWeights.W;
-
-				var vertex = new VertexSkinned(blendedPosition, wedge.Normal.ToXna(), wedge.Texture.ToXna(), new Byte4(blendIndices), blendWeights);
-
-				mb.AddVertex(vertex);
-			}
-
-			// Set indices/weights
-			for (var i = 0; i < zkWeights.Count; ++i)
-			{
-				var weights = zkWeights[i];
-				for (var j = 0; j < weights.Count; ++j)
-				{
-					var weight = weights[j];
-				}
-			}
-
-			meshBuilder = mb;
+			meshBuilder = CreateSkinnedBuilder(zkSkinnedMesh, zkSubMesh, bindTransforms, skinMap);
 		}
 
 		var triangles = zkSubMesh.Triangles;
@@ -159,239 +68,310 @@ partial class Assets
 		return result;
 	}
 
-	private DrMesh CreateMesh(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, Matrix[] zkHierarchy = null)
+	/// <summary>
+	/// Rebuilds the vertices of a skinned sub-mesh.
+	/// <para>
+	/// A weight stores its position in its own bone's space, and every weight of one
+	/// vertex resolves to the same model-space point, so the bind position is recovered by
+	/// pushing a weight position through that bone's absolute bind transform. The mesh's
+	/// own position array cannot be used: for skinned meshes it holds values that are not
+	/// vertex positions at all.
+	/// </para>
+	/// <para>
+	/// Weights address hierarchy node indices, while the blend indices handed to the GPU
+	/// address the skin's joint array, so <paramref name="skinMap"/> translates between
+	/// the two.
+	/// </para>
+	/// </summary>
+	private static MeshBuilderS CreateSkinnedBuilder(ISoftSkinMesh zkSkinnedMesh, IMultiResolutionSubMesh zkSubMesh, Matrix[] bindTransforms, Dictionary<int, int> skinMap)
+	{
+		var mb = new MeshBuilderS();
+
+		var wedges = zkSubMesh.Wedges;
+		var zkWeights = zkSkinnedMesh.Weights;
+
+		for (var i = 0; i < wedges.Count; ++i)
+		{
+			var wedge = wedges[i];
+			var weight = zkWeights[wedge.Index];
+
+			// The vertex format has four blend slots; real data never exceeds three.
+			var count = Math.Min(weight.Count, 4);
+
+			var position = Vector3.Zero;
+			var blendIndices = Vector4.Zero;
+			var blendWeights = Vector4.Zero;
+
+			for (var j = 0; j < count; ++j)
+			{
+				var item = weight[j];
+
+				// One weight is enough for the position: they all agree. Blending them would
+				// only add rounding error.
+				if (j == 0)
+				{
+					position = Vector3.Transform(item.Position.ToXna(), bindTransforms[item.NodeIndex]);
+				}
+
+				var boneIndex = skinMap[item.NodeIndex];
+				switch (j)
+				{
+					case 0:
+						blendIndices.X = boneIndex;
+						blendWeights.X = item.Weight;
+						break;
+					case 1:
+						blendIndices.Y = boneIndex;
+						blendWeights.Y = item.Weight;
+						break;
+					case 2:
+						blendIndices.Z = boneIndex;
+						blendWeights.Z = item.Weight;
+						break;
+					default:
+						blendIndices.W = boneIndex;
+						blendWeights.W = item.Weight;
+						break;
+				}
+			}
+
+			// SkinnedEffect expects the weights to sum to one.
+			var sum = blendWeights.X + blendWeights.Y + blendWeights.Z + blendWeights.W;
+			if (sum > 0f && !sum.EpsilonEquals(1f))
+			{
+				blendWeights /= sum;
+			}
+
+			var vertex = new VertexSkinned(position, wedge.Normal.ToXna(), wedge.Texture.ToXna(), new Byte4(blendIndices), blendWeights);
+
+			mb.AddVertex(vertex);
+		}
+
+		return mb;
+	}
+
+	private DrMesh CreateMesh(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, Matrix[] bindTransforms = null, Dictionary<int, int> skinMap = null)
 	{
 		var mesh = new DrMesh();
 		foreach (var submesh in zkMesh.SubMeshes)
 		{
-			var meshPart = CreatePart(device, zkSkinnedMesh, zkMesh, submesh, zkHierarchy);
+			var meshPart = CreatePart(device, zkSkinnedMesh, zkMesh, submesh, bindTransforms, skinMap);
 			mesh.MeshParts.Add(meshPart);
 		}
 
 		return mesh;
 	}
 
-	private ModelResult LoadModel(GraphicsDevice device, IModelHierarchy zkHierarchy, IModelMesh zkMesh)
+	/// <summary>
+	/// A skinned mesh plus the hierarchy nodes it deforms across, in blend-index order.
+	/// </summary>
+	private sealed class SkinnedMeshInfo
 	{
-		// Load meshes
-		var meshes = new Dictionary<string, DrMesh>();
+		public DrMesh Mesh { get; }
+		public IReadOnlyList<int> JointNodes { get; }
 
-		var attachments = zkMesh.Attachments;
-		foreach (var pair in attachments)
+		public SkinnedMeshInfo(DrMesh mesh, IReadOnlyList<int> jointNodes)
 		{
-			var mesh = CreateMesh(device, null, pair.Value);
+			Mesh = mesh;
+			JointNodes = jointNodes;
+		}
+	}
 
-			meshes[pair.Key] = mesh;
+	/// <summary>
+	/// Assembles a <see cref="DrModel"/> from a hierarchy and its meshes.
+	/// <para>
+	/// A static mesh is attached to the hierarchy node that carries its name, so the node's
+	/// transform positions it. A skinned mesh cannot be: it deforms across many bones, and
+	/// one bone owns at most one mesh, so each skinned mesh gets a synthetic bone below a
+	/// synthetic root and the real skeleton hangs beside them. The skin still references
+	/// the real bones, which is what makes the deformation follow the skeleton.
+	/// </para>
+	/// </summary>
+	private DrModel LoadModel(GraphicsDevice device, IModelHierarchy zkHierarchy, IModelMesh zkMesh)
+	{
+		// Static meshes are named after the hierarchy node they belong to.
+		var staticMeshes = new Dictionary<string, DrMesh>(StringComparer.OrdinalIgnoreCase);
+		foreach (var pair in zkMesh.Attachments)
+		{
+			staticMeshes[pair.Key] = CreateMesh(device, null, pair.Value);
 		}
 
-		// Load nodes
-		var nodesData = new List<Tuple<DrModelBone, int?>>();
-
+		// One bone per hierarchy node, in hierarchy order, so a weight's node index
+		// addresses this array directly. The nodes are ordered parents-first, so both the
+		// parenting and the bind transforms below can be resolved in a single pass.
 		var nodes = zkHierarchy.Nodes;
+		var bones = new DrModelBone[nodes.Count];
+		var parents = new int[nodes.Count];
+
 		for (var i = 0; i < nodes.Count; ++i)
 		{
 			var node = nodes[i];
 
-			DrMesh mesh = null;
-			DrModelBone bone;
-			if (meshes.TryGetValue(node.Name, out mesh))
+			DrMesh mesh;
+			if (!staticMeshes.TryGetValue(node.Name, out mesh))
 			{
-				bone = new DrModelBone(node.Name, mesh);
-			}
-			else
-			{
-				bone = new DrModelBone(node.Name);
+				mesh = null;
 			}
 
-			var transform = node.Transform.ToXna();
-			bone.DefaultPose = new SrtTransform(transform);
+			var bone = new DrModelBone(node.Name, mesh);
+			bone.DefaultPose = new SrtTransform(node.Transform.ToXna());
 
+			// The root offset lifts the model so its lowest point sits on the origin: an
+			// actor's bind pose is authored around the hips, with the feet below y = 0.
 			if (i == 0)
 			{
 				bone.DefaultPose.Translation += zkHierarchy.RootTranslation.ToXna();
 			}
 
-			nodesData.Add(new Tuple<DrModelBone, int?>(bone, node.ParentIndex == -1 ? null : node.ParentIndex));
+			bones[i] = bone;
+			parents[i] = node.ParentIndex;
 		}
 
-		// Set children
-		for (var i = 0; i < nodesData.Count; ++i)
+		for (var i = 0; i < bones.Length; ++i)
 		{
-			var children = new List<DrModelBone>();
-			for (var j = 0; j < nodesData.Count; ++j)
+			List<DrModelBone> children = null;
+			for (var j = 0; j < bones.Length; ++j)
 			{
-				if (i == j)
+				if (parents[j] == i)
 				{
-					continue;
-				}
-
-				if (nodesData[j].Item2 == i)
-				{
-					children.Add(nodesData[j].Item1);
+					children ??= new List<DrModelBone>();
+					children.Add(bones[j]);
 				}
 			}
 
-			if (children.Count > 0)
+			if (children != null)
 			{
-				nodesData[i].Item1.Children = children.ToArray();
+				bones[i].Children = children.ToArray();
 			}
 		}
 
-		var originalBones = (from nd in nodesData select nd.Item1).ToArray();
-
-		var root = originalBones[0];
-
-		var zkMeshes = zkMesh.Meshes;
-		if (zkMeshes.Count > 0)
+		// Absolute bind transforms, in hierarchy order. Computed here rather than through
+		// DrModel, whose bone numbering is a depth-first traversal order and therefore does
+		// not match the hierarchy order the weights use.
+		var bindTransforms = new Matrix[bones.Length];
+		for (var i = 0; i < bones.Length; ++i)
 		{
-			// Build inverse bind matrices for the whole bones hierarchy
-			var imb = new Matrix[originalBones.Length];
+			var local = bones[i].CalculateDefaultLocalTransform();
+			bindTransforms[i] = parents[i] < 0 ? local : local * bindTransforms[parents[i]];
+		}
 
-			var tempModel = new DrModel(root);
-			tempModel.CopyAbsoluteBoneTransformsTo(imb);
+		var skinnedMeshes = new List<SkinnedMeshInfo>();
 
-			for (var i = 0; i < imb.Length; ++i)
-			{
-				// imb[i] = Matrix.Invert(imb[i]);
-			}
-
-			// Create new root
+		var root = bones[0];
+		var zkSkinnedMeshes = zkMesh.Meshes;
+		if (zkSkinnedMeshes.Count > 0)
+		{
 			root = new DrModelBone("_ROOT");
 
 			var children = new List<DrModelBone>();
 
-			// Load animated meshes
-			for (var i = 0; i < zkMeshes.Count; ++i)
+			for (var i = 0; i < zkSkinnedMeshes.Count; ++i)
 			{
-				var zkSkinnedMesh = zkMeshes[i];
-				var meshImb = new Matrix[zkSkinnedMesh.Nodes.Count];
-				for (var j = 0; j < meshImb.Length; ++j)
+				var zkSkinnedMesh = zkSkinnedMeshes[i];
+
+				// Every node a weight mentions must be a joint, so the skin's joint array is
+				// built from the mesh's node list first and any remaining weight nodes after.
+				var jointNodes = new List<int>();
+				var blendIndexByNode = new Dictionary<int, int>();
+
+				foreach (var nodeIndex in zkSkinnedMesh.Nodes)
 				{
-					meshImb[j] = imb[zkSkinnedMesh.Nodes[j]];
+					if (blendIndexByNode.TryAdd(nodeIndex, jointNodes.Count))
+					{
+						jointNodes.Add(nodeIndex);
+					}
 				}
 
-				var mesh = CreateMesh(device, zkSkinnedMesh, zkSkinnedMesh.Mesh, imb);
-
-				// Store joint bones
-				var joints = new List<DrModelBone>();
-
-				var zkMeshNodes = zkSkinnedMesh.Nodes;
-				for (var j = 0; j < zkMeshNodes.Count; ++j)
+				foreach (var vertexWeights in zkSkinnedMesh.Weights)
 				{
-					joints.Add(originalBones[zkMeshNodes[j]]);
+					foreach (var weight in vertexWeights)
+					{
+						if (blendIndexByNode.TryAdd(weight.NodeIndex, jointNodes.Count))
+						{
+							jointNodes.Add(weight.NodeIndex);
+						}
+					}
 				}
-				mesh.Tag = joints;
 
-				var meshNode = new DrModelBone($"_MESH{i}", mesh);
-				children.Add(meshNode);
+				if (jointNodes.Count > SkinnedEffect.MaxBones)
+				{
+					throw new NotSupportedException(
+						$"Skinned mesh {i} of this model has {jointNodes.Count} joints, but SkinnedEffect supports {SkinnedEffect.MaxBones}.");
+				}
+
+				var mesh = CreateMesh(device, zkSkinnedMesh, zkSkinnedMesh.Mesh, bindTransforms, blendIndexByNode);
+
+				skinnedMeshes.Add(new SkinnedMeshInfo(mesh, jointNodes));
+
+				children.Add(new DrModelBone($"_MESH{i}", mesh));
 			}
 
-			children.Add(originalBones[0]);
+			children.Add(bones[0]);
 
 			root.Children = children.ToArray();
 		}
 
 		var result = new DrModel(root);
 
-		// Finally update the skins
-		if (zkMeshes.Count > 0)
+		// Now that the parts exist, give each skinned mesh its skin. The GPU is handed
+		// inverseBind * boneWorld, so this must be the inverse of the bind pose.
+		for (var i = 0; i < skinnedMeshes.Count; ++i)
 		{
-			var boneTransforms = new Matrix[result.Bones.Length];
-			result.CopyAbsoluteBoneTransformsTo(boneTransforms);
-			for (var i = 0; i < result.Meshes.Length; ++i)
+			var info = skinnedMeshes[i];
+
+			var joints = new DrSkinJoint[info.JointNodes.Count];
+			for (var j = 0; j < joints.Length; ++j)
 			{
-				var mesh = result.Meshes[i];
+				var nodeIndex = info.JointNodes[j];
+				joints[j] = new DrSkinJoint(bones[nodeIndex], Matrix.Invert(bindTransforms[nodeIndex]));
+			}
 
-				if (mesh.Tag != null)
-				{
-					var joints = (List<DrModelBone>)mesh.Tag;
-
-					var jointsData = new List<DrSkinJoint>();
-					for (var j = 0; j < joints.Count; ++j)
-					{
-						// var joint = new DrSkinJoint(joints[j], Matrix.Identity);
-						var joint = new DrSkinJoint(joints[j], Matrix.Invert(boneTransforms[joints[j].Index]));
-						jointsData.Add(joint);
-					}
-
-					var skin = new DrSkin(i, jointsData.ToArray());
-					for (var j = 0; j < mesh.MeshParts.Count; ++j)
-					{
-						mesh.MeshParts[j].Skin = skin;
-					}
-
-					mesh.Tag = null;
-				}
+			var skin = new DrSkin(i, joints);
+			foreach (var part in info.Mesh.MeshParts)
+			{
+				part.Skin = skin;
 			}
 		}
 
-		return new ModelResult(result, originalBones);
+		return result;
 	}
 
+	/// <summary>
+	/// Loads a model by name. A self-contained <c>.MDL</c> carries its own hierarchy and
+	/// mesh and is preferred; otherwise the skeleton <c>.MDH</c> and mesh <c>.MDM</c> pair
+	/// is used. Names may be given with or without an extension.
+	/// </summary>
 	private DrModel LoadModel(GraphicsDevice device, string name)
 	{
-		name = name.ToUpper();
-		var record = GetLastRecord(name);
+		var stem = Path.GetFileNameWithoutExtension(name).ToUpper();
 
-		var zkScript = new ModelScript(record.Node.Buffer);
+		IModelHierarchy zkHierarchy;
+		IModelMesh zkMesh;
 
-		var hierarchyName = Path.ChangeExtension(name, "MDH");
-		var zkHierarchy = new ModelHierarchy(GetLastRecord(hierarchyName).Node.Buffer);
-
-		var meshName = Path.ChangeExtension(zkScript.SkeletonName, "MDM");
-		var zkMesh = new ZenKit.ModelMesh(GetLastRecord(meshName).Node.Buffer);
-
-		var modelInfo = LoadModel(device, zkHierarchy, zkMesh);
-
-		var nameNoExt = Path.GetFileNameWithoutExtension(name);
-
-		modelInfo.Model.Animations = new Dictionary<string, AnimationClip>();
-
-		var zkAnimations = zkScript.Animations;
-		for (var i = 0; i < zkAnimations.Count; ++i)
+		var mdlName = stem + ".MDL";
+		if (_allRecords.ContainsKey(mdlName))
 		{
-			var animation = zkAnimations[i];
+			var mdl = new ZenKit.Model(GetLastRecord(mdlName).Node.Buffer);
+			zkHierarchy = mdl.Hierarchy;
+			zkMesh = mdl.Mesh;
+		}
+		else
+		{
+			var mdhName = stem + ".MDH";
+			var mdmName = stem + ".MDM";
 
-			var animationName = nameNoExt + "-" + animation.Name + ".MAN";
-
-			var zkAnimation = new ModelAnimation(GetLastRecord(animationName).Node.Buffer);
-
-			var timeStep = TimeSpan.FromSeconds(1.0f / animation.Fps);
-
-			var channels = new List<AnimationChannel>();
-
-			var zkAnimationNodeIndices = zkAnimation.NodeIndices;
-
-			var samples = zkAnimation.Samples;
-			for (var k = 0; k < zkAnimationNodeIndices.Count; ++k)
+			if (!_allRecords.ContainsKey(mdhName) || !_allRecords.ContainsKey(mdmName))
 			{
-				var bone = modelInfo.OriginalBones[zkAnimationNodeIndices[k]];
-
-				var keyframes = new List<AnimationChannelKeyframe>();
-				var time = TimeSpan.Zero;
-				for (var j = 0; j < zkAnimation.FrameCount; ++j)
-				{
-					var pos = k + j * zkAnimationNodeIndices.Count;
-					var sample = samples[pos];
-
-					time += timeStep;
-					var keyframe = new AnimationChannelKeyframe(time, new SrtTransform(sample.Position.ToXna(), sample.Rotation.ToXna(), bone.DefaultPose.Scale));
-
-					keyframes.Add(keyframe);
-				}
-
-				var channel = new AnimationChannel(bone.Index, keyframes.ToArray());
-				channels.Add(channel);
+				throw new InvalidOperationException($"Model '{stem}' has neither a .MDL nor a .MDH/.MDM pair.");
 			}
 
-			if (channels.Count > 0)
-			{
-				var clip = new AnimationClip(animation.Name, zkAnimation.FrameCount * timeStep, channels.ToArray());
-				modelInfo.Model.Animations[clip.Name] = clip;
-			}
+			zkHierarchy = new ModelHierarchy(GetLastRecord(mdhName).Node.Buffer);
+			zkMesh = new ZenKit.ModelMesh(GetLastRecord(mdmName).Node.Buffer);
 		}
 
-		return modelInfo.Model;
+		// Animation clips are a separate task (C2); the .MDL script that lists them does not
+		// parse for these models, so there is nothing to attach yet.
+		return LoadModel(device, zkHierarchy, zkMesh);
 	}
 
 	private DrMesh LoadMultiMesh(GraphicsDevice device, string name)

@@ -11,19 +11,20 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 ## Status snapshot
 
 - Data readers exist: VDF mounting/record index, texture loading, ZEN world mesh
-  + static vob instancing (`Assets.World.cs`), MDL model + animation loading
-  (`Assets.Model.cs`).
+  + static vob instancing (`Assets.World.cs`), MDL model loading (`Assets.Model.cs`).
 - Application host exists: `OgGame` window + `Update`/`Draw` loop publishes
   `OG.GraphicsDevice`.
 - Logging exists: `Log.Info/Warning/Error` to console and `log.txt`, with ZenKit
   messages routed in.
 - Command line parsed and validated: `-g`, `-game:`, `-w`, `-nomenu`, `-devmode`,
   `-nocull`/`-cull:` exposed via `CommandLine.Instance`. Debug switches are pushed into the
-  static `DebugSettings`.
+  static `DebugSettings`. Inspecting a single asset is done with `-cam:`, `-lookat:` and
+  `-model:`/`-modeldist:`; `-screenshot:`/`-screenshotframe:` write a PNG straight from the
+  backbuffer, which is the only capture that works here (an OS-level window grab is black).
 - Settings load from `SystemPack.ini`/`Gothic.ini` plus a user override file, with
   typed accessors and persistence.
-- Unit test project (`OpenGothic.Tests`, xunit) covers INI, settings and command line;
-  hermetic, no game installation required.
+- Unit test project (`OpenGothic.Tests`, xunit) covers INI, settings, camera and command
+  line; hermetic, no game installation required.
 - Camera exists: view/projection from FOV and near/far, RHS world space.
 - Static world renders with a gradient sky dome and distance fog. `Renderer` is a
   low-level drawing service (`BeginFrame`, `Clear`, `DrawMeshPart`, `EndFrame`) that owns no
@@ -32,16 +33,22 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   culling and traversal, `Sky` owns its own mesh part. Materials live on the mesh part's
   `DrMeshPartTag`, so `customMaterial` is usually null except for debug drawing. No
   vertex/texture UV flips. Reused state, no per-frame allocations.
-- No input, physics, audio, or scripting yet.
+- Models render: `ModelNode` holds a `DrModelInstance`; `DrawMeshPart` picks the static or
+  skinned path from whether the part carries a skin, and a part with a skin throws if it is
+  drawn without its bone transforms. Model vobs in the ZEN become nodes; use
+  `-nomodels`/`-models:` to disable them. Bind transforms, root translation and the synthetic
+  `_ROOT` arrangement are specified in
+  `Documentation/Specifications/gothic-model-format.md`.
+- No animation playback yet. No input, physics, audio, or scripting yet.
 - UI exists: Myra `Desktop` rooted at a `Hud` panel with two independently anchored blocks
   — an always-visible `Controls` list (bottom-right) and a toggleable `DebugOverlay`
   (top-left, F1) showing FPS, camera position, draw-call and triangle counts and the active
   debug views. Layouts are `.xmmp` exported with `myra-export`; all UI lives in
   `OpenGothic/UI/`.
 - Debug views: F2 toggles wireframe, F3 toggles bounding boxes; independent of F1 and off by
-  default.
+  default. Both can be started on from the command line with `-wireframe`/`-bounds`.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
-  Current milestone: **C — Models and animation**.
+  **C1 (Model rendering) complete.** Current milestone: **C — Models and animation**.
 
 ---
 
@@ -117,31 +124,53 @@ toggleable (F2/F3), off by default, with the active views reported in the overla
 
 ## Milestone C — Models and animation
 
-### C1. Model rendering
+### C1. Model rendering — DONE
 Render `DrModel` hierarchies with `SkinnedEffect`/`BasicEffect`; map `DrMeshPart` +
 `DrMeshPartTag` material to effects.
 **Done when:** a static MDL model appears correctly placed and scaled in a world.
 
-Known from measuring real data (see `Documentation/` before starting):
+Measured from real data — see
+[Documentation/Specifications/gothic-model-format.md](Documentation/Specifications/gothic-model-format.md)
+for the full write-up:
 
+- A level names a model in the authoring format (`.ASC`/`.MDS`); the file on disk is
+  `STEM.MDL`, or the `STEM.MDH` + `STEM.MDM` pair. Only the stem is meaningful.
 - `ISoftSkinWeight.NodeIndex` is a **hierarchy** node index, not an index into
-  `ISoftSkinMesh.Nodes`.
+  `ISoftSkinMesh.Nodes`. The weight node index must be translated to the skin's joint slot
+  before being handed to the GPU.
 - Weight positions are bone-local and all weights of one vertex resolve to the same
   model-space point, so the bind position must be rebuilt from the weights.
 - `SoftSkinMesh.Mesh.Positions` is unreliable for skinned meshes (garbage bounding boxes),
   so it cannot supply the bind position.
-- `DrModel` composes `local * parentWorld`, and `DrModelInstance` expects
-  `InverseBindTransform * worldBone`; the inverse bind must be the *inverted* bind
-  transform, not identity.
-- `SkinnedEffect` supports 72 bones; a skeleton beyond that needs a custom effect.
+- Absolute bind transforms must be composed in **hierarchy order** as
+  `local * parentBind` (row-vector). The opposite order gives a ~23-unit average spread
+  between a vertex's own weights.
+- `RootTranslation` belongs on the **root bone's default pose**, not in the bind matrices.
+  With it there, actor feet land at y ≈ 0; props are unaffected because their offset is
+  zero.
+- `DrModel`/`DrModelInstance` compose `inverseBind * boneWorld`, so the joint stores
+  `Matrix.Invert(bindTransform)`, not the bind transform itself.
+- `SkinnedEffect` supports 72 bones. The shipped `newworld.zen` models top out at 36
+  joints per mesh and 47 bones total, so no custom effect is needed.
 
-Skinned parts also need a culling story: `part.BoundingBox` is the bind-pose box, so an
-animated limb can leave it. Expect a padded or skeleton-derived box, or `cull: false`.
+Skinned parts cull like any other part: their `DrMeshPart.BoundingBox` is built from the
+bind positions the loader rebuilds, so it describes exactly what is drawn in the bind pose.
+
+See [Documentation/README.md](Documentation/README.md#models) for the implemented render
+path and the debug switches used to inspect a model.
 
 ### C2. Animation playback
 Play `AnimationClip`s from loaded models with correct looping and blending between
 clips.
-**Done when:** a model plays an idle/animation clip at the right speed.
+
+A skinned part's box is its **bind pose**, which stops being true once a clip moves the
+skeleton: a swinging limb leaves the box and gets frustum-culled. Playing a clip must
+therefore grow each skinned part's `BoundingBox` to cover the whole clip — a per-part update,
+with no change to the draw path. Compute it from the clip's bone poses (or precompute a
+union per clip), not by disabling culling.
+
+**Done when:** a model plays an idle/animation clip at the right speed without any limb
+vanishing at the edge of the view.
 
 ### C3. Actor placement
 Place hero/NPC/object models at ZEN vob transforms, including attach points and

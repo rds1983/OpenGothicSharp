@@ -99,19 +99,62 @@ public class WorldRenderer : IDisposable
 			case MeshNode mesh:
 				DrawMeshPart(renderer, mesh.Mesh, mesh.Transform, debug);
 				break;
+
+			case ModelNode model:
+				DrawModel(renderer, model, debug);
+				break;
+		}
+	}
+
+	/// <summary>
+	/// Draws a placed model. A static part is positioned by its own bone, exactly as a
+	/// hand-authored prop model expects; a skinned part is deformed by the skeleton and
+	/// placed by the node transform alone, because its vertices are already in model space.
+	/// <see cref="Renderer.DrawMeshPart"/> picks the path from whether the part carries a
+	/// skin, so one call covers both.
+	/// </summary>
+	private static void DrawModel(Renderer renderer, ModelNode node, DebugDraw debug)
+	{
+		var instance = node.Instance;
+		var model = instance.Model;
+
+		foreach (var mesh in model.Meshes)
+		{
+			foreach (var part in mesh.MeshParts)
+			{
+				Matrix transform;
+				Matrix[] boneTransforms = null;
+
+				if (part.Skin != null)
+				{
+					transform = node.Transform;
+					boneTransforms = instance.GetSkinTransforms(part.Skin.SkinIndex);
+				}
+				else
+				{
+					transform = instance.GetBoneGlobalTransform(mesh.ParentBone.Index) * node.Transform;
+				}
+
+				DrawMeshPart(renderer, part, transform, boneTransforms, debug);
+			}
+		}
+	}
+
+	private static void DrawMeshPart(Renderer renderer, DrMeshPart part, Matrix transform, Matrix[] boneTransforms, DebugDraw debug)
+	{
+		if (debug?.Wireframe == true)
+		{
+			renderer.DrawMeshPartWireframe(part, transform, debug.WireframeColor, boneTransforms);
+		}
+		else
+		{
+			renderer.DrawMeshPart(part, transform, boneTransforms);
 		}
 	}
 
 	private static void DrawMeshPart(Renderer renderer, DrMeshPart part, Matrix transform, DebugDraw debug)
 	{
-		if (debug?.Wireframe == true)
-		{
-			renderer.DrawMeshPartWireframe(part, transform, debug.WireframeColor);
-		}
-		else
-		{
-			renderer.DrawMeshPart(part, transform);
-		}
+		DrawMeshPart(renderer, part, transform, null, debug);
 	}
 
 	public void Dispose()

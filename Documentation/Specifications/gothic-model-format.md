@@ -1,0 +1,161 @@
+# Model format (`.MDL`, `.MDH`, `.MDM`)
+
+How static and skinned models are stored and how they have to be assembled before a stock
+MonoGame `SkinnedEffect` can draw them. Written from the parsed structure and from measuring
+the shipped data, not from any binary.
+
+## Purpose
+
+A model is a skeleton plus one or more meshes. Two on-disk shapes exist:
+
+| Shape | Contents | Notes |
+| --- | --- | --- |
+| `.MDL` | hierarchy **and** mesh in one file | Self-contained. Several objects have only this. |
+| `.MDH` + `.MDM` | hierarchy in the former, mesh in the latter | Skeleton/mesh split, often shared. |
+
+A visual object in a level names a model in the **authoring** format, which is not the file
+on disk: `.ASC` and `.MDS` names both resolve to the same model. Only the stem is
+meaningful, so a loader resolves `STEM.MDL` first and falls back to `STEM.MDH` +
+`STEM.MDM`. In the shipped `newworld.zen`, all 63 distinct visual model names resolve this
+way — 51 through `.MDL`, 12 through `.MDH`/`.MDM`, none unresolved.
+
+The model script (`.MDS`, animation names and frame rates) does **not** parse for these
+files, so animations cannot be reached through it.
+
+## Hierarchy
+
+The hierarchy is a flat array of nodes; each node stores a name, its parent index (-1 for
+the root) and a local transform (translation, rotation, scale).
+
+Observed on all 63 `newworld.zen` models:
+
+- exactly one root, always at index 0;
+- every parent index is **smaller** than the child's index, i.e. the array is already in
+  parents-first order — no sorting or tree walking is needed;
+- node names are unique within a model;
+- the root node's own translation is always zero. The hierarchy also carries a separate
+  **root translation** offset, and that one is generally non-zero.
+
+### Root translation
+
+For actor-shaped models the bind pose is authored around the hips, so the mesh extends
+below y = 0. The hierarchy's root translation lifts the model so its lowest point sits on
+the model origin, and `rootTranslation.Y ≈ -bboxMinY` to within a couple of units:
+
+| model | root translation Y | bbox min Y | sum |
+| --- | --- | --- | --- |
+| `ARMOR_PRISONER` | 98.149 | -98.586 | -0.437 |
+| `ORC_BODY` | 100.39 | -99.383 | 1.007 |
+| `GIANT_RAT_BODY` | 31.717 | -30.106 | 1.611 |
+| `SHEEP_BODY` / `HAMMEL_BODY` | 67.774 | -67.188 | 0.586 |
+
+Hand-authored prop models (benches, beds, chests) have a zero root translation and a
+bounding box that already starts at y = 0.
+
+The consequence is a placement rule, not a rendering one: apply the root translation to
+the **default pose of the root bone**, and the same bone plus skin data then places both
+actors and props correctly with feet/base on the object origin. Applying it to a bind
+matrix used for skinning instead double-counts it.
+
+A measured check: with the offset on the root bone, `ARMOR_PRISONER` occupies
+`y ∈ [-0.44, 165.6]` and `SHEEP_BODY` `y ∈ [0.59, 95.6]`; without it, both sink by their
+root-translation amount. Props are identical either way because their offset is zero.
+
+## Absolute bind transforms
+
+A weight position is expressed in its own bone's space, so producing a model-space vertex
+requires that bone's **absolute bind transform**. Building it is a single pass in hierarchy
+order, because parents precede children:
+
+```
+absolute[0] = local[0]
+absolute[i] = local[i] * absolute[parent[i]]
+```
+
+(`local * parent` in row-vector convention, matching the vertex transform
+`Vector3.Transform(position, absolute)`.)
+
+This order is not a matter of taste — the opposite order diverges immediately. Measured on
+`ARMOR_PRISONER`'s 183 weighted vertices, "each vertex's weights all resolve to a single
+point" holds with spread **0.0** for `local * parent` and fails with average spread 23.3
+(max 229.4) for `parent * local`. The reconstruction can also be checked against the
+hierarchy's own bounding box: with the correct order it reproduces it exactly (modulo the
+Z mirror), so the two independent descriptions of the model agree.
+
+## Skinned meshes
+
+A skinned mesh stores, per vertex, a small list of (bone index, weight, position) tuples.
+Position is in that bone's space; the weights per vertex sum to 1, and at most **3** are
+used in practice (the shader format provides 4 slots).
+
+Two traps:
+
+- **The bone index is a hierarchy node index**, not an index into the mesh's own node list.
+  Both are usually closely related but are not the same numbering.
+- **The mesh's own vertex position array is unusable** for skinned meshes — its values are
+  not positions (bounding boxes come out around 1e22–1e33). The bind position must be
+  rebuilt from the weights: transform one weight's position by its bone's absolute bind
+  transform. All weights of a vertex agree, so the first is enough; blending them would
+  only add rounding noise.
+- Wedge normals and texture coordinates are still usable as stored. Their indices address
+  the weight array, so a wedge index selects a weight entry.
+
+Blend indices handed to a GPU skin must address the **skin's joint array**, so a loader
+needs a translation from hierarchy node index to joint slot. Building that joint list from
+the mesh's node list first and then appending any remaining weight nodes covers everything
+a weight can mention.
+
+Measured joint counts across `newworld.zen`'s models: at most **36 joints per mesh** and at
+most **47 bones total**. A stock `SkinnedEffect` supports 72, so no model here needs a
+custom effect.
+
+## Static attachments
+
+A mesh file may also carry **attachment** meshes, each named after the hierarchy node that
+positions it. They are ordinary rigid geometry with their own positions, wedge normals and
+UVs.
+
+All 93 attachments in `newworld.zen`'s models match a node name, and node names are unique,
+so the mapping is unambiguous. Most of those nodes carry a real transform, which is why the
+attachment must be attached to the node rather than assumed to sit at the origin.
+
+A model can have both kinds at once (e.g. `BOOK_BLUE` has one attachment plus one skinned
+mesh), so a loader must support a model whose geometry is partly rigid and partly skinned.
+
+## Assembling a model to draw
+
+The draw contract of a stock `SkinnedEffect` is one bone transform per joint, where each is
+`inverseBind * boneWorld`. Fitting Gothic's layout onto that needs two accommodations:
+
+1. **A bone owns at most one mesh.** A skinned mesh spans many bones, so it cannot hang off
+   one of them. Each skinned mesh is given a synthetic bone of its own, all under a
+   synthetic root, with the real skeleton beside them. The mesh is positioned by the
+   identity in that arrangement, because its vertices are already in model space.
+2. **Bone numbering is a depth-first traversal order**, not the hierarchy order the weights
+   use. Since the skin's joint array is explicit, this only matters for looking up the right
+   bone object per node index.
+
+A static part is positioned by its own node's global transform, as a prop model expects.
+
+Textures come from each sub-mesh's material; a part without a texture draws with the white
+fallback rather than failing.
+
+## Culling
+
+A part's box is computed from the vertices as loaded, so for a skinned part it is the bind
+pose. That is correct for what is drawn while nothing animates the skeleton, and the box can
+be used as-is. Animation is what breaks it: a swinging limb leaves the bind-pose box, so
+whatever plays a clip has to grow the box to cover the whole clip. The box lives on the mesh
+part, so this is a per-part update rather than a change to the draw path.
+
+## Edge cases and open questions
+
+- Weight counts per vertex are 1–3 in the shipped data; the format's upper bound is not
+  established.
+- Positions in the weight list are float and already in bone space; no unit conversion
+  appears to be needed (a human actor is ~165 units tall, consistent with 1 unit ≈ 1 cm).
+- Whether a model can reference a skeleton in a *different* `.MDH` (shared skeleton) is not
+  observed here: every model resolves to a self-contained `.MDL` or to its own `.MDH`/`.MDM`
+  pair with matching stems.
+- Animation data is out of scope for this document; the model script does not parse for
+  these files.

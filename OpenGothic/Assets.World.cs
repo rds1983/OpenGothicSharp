@@ -1,4 +1,5 @@
-﻿using Microsoft.Xna.Framework;
+﻿using DigitalRiseModel;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using OpenGothic.Scene;
 using OpenGothic.Utility;
@@ -309,6 +310,46 @@ namespace OpenGothic
 				var vob = top.Item2;
 
 				var transform = vob.Rotation.ToXna() * Matrix.CreateTranslation(vob.Position.ToXna());
+
+				var asModel = vob.Visual as VisualModel;
+				if (asModel != null && DebugSettings.ModelsEnabled)
+				{
+					// A vob's model name comes from the original authoring format, so only
+					// the stem is meaningful; GetModel resolves the actual file. A model that
+					// cannot be loaded is skipped rather than aborting the level, matching how
+					// a missing texture degrades instead of failing the load.
+					DrModel model = null;
+					try
+					{
+						model = GetModel(device, asModel.Name);
+					}
+					catch (Exception ex)
+					{
+						Log.Warning($"Unable to load model '{asModel.Name}': {ex.Message}");
+					}
+
+					if (model != null)
+					{
+						var instance = new DrModelInstance(model);
+
+						// The instance box is in model space; the vob transform places it. A
+						// model with no geometry yields a degenerate box at the vob's own
+						// position, which is still the right cell to register it in.
+						var bb = instance.BoundingBox ?? new BoundingBox(vob.Position.ToXna(), vob.Position.ToXna());
+						var worldBounds = bb.Transform(ref transform);
+
+						var cell = result.FindCellByBox(worldBounds);
+						if (cell != null)
+						{
+							cell.ObjectBounds.Add(worldBounds);
+							cell.Children.Add(new ModelNode
+							{
+								Instance = instance,
+								Transform = transform
+							});
+						}
+					}
+				}
 
 				var asMesh = vob.Visual as VisualMultiResolutionMesh;
 				if (asMesh != null)

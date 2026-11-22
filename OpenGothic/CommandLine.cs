@@ -1,4 +1,6 @@
+using Microsoft.Xna.Framework;
 using System;
+using System.Globalization;
 using System.IO;
 
 namespace OpenGothic;
@@ -19,6 +21,54 @@ public class CommandLine
 	/// resetting a value something else chose.
 	/// </summary>
 	public bool? Cull { get; private set; }
+
+	/// <summary>
+	/// Whether ZEN vobs that carry a model (as opposed to a static mesh) are instantiated.
+	/// Null when the flag was not passed. Useful for telling a model-loading problem apart
+	/// from a static-world one.
+	/// </summary>
+	public bool? Models { get; private set; }
+
+	/// <summary>
+	/// Where to write a PNG of the rendered frame, or null to not capture one. The image is
+	/// read straight from the backbuffer, so it works where an OS screenshot of the window
+	/// yields black for hardware-accelerated content.
+	/// </summary>
+	public string ScreenshotPath { get; private set; }
+
+	/// <summary>
+	/// Which frame to capture, counting from one, so a capture can wait for the world to
+	/// load and the first frames to settle. Null when not specified.
+	/// </summary>
+	public int? ScreenshotFrame { get; private set; }
+
+	/// <summary>
+	/// Camera position as <c>x,y,z</c>, or null to keep the default. Together with
+	/// <see cref="LookAtTarget"/> this parks the view on a known object, which is the
+	/// quickest way to inspect a specific piece of the world.
+	/// </summary>
+	public Vector3? CameraPosition { get; private set; }
+
+	/// <summary>Point the camera looks at as <c>x,y,z</c>, or null to keep the default.</summary>
+	public Vector3? LookAtTarget { get; private set; }
+
+	/// <summary>Whether to start with the wireframe view on. Null leaves it at its default.</summary>
+	public bool? Wireframe { get; private set; }
+
+	/// <summary>Whether to start with the bounding-box view on. Null leaves it at its default.</summary>
+	public bool? Bounds { get; private set; }
+
+	/// <summary>
+	/// A model to place in front of the camera, with or without an extension, or null to
+	/// place none. This is how a model that no world vob uses can still be inspected.
+	/// </summary>
+	public string SpawnModel { get; private set; }
+
+	/// <summary>
+	/// Distance in front of the camera to place <see cref="SpawnModel"/>. Defaults to 400
+	/// world units, which fits an actor-sized model in view.
+	/// </summary>
+	public float? SpawnDistance { get; private set; }
 
 	private bool _invalid;
 
@@ -52,6 +102,18 @@ public class CommandLine
 					result.Cull = false;
 					break;
 
+				case "-nomodels":
+					result.Models = false;
+					break;
+
+				case "-wireframe":
+					result.Wireframe = true;
+					break;
+
+				case "-bounds":
+					result.Bounds = true;
+					break;
+
 				default:
 					if (arg.StartsWith("-game:", StringComparison.OrdinalIgnoreCase))
 					{
@@ -65,6 +127,70 @@ public class CommandLine
 					else if (arg.StartsWith("-cull:", StringComparison.OrdinalIgnoreCase))
 					{
 						result.Cull = result.ParseBool(arg.Substring("-cull:".Length), arg);
+					}
+					else if (arg.StartsWith("-models:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.Models = result.ParseBool(arg.Substring("-models:".Length), arg);
+					}
+					else if (arg.StartsWith("-screenshot:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.ScreenshotPath = arg.Substring("-screenshot:".Length);
+						if (string.IsNullOrEmpty(result.ScreenshotPath))
+						{
+							Log.Error("Option '-screenshot:' requires a file path.");
+							result._invalid = true;
+						}
+					}
+					else if (arg.StartsWith("-screenshotframe:", StringComparison.OrdinalIgnoreCase))
+					{
+						var value = arg.Substring("-screenshotframe:".Length);
+						if (int.TryParse(value, out var frame) && frame > 0)
+						{
+							result.ScreenshotFrame = frame;
+						}
+						else
+						{
+							Log.Error($"Option '-screenshotframe:' requires a positive frame number, got '{value}'.");
+							result._invalid = true;
+						}
+					}
+					else if (arg.StartsWith("-cam:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.CameraPosition = result.ParseVector(arg.Substring("-cam:".Length), arg);
+					}
+					else if (arg.StartsWith("-lookat:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.LookAtTarget = result.ParseVector(arg.Substring("-lookat:".Length), arg);
+					}
+					else if (arg.StartsWith("-wireframe:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.Wireframe = result.ParseBool(arg.Substring("-wireframe:".Length), arg);
+					}
+					else if (arg.StartsWith("-bounds:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.Bounds = result.ParseBool(arg.Substring("-bounds:".Length), arg);
+					}
+					else if (arg.StartsWith("-model:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.SpawnModel = arg.Substring("-model:".Length);
+						if (string.IsNullOrEmpty(result.SpawnModel))
+						{
+							Log.Error("Option '-model:' requires a model name.");
+							result._invalid = true;
+						}
+					}
+					else if (arg.StartsWith("-modeldist:", StringComparison.OrdinalIgnoreCase))
+					{
+						var value = arg.Substring("-modeldist:".Length);
+						if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var distance) && distance > 0f)
+						{
+							result.SpawnDistance = distance;
+						}
+						else
+						{
+							Log.Error($"Option '-modeldist:' requires a positive distance, got '{value}'.");
+							result._invalid = true;
+						}
 					}
 					else
 					{
@@ -84,6 +210,11 @@ public class CommandLine
 		if (Cull.HasValue)
 		{
 			DebugSettings.CullEnabled = Cull.Value;
+		}
+
+		if (Models.HasValue)
+		{
+			DebugSettings.ModelsEnabled = Models.Value;
 		}
 	}
 
@@ -119,11 +250,28 @@ public class CommandLine
 	}
 
 	private const string Usage =
-		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull]";
+		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] " +
+		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] " +
+		"[-model:<name>] [-modeldist:<n>]";
+
+	private Vector3? ParseVector(string value, string option)
+	{
+		var parts = value.Split(',');
+		if (parts.Length == 3 &&
+			float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x) &&
+			float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y) &&
+			float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var z))
+		{
+			return new Vector3(x, y, z);
+		}
+
+		Log.Error($"Option '{option}' requires three comma-separated numbers, got '{value}'.");
+		_invalid = true;
+		return null;
+	}
 
 	private bool? ParseBool(string value, string option)
-	{
-		if (bool.TryParse(value, out var result))
+	{		if (bool.TryParse(value, out var result))
 		{
 			return result;
 		}
