@@ -159,23 +159,47 @@ bind positions the loader rebuilds, so it describes exactly what is drawn in the
 See [Documentation/README.md](Documentation/README.md#models) for the implemented render
 path and the debug switches used to inspect a model.
 
-### C2. Animation playback
-Play `AnimationClip`s from loaded models with correct looping and blending between
-clips.
+### C2. Animation clips
+Load the animation data a model references and expose it as playable `AnimationClip`s,
+without playing them yet.
 
+C1 deliberately left clip loading out of `LoadModel`: the `.MDL` script that lists clips does
+not parse for the models measured, so the `.MDS`/`.MSB` path has to be established first.
+Start with a data audit of which shipped models actually reference clips and where they live.
+
+**Done when:** a model's clips are enumerated and one clip's frames and bone tracks are
+readable, with an audit of how many shipped models have clips at all.
+
+### C3. Animation playback
+Play `AnimationClip`s on a `DrModelInstance` with correct looping and blending between clips.
+**Done when:** a model plays an idle/animation clip at the right speed and loops without a
+pop.
+
+### C4. Animated culling boxes
 A skinned part's box is its **bind pose**, which stops being true once a clip moves the
 skeleton: a swinging limb leaves the box and gets frustum-culled. Playing a clip must
 therefore grow each skinned part's `BoundingBox` to cover the whole clip — a per-part update,
-with no change to the draw path. Compute it from the clip's bone poses (or precompute a
-union per clip), not by disabling culling.
+with no change to the draw path. Compute it from the clip's bone poses (or precompute a union
+per clip), not by disabling culling.
+**Done when:** no limb vanishes at the edge of the view while a model animates, and an
+off-screen animating model still draws almost nothing.
 
-**Done when:** a model plays an idle/animation clip at the right speed without any limb
-vanishing at the edge of the view.
+### C5. Vob hierarchy and attach points
+C1 places a model vob at its own ZEN rotation/translation, but the vob **hierarchy** is still
+flattened: the child walk in `Assets.World.cs` enqueues each child with the parent's
+transform and then recomputes the child's from its own fields alone, so the parent transform
+is discarded. Nested vobs therefore do not follow their parent.
 
-### C3. Actor placement
-Place hero/NPC/object models at ZEN vob transforms, including attach points and
-scaling.
-**Done when:** multiple animated models stand at their authored positions.
+Separately, `IModelMesh.Attachments` names attach points on a model (93 in the shipped
+`newworld.zen` data). An actor's armour and weapon meshes are meant to follow those named
+nodes, which `ModelNode` cannot express yet.
+
+Add an `AttachNode` that resolves an attach-point name to a model bone and inherits that
+bone's world transform, and compose the parent transform in the vob walk so nested vobs
+inherit it.
+**Done when:** a child vob follows its parent instead of sitting at its own absolute
+position, and a model parented to another model's attach point follows that bone without a
+manual offset.
 
 ---
 
