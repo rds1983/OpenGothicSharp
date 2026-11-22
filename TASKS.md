@@ -23,7 +23,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   typed accessors and persistence.
 - Unit test project (`OpenGothic.Tests`, xunit) covers INI, settings and command line;
   hermetic, no game installation required.
-- No renderer, input, physics, UI, audio, or scripting yet.
+- Camera exists: view/projection from FOV and near/far, RHS world space. No renderer,
+  input, physics, UI, audio, or scripting yet.
 - Milestone A (Foundation) complete. Current milestone: **B — Static world rendering**.
 
 ---
@@ -68,7 +69,7 @@ gitignored; document the required shape instead of committing it.
 
 ## Milestone B — Static world rendering
 
-### B1. Camera and matrices
+### B1. Camera and matrices — DONE
 Implement a camera with `View`/`Projection` (FOV, near/far from `Constants`) and a
 world transform convention (right-handed, Y-up, matching `Mathematics.ToXna`).
 **Done when:** the world grid can be viewed from an arbitrary position/orientation.

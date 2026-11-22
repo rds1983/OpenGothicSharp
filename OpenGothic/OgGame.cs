@@ -8,6 +8,8 @@ public class OgGame : Game
 {
 	private readonly GraphicsDeviceManager _graphics;
 
+	public Camera Camera { get; } = new Camera();
+
 	public OgGame()
 	{
 		_graphics = new GraphicsDeviceManager(this);
@@ -20,6 +22,9 @@ public class OgGame : Game
 		base.Initialize();
 
 		OG.GraphicsDevice = GraphicsDevice;
+
+		Camera.FieldOfView = OG.Settings?.CameraFov ?? Camera.FieldOfView;
+		Camera.SetViewport(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
 	}
 
 	protected override void Update(GameTime gameTime)

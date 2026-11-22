@@ -54,6 +54,10 @@ without breaking one, stop and ask the developer.
 - **UI:** Myra, usability first. Parity comes later.
 - **Visual/UI parity has the lowest priority.** Do not spend time on fidelity before the
   game is playable.
+- **Coordinate systems:** Gothic's game data is left-handed; MonoGame is right-handed. The
+  conversion happens **once, while loading assets**, in `Mathematics.ToXna` (Z is mirrored).
+  Everything past asset loading is right-handed. Do not add per-frame handedness flips in
+  rendering code — if a conversion is missing, fix it where the asset is read.
 - Follow existing code style and patterns. No comments unless they clarify non-obvious
   logic.
 - New subsystems get a short note in `Documentation/`; format/behavior findings go in

@@ -83,12 +83,16 @@ internal static class Mathematics
 	public static Vector2 ToXna(this System.Numerics.Vector2 v) => new Vector2(v.X, v.Y);
 
 	/// <summary>
-	/// Gothic uses left-handed coordinate system, all below transforms change it to right-handed
+	/// Converts Gothic's left-handed game data to MonoGame's right-handed space by mirroring Z.
+	/// This is the single loading-time conversion point: everything past asset loading is RHS.
 	/// </summary>
 	/// <param name="v"></param>
 	/// <returns></returns>
 	public static Vector3 ToXna(this System.Numerics.Vector3 v) => new Vector3(v.X, v.Y, -v.Z);
 
+	/// <summary>
+	/// Converts Gothic's left-handed quaternion to right-handed. See <see cref="ToXna(System.Numerics.Vector3)"/>.
+	/// </summary>
 	public static Quaternion ToXna(this System.Numerics.Quaternion v)
 	{
 		var result = new Quaternion(v.X, v.Y, -v.Z, v.W);
@@ -96,6 +100,9 @@ internal static class Mathematics
 		return result;
 	}
 
+	/// <summary>
+	/// Converts Gothic's left-handed matrix to right-handed. See <see cref="ToXna(System.Numerics.Vector3)"/>.
+	/// </summary>
 	public static Matrix ToXna(this System.Numerics.Matrix4x4 m)
 	{
 		var result = new Matrix(m.M11, m.M12, m.M13, m.M14,

@@ -4,6 +4,8 @@ public static class Constants
 {
 	public const int GridSize = 4;
 	public const float MaxDistance = 20000.0f;
+	public const float NearPlane = 10.0f;
+	public const float FarPlane = MaxDistance;
 	public const float MaxShadowDistance = MaxDistance / 2.0f;
 	public const float FogStart = MaxShadowDistance;
 	public const float FogEnd = MaxDistance;
