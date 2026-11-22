@@ -1,0 +1,42 @@
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
+
+namespace OpenGothic;
+
+public class OgGame : Game
+{
+	private readonly GraphicsDeviceManager _graphics;
+
+	public OgGame()
+	{
+		_graphics = new GraphicsDeviceManager(this);
+		IsMouseVisible = true;
+		Window.Title = $"OpenGothicSharp {OG.Version}";
+	}
+
+	protected override void Initialize()
+	{
+		base.Initialize();
+
+		OG.GraphicsDevice = GraphicsDevice;
+	}
+
+	protected override void Update(GameTime gameTime)
+	{
+		if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed ||
+			Keyboard.GetState().IsKeyDown(Keys.Escape))
+		{
+			Exit();
+		}
+
+		base.Update(gameTime);
+	}
+
+	protected override void Draw(GameTime gameTime)
+	{
+		GraphicsDevice.Clear(Color.CornflowerBlue);
+
+		base.Draw(gameTime);
+	}
+}

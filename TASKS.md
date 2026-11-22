@@ -13,28 +13,31 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - Data readers exist: VDF mounting/record index, texture loading, ZEN world mesh
   + static vob instancing (`Assets.World.cs`), MDL model + animation loading
   (`Assets.Model.cs`).
-- No game loop, renderer, input, physics, UI, audio, or scripting yet.
+- Application host exists: `OgGame` window + `Update`/`Draw` loop publishes
+  `OG.GraphicsDevice`.
+- No renderer, input, physics, UI, audio, or scripting yet.
 - Current milestone: **A — Foundation**.
 
 ---
 
 ## Milestone A — Foundation
 
-### A1. Application skeleton
+### A1. Application skeleton — DONE
 Create a `Microsoft.Xna.Framework.Game` subclass (`OgGame`) that creates a window,
 initializes `GraphicsDevice`, holds `OG.GraphicsDevice`, and runs a fixed
 `Update`/`Draw` loop with an exit hook.
 **Done when:** `dotnet run` opens a window that clears to a color and closes cleanly.
 
-### A2. Command line
-Parse and expose `-g <path>`, `-game:<modfile.ini>`, `-w <world.zen>`, `-nomenu`,
-`-devmode`. Validate the Gothic data folder exists and fail with a clear message.
-**Done when:** flags are readable from game code and bad paths report an actionable error.
-
-### A3. Logging & diagnostics
+### A2. Logging & diagnostics
 Route `OG.LogInfo/LogWarning/LogError` to console and `log.txt`. Initialize the
 logger and ZenKit logging before other subsystems.
 **Done when:** startup and asset-load lines appear in `log.txt`.
+
+### A3. Command line
+Parse and expose `-g <path>`, `-game:<modfile.ini>`, `-w <world.zen>`, `-nomenu`,
+`-devmode`. Validate the Gothic data folder exists and fail with a clear message
+(logged and on console).
+**Done when:** flags are readable from game code and bad paths report an actionable error.
 
 ### A4. Settings file
 Read the game's INI settings (`gothic.ini`/`systempack.ini`) into a typed settings
