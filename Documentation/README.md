@@ -33,6 +33,22 @@ Unknown arguments are logged as warnings. `Validate()` checks that `-g` was give
 the folder contains a `Data` directory. `Main` logs the parsed values, and returns exit
 code 1 with an actionable error if validation fails.
 
+### Settings
+
+`IniFile` (`OpenGothic/IniFile.cs`) is a small INI reader/writer: `;` comments,
+`[SECTION]` headers, `name=value` pairs, case-insensitive section/key lookup, Latin-1
+(Windows-1252) encoding, and `Save()` that rewrites the file.
+
+`Settings` (`OpenGothic/Settings.cs`) layers four INI sources, most-specific first: the
+user file (`Gothic.ini` in the working directory), the installation's
+`system/Gothic.ini`, `system/SystemPack.ini`, then built-in defaults. It exposes typed
+properties (volumes, video brightness/contrast/gamma, mouse sensitivity, camera FOV, FPS
+limit, FPS counter) and generic `GetString/GetInt/GetFloat/Set` accessors. `Set` writes to
+the user file; `Save()` flushes it. `Main` loads settings after command-line validation and
+publishes them via `OG.Settings`.
+
+The user `Gothic.ini` is written to the working directory at runtime and is gitignored.
+
 ### Logging
 
 `Log` (`OpenGothic/Log.cs`) is the single logging entry point and exposes `Log.Info`,
@@ -45,6 +61,18 @@ in `Main` so even a fatal exception is recorded first. `log.txt` is gitignored.
 `ZenKit` ships native libraries and injects a `RuntimeIdentifier` per platform, so the
 project declares `RuntimeIdentifiers` for its supported platforms to keep restore and
 build targets in sync.
+
+## Testing
+
+Unit tests live in `OpenGothic.Tests` (xunit). Run them with:
+
+```bash
+dotnet test OpenGothic.MonoGame.sln
+```
+
+Tests avoid touching the real game installation — they build temporary folders and INI
+files instead. Anything requiring a GPU, a window, or game data is exercised by running
+the app, not by unit tests.
 
 ## Rendering
 

@@ -1,5 +1,6 @@
 ﻿using AssetManagementBase;
 using System;
+using System.IO;
 
 namespace OpenGothic;
 
@@ -34,6 +35,13 @@ internal static class Program
 			}
 
 			Log.Info($"NoMenu: {commandLine.NoMenu}, DevMode: {commandLine.DevMode}");
+
+			var settings = new Settings();
+			settings.Load(commandLine.GothicPath, Directory.GetCurrentDirectory());
+			OG.Settings = settings;
+
+			Log.Info($"Music volume: {settings.MusicVolume}, sound volume: {settings.SoundVolume}");
+			Log.Info($"Camera FOV: {settings.CameraFov}, FPS limit: {settings.FpsLimit}");
 
 			using (var game = new OgGame())
 			{

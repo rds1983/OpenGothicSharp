@@ -19,8 +19,12 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   messages routed in.
 - Command line parsed and validated: `-g`, `-game:`, `-w`, `-nomenu`, `-devmode`
   exposed via `CommandLine.Instance`.
+- Settings load from `SystemPack.ini`/`Gothic.ini` plus a user override file, with
+  typed accessors and persistence.
+- Unit test project (`OpenGothic.Tests`, xunit) covers INI, settings and command line;
+  hermetic, no game installation required.
 - No renderer, input, physics, UI, audio, or scripting yet.
-- Current milestone: **A — Foundation**.
+- Milestone A (Foundation) complete. Current milestone: **B — Static world rendering**.
 
 ---
 
@@ -43,10 +47,16 @@ Parse and expose `-g <path>`, `-game:<modfile.ini>`, `-w <world.zen>`, `-nomenu`
 (logged and on console).
 **Done when:** flags are readable from game code and bad paths report an actionable error.
 
-### A4. Settings file
+### A4. Settings file — DONE
 Read the game's INI settings (`gothic.ini`/`systempack.ini`) into a typed settings
 object with get/set and flush-to-disk, without wiring UI yet.
 **Done when:** known keys load with defaults and changes persist on save.
+
+### A5. Unit test harness — DONE
+Add an xunit test project (`OpenGothic.Tests`) wired into the solution. Tests must be
+hermetic: temp folders and synthetic INI files only, never the real game installation,
+so the suite runs on CI.
+**Done when:** `dotnet test` passes on a machine with no Gothic installation.
 
 ---
 

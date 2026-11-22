@@ -5,6 +5,8 @@ VisualStudioVersion = 18.1.11304.174
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenGothic.MonoGame", "OpenGothic\OpenGothic.MonoGame.csproj", "{34CF44C0-861C-3373-CECE-D6594D0A3B4E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenGothic.Tests", "OpenGothic.Tests\OpenGothic.Tests.csproj", "{D843CFAA-5D94-4593-AC91-BB3361CA11D2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{34CF44C0-861C-3373-CECE-D6594D0A3B4E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{34CF44C0-861C-3373-CECE-D6594D0A3B4E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{34CF44C0-861C-3373-CECE-D6594D0A3B4E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D843CFAA-5D94-4593-AC91-BB3361CA11D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D843CFAA-5D94-4593-AC91-BB3361CA11D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D843CFAA-5D94-4593-AC91-BB3361CA11D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D843CFAA-5D94-4593-AC91-BB3361CA11D2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

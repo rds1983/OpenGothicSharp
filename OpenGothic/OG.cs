@@ -8,6 +8,8 @@ public static class OG
 {
 	private static GraphicsDevice _device;
 
+	public static Settings Settings { get; internal set; }
+
 	public static string Version
 	{
 		get

@@ -265,3 +265,6 @@ LOCAL_PATHS.md
 
 # Runtime log output
 log.txt
+
+# Runtime settings written next to the executable
+/Gothic.ini
