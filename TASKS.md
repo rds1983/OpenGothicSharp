@@ -58,13 +58,19 @@ hermetic: temp folders and synthetic INI files only, never the real game install
 so the suite runs on CI.
 **Done when:** `dotnet test` passes on a machine with no Gothic installation.
 
+### A6. Launch profile — DONE
+Add a per-developer `launchSettings.json` that starts the game with `-g <local Gothic
+path>`, plus a devmode variant. The file embeds a machine-specific path, so it is
+gitignored; document the required shape instead of committing it.
+**Done when:** `dotnet run --launch-profile <name>` opens the game against a local install.
+
 ---
 
 ## Milestone B — Static world rendering
 
 ### B1. Camera and matrices
 Implement a camera with `View`/`Projection` (FOV, near/far from `Constants`) and a
-world transform convention (left-handed, Y-up).
+world transform convention (right-handed, Y-up, matching `Mathematics.ToXna`).
 **Done when:** the world grid can be viewed from an arbitrary position/orientation.
 
 ### B2. Mesh renderer

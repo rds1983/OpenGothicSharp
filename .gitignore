@@ -268,3 +268,6 @@ log.txt
 
 # Runtime settings written next to the executable
 /Gothic.ini
+
+# Launch profiles contain machine-specific Gothic paths; each dev creates their own.
+/OpenGothic/Properties/launchSettings.json
