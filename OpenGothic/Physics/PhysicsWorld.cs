@@ -10,6 +10,7 @@ using Microsoft.Xna.Framework;
 using OpenGothic.Scene;
 using OpenGothic.Utility;
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using BoundingBox = Microsoft.Xna.Framework.BoundingBox;
 using Matrix = Microsoft.Xna.Framework.Matrix;
@@ -53,10 +54,20 @@ public sealed class PhysicsWorld : IDisposable
 	private const float CapsuleRadius = 30f;
 	private const float CapsuleLength = 110f;
 	private const float StepSeconds = 1f / 60f;
+	private const float StreamStep = 256f;
+	private const float UnloadMargin = 500f;
 
 	private readonly BufferPool _bufferPool = new();
-	private readonly CollisionSurfaceSet _vobSurfaces = new();
+	private readonly List<CollisionSource> _sources = new();
+	private readonly Dictionary<long, LoadedChunk> _loadedChunks = new();
+	private readonly Dictionary<CollisionSource, List<StaticCollider>> _loadedSources = new();
+	private readonly List<long> _unloadChunks = new();
+	private readonly List<CollisionSource> _unloadSources = new();
 
+	private WorldGrid _world;
+	private Vector3 _streamCenter;
+	private float _loadRadius = 3000f;
+	private bool _streaming;
 	private int _staticCount;
 
 	public Simulation Simulation { get; }
@@ -85,159 +96,351 @@ public sealed class PhysicsWorld : IDisposable
 	}
 
 	/// <summary>
-	/// Adds the level's own triangles and the static vobs near <paramref name="center"/>. A
-	/// vob is collidable only where its model has rigid geometry: a skinned mesh deforms with
-	/// its skeleton and is left out, matching the reference. The radius keeps the build local
-	/// while there is no streaming: the whole level costs about 20 seconds and hundreds of
-	/// megabytes.
+	/// Collects the static vob geometry once and loads the level and vob neighbourhood around
+	/// <paramref name="center"/>. <see cref="Update"/> keeps it centred as the player moves.
+	/// A vob is collidable only where its model has rigid geometry: a skinned mesh deforms
+	/// with its skeleton and is left out, matching the reference.
 	/// </summary>
-	public void Build(WorldGrid world, Vector3 center, float radius)
+	public void Initialize(WorldGrid world, Vector3 center, float radius)
 	{
-		var area = new BoundingBox(
+		_world = world ?? throw new ArgumentNullException(nameof(world));
+		_loadRadius = radius;
+
+		CollectSources(world);
+		_streamCenter = center;
+		Update(center, true);
+
+		Log.Info(
+			$"Physics: {TerrainTriangles:N0} terrain triangles, {VobTriangles:N0} vob triangles " +
+			$"near ({center.X:0.#}, {center.Z:0.#}), {_staticCount} static bodies; " +
+			$"{_sources.Count} vob sources known.");
+	}
+
+	/// <summary>
+	/// Loads and unloads collision when the player has moved far enough from the last
+	/// streaming centre. The update is skipped while the player stays inside a small step, so
+	/// walking does not rebuild anything every frame.
+	/// </summary>
+	public void Update(Vector3 center)
+	{
+		if (!_streaming)
+		{
+			return;
+		}
+
+		var dx = center.X - _streamCenter.X;
+		var dz = center.Z - _streamCenter.Z;
+		if (dx * dx + dz * dz < StreamStep * StreamStep)
+		{
+			return;
+		}
+
+		Update(center, false);
+	}
+
+	private void Update(Vector3 center, bool force)
+	{
+		_streaming = true;
+		_streamCenter = center;
+
+		var loadArea = Area(center, _loadRadius);
+		var unloadArea = Area(center, _loadRadius + UnloadMargin);
+		var loaded = 0;
+		var unloaded = 0;
+
+		// Terrain chunks whose bounds cover the load area. Chunks are laid out from the level
+		// mesh's minimum corner, the same origin the triangles were bucketed with.
+		var size = WorldGrid.CollisionChunkSize;
+		var origin = _world.MeshBounds.Min;
+		var minX = (int)MathF.Floor((loadArea.Min.X - origin.X) / size);
+		var maxX = (int)MathF.Floor((loadArea.Max.X - origin.X) / size);
+		var minZ = (int)MathF.Floor((loadArea.Min.Z - origin.Z) / size);
+		var maxZ = (int)MathF.Floor((loadArea.Max.Z - origin.Z) / size);
+
+		for (var x = minX; x <= maxX; ++x)
+		{
+			for (var z = minZ; z <= maxZ; ++z)
+			{
+				if (!_world.CollisionChunks.TryGetValue((x, z), out var chunk))
+				{
+					continue;
+				}
+
+				var key = ChunkKey(x, z);
+				if (_loadedChunks.ContainsKey(key))
+				{
+					continue;
+				}
+
+				_loadedChunks[key] = new LoadedChunk(chunk, AddChunk(chunk));
+				TerrainTriangles += chunk.Surfaces.TriangleCount;
+				++loaded;
+			}
+		}
+
+		_unloadChunks.Clear();
+		foreach (var pair in _loadedChunks)
+		{
+			if (!pair.Value.Chunk.Bounds.Intersects(unloadArea))
+			{
+				_unloadChunks.Add(pair.Key);
+			}
+		}
+
+		foreach (var key in _unloadChunks)
+		{
+			var loadedChunk = _loadedChunks[key];
+			RemoveColliders(loadedChunk.Colliders);
+			TerrainTriangles -= loadedChunk.Chunk.Surfaces.TriangleCount;
+			_loadedChunks.Remove(key);
+			++unloaded;
+		}
+
+		// Static vobs. Scanning the pre-collected sources is cheap; the expensive part is
+		// building the Bepu mesh, which happens only for a source that crossed the radius.
+		foreach (var source in _sources)
+		{
+			if (_loadedSources.ContainsKey(source) || !source.Bounds.Intersects(loadArea))
+			{
+				continue;
+			}
+
+			var colliders = AddSource(source);
+			if (colliders.Count == 0)
+			{
+				continue;
+			}
+
+			_loadedSources[source] = colliders;
+			VobTriangles += source.TriangleCount;
+			++loaded;
+		}
+
+		_unloadSources.Clear();
+		foreach (var pair in _loadedSources)
+		{
+			if (!pair.Key.Bounds.Intersects(unloadArea))
+			{
+				_unloadSources.Add(pair.Key);
+			}
+		}
+
+		foreach (var source in _unloadSources)
+		{
+			RemoveColliders(_loadedSources[source]);
+			VobTriangles -= source.TriangleCount;
+			_loadedSources.Remove(source);
+			++unloaded;
+		}
+
+		if (force || loaded > 0 || unloaded > 0)
+		{
+			Log.Info(
+				$"Physics stream: {_loadedChunks.Count} chunks, {_loadedSources.Count} vob sources, " +
+				$"{TerrainTriangles:N0} terrain + {VobTriangles:N0} vob triangles, {_staticCount} static bodies.");
+		}
+	}
+
+	private static BoundingBox Area(Vector3 center, float radius)
+	{
+		return new BoundingBox(
 			center - new Vector3(radius),
 			center + new Vector3(radius));
+	}
 
-		foreach (var surface in world.StaticCollision.Surfaces)
-		{
-			TerrainTriangles += AddSurface(surface, PhysicsSurfaceKind.Terrain, area);
-		}
+	private static long ChunkKey(int x, int z) => ((long)x << 32) | (uint)z;
+
+	/// <summary>
+	/// Turns the scene's static geometry into a flat list of sources once. A model is one
+	/// source; an instanced mesh becomes one per instance so a large group does not load
+	/// because one of its members is close.
+	/// </summary>
+	private void CollectSources(WorldGrid world)
+	{
+		_sources.Clear();
 
 		foreach (var cell in world.Cells)
 		{
 			foreach (var node in cell.Children)
 			{
-				AddSceneNode(node, area);
+				switch (node)
+				{
+					case MeshNode mesh:
+						AddPartSource(mesh.Mesh, mesh.WorldTransform);
+						break;
+
+					case InstancedMeshNode instanced:
+						foreach (var transform in instanced.InstancesTransforms)
+						{
+							AddPartSource(instanced.Mesh, transform);
+						}
+
+						break;
+
+					case ModelNode model:
+						AddModelSource(model);
+						break;
+				}
 			}
 		}
-
-		foreach (var surface in _vobSurfaces.Surfaces)
-		{
-			VobTriangles += AddSurface(surface, PhysicsSurfaceKind.Vob, null);
-		}
-
-		Log.Info(
-			$"Physics: {TerrainTriangles:N0} terrain triangles, {VobTriangles:N0} vob triangles " +
-			$"within {radius:0} of ({center.X:0.#}, {center.Z:0.#}), {_staticCount} static bodies.");
 	}
 
-	private void AddSceneNode(SceneNode node, BoundingBox area)
+	private void AddPartSource(DrMeshPart part, Matrix transform)
 	{
-		switch (node)
-		{
-			case MeshNode mesh:
-				if (IsNear(mesh.Mesh.BoundingBox, mesh.WorldTransform, area))
-				{
-					AddPart(mesh.Mesh, mesh.WorldTransform);
-				}
-
-				break;
-
-			case InstancedMeshNode instanced:
-				foreach (var transform in instanced.InstancesTransforms)
-				{
-					if (IsNear(instanced.Mesh.BoundingBox, transform, area))
-					{
-						AddPart(instanced.Mesh, transform);
-					}
-				}
-
-				break;
-
-			case ModelNode model:
-				var instance = model.Instance;
-				var modelWorld = model.WorldTransform;
-				var modelBounds = instance.BoundingBox ?? new BoundingBox(modelWorld.Translation, modelWorld.Translation);
-
-				if (!IsNear(modelBounds, modelWorld, area))
-				{
-					break;
-				}
-
-				foreach (var mesh in instance.Model.Meshes)
-				{
-					if (mesh.ParentBone == null)
-					{
-						continue;
-					}
-
-					// The same placement the renderer uses for a static part.
-					var transform = instance.GetBoneGlobalTransform(mesh.ParentBone.Index) * modelWorld;
-
-					foreach (var part in mesh.MeshParts)
-					{
-						if (IsNear(part.BoundingBox, transform, area))
-						{
-							AddPart(part, transform);
-						}
-					}
-				}
-
-				break;
-		}
-	}
-
-	private static bool IsNear(BoundingBox local, Matrix transform, BoundingBox area)
-	{
-		var world = local.Transform(ref transform);
-		return area.Intersects(world);
-	}
-
-	private void AddPart(DrMeshPart part, Matrix transform)
-	{
-		if (part.Tag is not DrMeshPartTag tag || tag.Collision == null || tag.Friction <= 0f)
+		if (!HasCollision(part))
 		{
 			return;
 		}
 
-		_vobSurfaces.AddTriangles(tag.Friction, tag.Sensor, tag.Collision.Vertices, transform);
+		var bounds = part.BoundingBox.Transform(ref transform);
+		var tag = (DrMeshPartTag)part.Tag;
+		_sources.Add(new CollisionSource
+		{
+			Bounds = bounds,
+			Transform = transform,
+			Part = part,
+			TriangleCount = tag.Collision.TriangleCount
+		});
 	}
 
-	/// <summary>
-	/// Adds one friction/sensor group as a Bepu mesh, optionally limited to the triangles that
-	/// touch <paramref name="area"/>. Returns the number of source triangles taken.
-	/// </summary>
-	private int AddSurface(CollisionSurface surface, PhysicsSurfaceKind kind, BoundingBox? area)
+	private void AddModelSource(ModelNode node)
 	{
-		var vertices = surface.Vertices;
+		var instance = node.Instance;
+		var modelWorld = node.WorldTransform;
+		var triangles = 0;
 
-		// Count first, so the buffer holds exactly the triangles that are stored. Meshes
-		// cannot have trailing unused entries: they would become degenerate triangles at the
-		// origin.
-		var source = 0;
-		for (var i = 0; i + 2 < vertices.Count; i += 3)
+		foreach (var mesh in instance.Model.Meshes)
 		{
-			if (!IsUsable(vertices[i], vertices[i + 1], vertices[i + 2], area))
+			if (mesh.ParentBone == null)
 			{
 				continue;
 			}
 
-			// Bepu triangle meshes are one-sided: only the winding that faces the body
-			// generates contacts and ray hits. Gothic's meshes have no consistent winding
-			// (the renderer draws without back-face culling), so each triangle is added in
-			// both directions to make the surface solid from either side.
-			++source;
+			foreach (var part in mesh.MeshParts)
+			{
+				if (part.Skin == null && HasCollision(part))
+				{
+					triangles += ((DrMeshPartTag)part.Tag).Collision.TriangleCount;
+				}
+			}
+		}
+
+		if (triangles == 0)
+		{
+			return;
+		}
+
+		var bounds = instance.BoundingBox?.Transform(ref modelWorld) ??
+		             new BoundingBox(modelWorld.Translation, modelWorld.Translation);
+
+		_sources.Add(new CollisionSource
+		{
+			Bounds = bounds,
+			Model = node,
+			TriangleCount = triangles
+		});
+	}
+
+	private static bool HasCollision(DrMeshPart part)
+	{
+		return part.Tag is DrMeshPartTag tag && tag.Collision != null && tag.Friction > 0f;
+	}
+
+	private List<StaticCollider> AddChunk(CollisionChunk chunk)
+	{
+		var result = new List<StaticCollider>();
+		foreach (var surface in chunk.Surfaces.Surfaces)
+		{
+			AddMesh(surface.Vertices, Matrix.Identity, surface.Friction, surface.Sensor,
+				PhysicsSurfaceKind.Terrain, result);
+		}
+
+		return result;
+	}
+
+	private List<StaticCollider> AddSource(CollisionSource source)
+	{
+		var result = new List<StaticCollider>();
+
+		if (source.Part != null)
+		{
+			var tag = (DrMeshPartTag)source.Part.Tag;
+			AddMesh(tag.Collision.Vertices, source.Transform, tag.Friction, tag.Sensor,
+				PhysicsSurfaceKind.Vob, result);
+			return result;
+		}
+
+		if (source.Model == null)
+		{
+			return result;
+		}
+
+		var instance = source.Model.Instance;
+		var modelWorld = source.Model.WorldTransform;
+
+		foreach (var mesh in instance.Model.Meshes)
+		{
+			if (mesh.ParentBone == null)
+			{
+				continue;
+			}
+
+			// The same placement the renderer uses for a static part.
+			var transform = instance.GetBoneGlobalTransform(mesh.ParentBone.Index) * modelWorld;
+
+			foreach (var part in mesh.MeshParts)
+			{
+				if (part.Skin != null || !HasCollision(part))
+				{
+					continue;
+				}
+
+				var tag = (DrMeshPartTag)part.Tag;
+				AddMesh(tag.Collision.Vertices, transform, tag.Friction, tag.Sensor,
+					PhysicsSurfaceKind.Vob, result);
+			}
+		}
+
+		return result;
+	}
+
+	/// <summary>
+	/// Builds one Bepu mesh from a triangle soup and registers it as a static. The triangles
+	/// are duplicated with the opposite winding because Bepu meshes are one-sided and Gothic's
+	/// geometry has no consistent winding.
+	/// </summary>
+	private void AddMesh(IReadOnlyList<Vector3> vertices, Matrix transform, float friction, bool sensor,
+		PhysicsSurfaceKind kind, List<StaticCollider> target)
+	{
+		var source = 0;
+		for (var i = 0; i + 2 < vertices.Count; i += 3)
+		{
+			if (!IsDegenerate(vertices[i], vertices[i + 1], vertices[i + 2]))
+			{
+				++source;
+			}
 		}
 
 		if (source == 0)
 		{
-			return 0;
+			return;
 		}
 
 		_bufferPool.Take<Triangle>(source * 2, out var triangles);
 
-		var target = 0;
+		var write = 0;
 		for (var i = 0; i + 2 < vertices.Count; i += 3)
 		{
-			var a = vertices[i];
-			var b = vertices[i + 1];
-			var c = vertices[i + 2];
-			if (!IsUsable(a, b, c, area))
+			var a = Vector3.Transform(vertices[i], transform);
+			var b = Vector3.Transform(vertices[i + 1], transform);
+			var c = Vector3.Transform(vertices[i + 2], transform);
+			if (IsDegenerate(a, b, c))
 			{
 				continue;
 			}
 
-			triangles[target++] = new Triangle(ToNumerics(a), ToNumerics(b), ToNumerics(c));
-			triangles[target++] = new Triangle(ToNumerics(a), ToNumerics(c), ToNumerics(b));
+			triangles[write++] = new Triangle(ToNumerics(a), ToNumerics(b), ToNumerics(c));
+			triangles[write++] = new Triangle(ToNumerics(a), ToNumerics(c), ToNumerics(b));
 		}
 
 		var mesh = new Mesh(triangles, Num.Vector3.One, _bufferPool);
@@ -246,34 +449,61 @@ public sealed class PhysicsWorld : IDisposable
 
 		Surfaces.Allocate(handle) = new PhysicsSurface
 		{
-			Friction = surface.Friction,
-			Kind = surface.Sensor ? PhysicsSurfaceKind.Sensor : kind
+			Friction = friction,
+			Kind = sensor ? PhysicsSurfaceKind.Sensor : kind
 		};
 
 		++_staticCount;
-		return source;
+		target.Add(new StaticCollider(handle, shape));
 	}
 
-	private static bool IsUsable(Vector3 a, Vector3 b, Vector3 c, BoundingBox? area)
+	private void RemoveColliders(List<StaticCollider> colliders)
+	{
+		foreach (var collider in colliders)
+		{
+			Simulation.Statics.Remove(collider.Handle);
+			Simulation.Shapes.RemoveAndDispose(collider.Shape, _bufferPool);
+			--_staticCount;
+		}
+	}
+
+	private static bool IsDegenerate(Vector3 a, Vector3 b, Vector3 c)
 	{
 		var normal = Vector3.Cross(b - a, c - a);
-		if (normal.LengthSquared() < 1e-6f)
+		return normal.LengthSquared() < 1e-6f;
+	}
+
+	private readonly struct StaticCollider
+	{
+		public readonly StaticHandle Handle;
+		public readonly TypedIndex Shape;
+
+		public StaticCollider(StaticHandle handle, TypedIndex shape)
 		{
-			return false;
+			Handle = handle;
+			Shape = shape;
 		}
+	}
 
-		if (!area.HasValue)
+	private sealed class CollisionSource
+	{
+		public BoundingBox Bounds;
+		public Matrix Transform;
+		public DrMeshPart Part;
+		public ModelNode Model;
+		public int TriangleCount;
+	}
+
+	private sealed class LoadedChunk
+	{
+		public CollisionChunk Chunk { get; }
+		public List<StaticCollider> Colliders { get; }
+
+		public LoadedChunk(CollisionChunk chunk, List<StaticCollider> colliders)
 		{
-			return true;
+			Chunk = chunk;
+			Colliders = colliders;
 		}
-
-		var bounds = area.Value;
-		var min = Vector3.Min(a, Vector3.Min(b, c));
-		var max = Vector3.Max(a, Vector3.Max(b, c));
-
-		return min.X <= bounds.Max.X && max.X >= bounds.Min.X &&
-		       min.Y <= bounds.Max.Y && max.Y >= bounds.Min.Y &&
-		       min.Z <= bounds.Max.Z && max.Z >= bounds.Min.Z;
 	}
 
 	/// <summary>
@@ -379,6 +609,7 @@ public sealed class PhysicsWorld : IDisposable
 		for (var i = 0; i < steps; ++i)
 		{
 			controller.Step(TimeSpan.FromSeconds(dt), wish);
+			Update(controller.Position);
 
 			var position = controller.Position;
 			var moved = new Vector3(position.X - previous.X, 0f, position.Z - previous.Z);
@@ -565,6 +796,11 @@ public sealed class PhysicsWorld : IDisposable
 			var angle = MathF.Tau * i / 16f;
 			var direction = new Vector3(MathF.Cos(angle), 0f, MathF.Sin(angle));
 			if (!RayCast(rested, direction, 250f, false, out var hit, bodyHandle))
+			{
+				continue;
+			}
+
+			if (hit.Distance < CapsuleRadius + 5f)
 			{
 				continue;
 			}

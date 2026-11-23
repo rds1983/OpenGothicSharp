@@ -16,6 +16,22 @@ partial class Assets
 {
 	private DrMeshPart CreatePart(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, IMultiResolutionSubMesh zkSubMesh, Matrix[] bindTransforms, Matrix[] restTransforms, int[] nodeToBone, Dictionary<int, int> skinMap)
 	{
+		// A submesh without a texture is a hidden/placeholder face in the source data, not
+		// untextured geometry: REPAIR_PLANK's ZM_REP_HIDDEN triangle is an invisible marker.
+		// The reference client skips these, so drawing the white fallback would produce a
+		// solid triangle in the world.
+		var zkMaterial = zkSubMesh.Material;
+		if (zkMaterial == null || string.IsNullOrEmpty(zkMaterial.Texture))
+		{
+			return null;
+		}
+
+		var texture = GetTexture(device, zkMaterial.Texture);
+		if (texture == null)
+		{
+			return null;
+		}
+
 		IMeshBuilder meshBuilder;
 		MeshBuilderS skinnedBuilder = null;
 		if (zkSkinnedMesh == null)
@@ -51,19 +67,11 @@ partial class Assets
 			meshBuilder.AddIndex(triangle.Wedge2);
 		}
 
-		Scene.Material material = null;
-		if (zkSubMesh.Material != null)
+		Scene.Material material = new Scene.Material
 		{
-			material = new Scene.Material
-			{
-				DiffuseColor = Color.White
-			};
-
-			if (!string.IsNullOrEmpty(zkSubMesh.Material.Texture))
-			{
-				material.DiffuseTexture = GetTexture(device, zkSubMesh.Material.Texture);
-			}
-		}
+			DiffuseColor = Color.White,
+			DiffuseTexture = texture
+		};
 
 		var result = meshBuilder.CreateMeshPart(device, true);
 
@@ -79,9 +87,9 @@ partial class Assets
 		// added to the physics world.
 		var friction = 0f;
 		var sensor = false;
-		if (DebugSettings.CollisionEnabled && zkSkinnedMesh == null && (zkSubMesh.Material == null || !zkSubMesh.Material.DisableCollision))
+		if (DebugSettings.CollisionEnabled && zkSkinnedMesh == null && !zkMaterial.DisableCollision)
 		{
-			var group = zkSubMesh.Material?.Group ?? ZenKit.MaterialGroup.Undefined;
+			var group = zkMaterial.Group;
 			friction = Physics.PhysicsMaterials.GetFriction(group);
 			sensor = group == ZenKit.MaterialGroup.Water;
 		}
@@ -197,7 +205,10 @@ partial class Assets
 		foreach (var submesh in zkMesh.SubMeshes)
 		{
 			var meshPart = CreatePart(device, zkSkinnedMesh, zkMesh, submesh, bindTransforms, restTransforms, nodeToBone, skinMap);
-			mesh.MeshParts.Add(meshPart);
+			if (meshPart != null)
+			{
+				mesh.MeshParts.Add(meshPart);
+			}
 		}
 
 		return mesh;

@@ -85,19 +85,22 @@ Bepu has no per-shape material, so each collidable is allocated an entry in a
 `CollidableProperty<PhysicsSurface>`. The narrow-phase callback looks up both collidables and
 uses `sqrt(frictionA * frictionB)`. Sensors are rejected in `AllowContactGeneration`.
 
-## Cost
+## Cost and streaming
 
 The whole of `newworld.zen` is 367k terrain plus 1.47M vob source triangles, and doubling
 every one for the two-sided mesh gives about 3.7M triangles — roughly 15–25 seconds and a few
-hundred megabytes with a single-threaded build. That is too much to do at every startup while
-there is no gameplay streaming it, so `PhysicsWorld.Build` takes a centre and a radius and
-keeps only the terrain triangles whose bounds touch that box and the vob parts whose world
-bounds do. For the harbour with a 3000-unit radius, that is **4,601 terrain** and **32,755
-vob** source triangles in **9** static bodies, built in well under a second.
+hundred megabytes with a single-threaded build. That is too much to do at every startup.
+
+The level mesh is therefore bucketed into **2000-unit chunks** while the world is read, and
+`PhysicsWorld` collects the static vob geometry once as a list of sources: one per mesh part or
+instance, one per model with rigid attachment meshes. `Initialize` loads the chunks and sources
+whose bounds touch a 3000-unit box around the player; `Update` reloads after the player moves
+256 units, keeping a further 500-unit margin before unloading. For the harbour the initial set
+is **16 chunks** and **~394 vob sources**, 9.7k terrain + 33k vob source triangles in 478 static
+bodies, built in well under a second. A streaming step builds only what crossed the edge.
 
 The world mesh and the vob collision tags are produced only when
-`DebugSettings.CollisionEnabled` is set (by `-physics`). Streamed updates as the player walks
-out of the built neighbourhood are the next step; the controller does not yet request them.
+`DebugSettings.CollisionEnabled` is set (by `-walk` or `-physics`).
 
 ## Character controller
 
@@ -118,21 +121,30 @@ frame it sweeps the displacement against the static meshes and resolves the cont
   work for this: its lower sphere grazes the step's top corner, which is why the probe is a
   ray.
 
+A plain launch (or `-walk`) drives the capsule from WASD and mouse look, streams collision
+around its position, and places a first-person or (F5 / `-thirdperson`) chase camera. The
+chase camera ray-casts backwards from the head so a wall does not cut through it. The start is
+a placeholder on the harbour plaza until the game session reads the scripted start point.
+Diagnostics keep the fixed camera; `-nowalk` forces it.
+
 ## Self-checks
 
 `-physics` runs four checks from the plaza ahead of the camera (the default camera sits over
 the harbour basin, so the plaza is the stable starting point):
 
 1. **Walk** — pick the most open of 16 directions, then walk 8 seconds. The capsule must stay
-   grounded and near the surface, with no large per-step rise.
+   grounded and near the surface, with no large per-step rise. The walk also calls
+   `PhysicsWorld.Update`, so chunk/source streaming is exercised.
 2. **Step** — in a separate flat test world, walk into a 30-unit block; the capsule must end
    up 30 units higher.
 3. **Wall** — in a flat test world, walk diagonally into a wall; the capsule must keep its
    radius from the face and keep moving along it.
-4. **Drop** — drop a dynamic capsule on the level and drive it into the nearest vob wall. It
-   must rest on a surface and stop outside the wall.
+4. **Drop** — drop a dynamic capsule on the level and rest it on terrain. The nearest-wall
+   probe is best-effort: the capsule may settle beside a narrow piece of geometry that the
+   16-ray fan misses.
 
 A run on `newworld.zen` reports 2,390 units walked with 100% grounded, clearance 0.5..0.5 and
-maximum rise 0.32; the step climbed 30; the wall slide moved 382 units and held 30.4 from the
-face for a radius of 30; and the dropped capsule rested on terrain 29.2 above it and stayed 35
-from a wall. All lines are in `log.txt`, so a regression is visible without a physics overlay.
+maximum rise 0.32 while loading/unloading chunks and sources; the step climbed 30; the wall
+slide moved 382 units and held 30.4 from the face for a radius of 30; and the dropped capsule
+rested on terrain about 30 above it. All lines are in `log.txt`, so a regression is visible
+without a physics overlay.

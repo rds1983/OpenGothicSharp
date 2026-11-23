@@ -56,6 +56,9 @@ default chosen elsewhere.
 | `-animtime:<seconds>` | Playback position used with `-freeze`. A looping clip wraps it; a one-shot clamps. |
 | `-wireframe` / `-bounds` | Start with the F2 / F3 debug views already on. |
 | `-physics` | Build the local static collision world and run the capsule/controller self-checks at startup; their results are logged. Off by default because the collision set still costs time and memory to build. |
+| `-walk` | Force the playable capsule. A plain launch already starts walking; this is for combining walking with a diagnostic option. |
+| `-nowalk` | Keep the fixed diagnostic camera even for a plain launch. |
+| `-thirdperson` | Start walking in the chase camera instead of first person. |
 | `-cam:<x,y,z>` | Override the camera position. |
 | `-lookat:<x,y,z>` | Point the camera at a world position (implies yaw and pitch). |
 | `-model:<name>` | Spawn a model directly in front of the camera, with or without an extension. Reaches models no world vob uses. |
@@ -394,7 +397,9 @@ frame can be compared against the same world without model geometry. Details in
 [Specifications/zen-vob-transform.md](Specifications/zen-vob-transform.md).
 
 Model parts are **texture-driven the same way as static meshes**: the material comes from
-`DrMeshPartTag`, with the white fallback when a texture is missing. Wireframe and bounds
+`DrMeshPartTag`. A submesh with no texture is skipped rather than drawn with a white fallback:
+the shipped data uses those as hidden/placeholder faces (`REPAIR_PLANK`'s `ZM_REP_HIDDEN`
+triangle is one), and the reference client skips them too. Wireframe and bounds
 both extend to models: `DrawMeshPartWireframe` still applies the skeleton, so the edges show
 the posed geometry rather than the bind pose.
 
@@ -518,15 +523,26 @@ material group (`PhysicsMaterials`) and is stored per collidable in a Bepu
 `CollidableProperty`; contacts use the geometric mean of the two surfaces' coefficients.
 Water material is added as a sensor: it is present for queries but refuses contacts.
 
-`-physics` enables the CPU triangle data and builds the world. Because building the whole
-level takes ~15–25 s and a few hundred MB, only a **3000-unit neighbourhood** around the
-player is built: for the harbour that is 4,601 terrain and 32,755 vob source triangles and
-well under a second. Streaming the neighbourhood as the player moves is the next step; until
-then the build is centred on the spawn point.
+`-walk` forces the CPU triangle data and the playable camera; a plain launch enables both
+too, while diagnostics (`-model`, `-compose`, `-attach`, `-cam`, `-lookat`, `-screenshot`,
+`-physics`) keep the fixed camera; `-nowalk` overrides even a plain launch. `-physics` builds
+the same collision and also runs the self-checks. Because building the whole level takes
+~15–25 s and a few hundred MB, collision is **streamed**: the level mesh is bucketed into
+2000-unit chunks while it is read, and the static vobs are collected once as bounds plus a
+triangle soup. A 3000-unit neighbourhood around the player is loaded — 16 chunks and ~394 vob
+sources for the harbour, 9.7k terrain + 33k vob source triangles in 478 static bodies — and
+`PhysicsWorld.Update` reloads it after the player moves 256 units, unloading with a 500-unit
+margin. The initial load is well under a second; a streaming step is a few milliseconds.
 
 The startup self-checks cover the pieces D2 needs: a capsule dropped on the plaza (D1), a
 capsule that walks the terrain, a capsule that steps onto a 30-unit block, and one that walks
 diagonally into a wall and slides along it. Each prints a single line to `log.txt`.
+
+A plain launch starts a playable first-person capsule at a placeholder point on the harbour
+plaza (until the game session supplies the scripted start point). **WASD** moves, the
+**mouse** looks, **F5** switches first/third person, and `-thirdperson` starts in the chase
+camera. The third-person camera pulls in when a wall is behind the player. Diagnostics keep
+the static camera used by captures; `-nowalk` forces it back.
 
 ### Character controller
 
@@ -545,7 +561,7 @@ three behaviours explicit:
 - **Wall slide** is the normal projection of whatever displacement remains after a hit. A
   diagonal walk into a wall keeps its distance from the face and keeps moving along it.
 
-The controller is used by the self-checks; player input arrives in D3.
+The controller is driven by `-walk`; the self-checks drive it directly.
 
 The format details and measurements are in
 [Specifications/gothic-collision-format.md](Specifications/gothic-collision-format.md).

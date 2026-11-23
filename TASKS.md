@@ -55,13 +55,16 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   `ZS_*` attach nodes, which no armour file has. `-modelrot:<degrees>` turns the spawn so a
   capture can show its front.
 - Static collision exists: BepuPhysics2 triangle meshes for the level and for static vobs,
-  grouped by material friction with water as a contact-free sensor. The build is limited to a
-  3000-unit neighbourhood around the player (4.6k terrain + 33k vob source triangles, under a
-  second) while there is no streaming. `-physics` builds it and runs the walk, step, wall-slide
-  and capsule checks.
+  grouped by material friction with water as a contact-free sensor. It streams: the level mesh
+  is split into 2000-unit chunks and the vobs are collected as sources, with a 3000-unit
+  neighbourhood loaded around the player and refreshed every 256 units. `-physics` also runs
+  the walk, step, wall-slide and capsule checks.
 - A kinematic character controller walks the terrain with gravity, ground snap, slope slide and
-  a 35-unit step assist. It is exercised by the `-physics` self-checks; input arrives in D3.
-- No input, audio, or scripting yet.
+  a 35-unit step assist. A plain launch starts it in first person: WASD, mouse look, F5 for the
+  chase camera (`-thirdperson`), `-nowalk` for the old static diagnostic camera.
+- Models skip submeshes whose material has no texture; the shipped data uses those as hidden
+  placeholder faces (`REPAIR_PLANK`'s `ZM_REP_HIDDEN` was a white triangle on screen).
+- No audio or scripting yet.
 - UI exists: Myra `Desktop` rooted at a `Hud` panel with two independently anchored blocks
   — an always-visible `Controls` list (bottom-right) and a toggleable `DebugOverlay`
   (top-left, F1) showing FPS, camera position, draw-call and triangle counts and the active
@@ -72,7 +75,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
   **Milestone C (Models and animation) complete** — C1–C8: model rendering, clips, playback,
   animated culling boxes, vob hierarchy, attach points, animation layers, composed models.
-  Current milestone: **D — Physics and movement**, D1–D2 complete, next task **D3**.
+  **Milestone D (Physics and movement) complete** — D1–D3: static collision, kinematic
+  character controller, player input, first/third-person cameras and streamed collision.
+  Next milestone: **E — Interaction and world objects**, next task **E1**.
 
 ---
 
@@ -412,12 +417,35 @@ leave collision behind; streaming around the moving player is D3. `-physics` is 
 until input needs it. Details in
 [Specifications/gothic-collision-format.md](Documentation/Specifications/gothic-collision-format.md).
 
-### D3. Player input & camera modes
+### D3. Player input & camera modes — DONE
 WASD + mouse look, first/third-person camera, and collision-aware movement. This is where the
-kinematic controller meets the game: enable the collision build for normal play, rebuild or
-stream the 3000-unit collision neighbourhood as the player moves, and drive the controller from
-input. The frame's ground state and eye position then feed the camera modes.
-**Done when:** the developer can walk around a level with mouse and keyboard.
+kinematic controller meets the game: enable the collision build for normal play, stream the
+collision neighbourhood as the player moves, and drive the controller from input.
+
+A plain launch now starts the capsule in first person on a placeholder harbour-plaza point
+(the scripted start arrives with the session in K1). **WASD** moves relative to yaw, the
+**mouse** looks, **F5** toggles first/third person, and `-thirdperson` starts in the chase
+camera; the chase camera ray-casts backwards from the head so a wall does not cut through it.
+Diagnostics (`-model`, `-compose`, `-attach`, `-cam`, `-lookat`, `-screenshot`, `-physics`)
+keep the fixed camera, and `-nowalk` forces it back.
+
+Collision streams: the level mesh is bucketed into 2000-unit chunks while it is read, the
+static vobs are collected once as sources (one per mesh/instance, one per model with rigid
+parts), and `PhysicsWorld.Update` reloads a 3000-unit neighbourhood after the player moves 256
+units, with a 500-unit unload margin. A loaded set for the harbour is 16 chunks and ~394
+sources: 9.7k terrain + 33k vob source triangles, 478 static bodies. Walking is the default,
+so the CPU triangles are built for any launch that is not a diagnostic.
+
+The HUD controls list was regenerated with the movement keys. A no-texture model submesh is
+now skipped instead of drawn white, matching the reference: the shipped data uses those as
+hidden faces, and `REPAIR_PLANK`'s `ZM_REP_HIDDEN` had been a visible white triangle in the
+harbour.
+
+**Done when:** the developer can walk around a level with mouse and keyboard. — The developer
+walked from the harbour into the city and confirmed. The self-checks still pass (walk 2,390
+units with 100% grounding, 30-unit step, 382-unit wall slide, capsule rest/wall), and the
+standard model captures are unchanged. Details in
+[Specifications/gothic-collision-format.md](Documentation/Specifications/gothic-collision-format.md).
 
 ---
 

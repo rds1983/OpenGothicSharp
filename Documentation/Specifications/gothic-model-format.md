@@ -187,8 +187,9 @@ The draw contract of a stock `SkinnedEffect` is one bone transform per joint, wh
 
 A static part is positioned by its own node's global transform, as a prop model expects.
 
-Textures come from each sub-mesh's material; a part without a texture draws with the white
-fallback rather than failing.
+Textures come from each sub-mesh's material. A submesh with no texture (or a texture file that
+cannot be found) is skipped: the shipped data uses those as hidden/placeholder faces, such as
+`REPAIR_PLANK`'s `ZM_REP_HIDDEN` triangle, and the reference client skips them as well.
 
 ## Culling
 

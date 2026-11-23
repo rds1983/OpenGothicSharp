@@ -21,6 +21,10 @@ public class OgGame : Game
 	private Assets _assets;
 	private WorldGrid _world;
 	private PhysicsWorld _physics;
+	private CharacterController _controller;
+	private float _mouseYaw;
+	private float _mousePitch;
+	private bool _thirdPerson;
 	private Desktop _desktop;
 	private Hud _hud;
 	private KeyboardState _previousKeyboard;
@@ -311,27 +315,68 @@ public class OgGame : Game
 			Log.Error($"Unable to load world '{worldName}': {ex.Message}");
 		}
 
-		if (_world != null && CommandLine.Instance.Physics)
+		if (_world != null && (CommandLine.Instance.Physics || CommandLine.Instance.StartWalking))
 		{
-			try
-			{
-				_physics = new PhysicsWorld();
+			SetupPhysics();
+		}
+	}
 
-				// The default camera sits over the harbour basin; the model spawn point ahead
-				// is on the plaza, which is a stable place to start the self-checks. Until
-				// collision streams, only this neighbourhood is built.
-				var center = Camera.Position + Camera.Forward * 260f;
-				_physics.Build(_world, center, 3000f);
+	/// <summary>
+	/// Builds collision around the placeholder player start and, with <c>-walk</c>, creates the
+	/// capsule the input drives. The physics self-checks are requested separately with
+	/// <c>-physics</c>.
+	/// </summary>
+	private void SetupPhysics()
+	{
+		try
+		{
+			_physics = new PhysicsWorld();
+
+			// TODO(K1): read the start point the game scripts select. Until the session exists,
+			// the plaza ahead of the default camera is the stable standing place.
+			var center = Camera.Position + Camera.Forward * 260f;
+			_physics.Initialize(_world, center, 3000f);
+
+			if (CommandLine.Instance.StartWalking)
+			{
+				StartPlayer(center);
+			}
+
+			if (CommandLine.Instance.Physics)
+			{
 				_physics.RunWalkTest(center);
 				_physics.RunStepTest();
 				_physics.RunWallSlideTest();
 				_physics.RunCapsuleTest(center);
 			}
-			catch (Exception ex)
-			{
-				Log.Error($"Unable to build the physics world: {ex.Message}");
-			}
 		}
+		catch (Exception ex)
+		{
+			Log.Error($"Unable to build the physics world: {ex.Message}");
+		}
+	}
+
+	private void StartPlayer(Vector3 center)
+	{
+		if (!_physics.RayCast(center + Vector3.UnitY * 1000f, -Vector3.UnitY, 2000f, false, out var ground))
+		{
+			Log.Warning("Unable to find ground for the player; walking is disabled.");
+			return;
+		}
+
+		_controller = new CharacterController(_physics)
+		{
+			Position = ground.Position + Vector3.UnitY *
+				(CharacterController.DefaultRadius + CharacterController.DefaultLength * 0.5f +
+				 CharacterController.GroundClearance)
+		};
+
+		_mouseYaw = Camera.Yaw;
+		_mousePitch = Camera.Pitch;
+		_thirdPerson = CommandLine.Instance.ThirdPerson;
+		Mouse.SetPosition(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height / 2);
+
+		Log.Info($"Player spawned at ({_controller.Position.X:0.#}, {_controller.Position.Y:0.#}, {_controller.Position.Z:0.#}) on {ground.Kind}.");
 	}
 
 	protected override void Update(GameTime gameTime)
@@ -360,11 +405,78 @@ public class OgGame : Game
 			DebugDraw.Bounds = !DebugDraw.Bounds;
 		}
 
+		if (_controller != null)
+		{
+			UpdatePlayer(gameTime, keyboard);
+		}
+
 		_previousKeyboard = keyboard;
 
 		UpdateAnimations(gameTime);
 
 		base.Update(gameTime);
+	}
+
+	/// <summary>
+	/// Drives the capsule from WASD and mouse look, streams collision around it, and places the
+	/// camera in first or third person. F5 switches the camera mode.
+	/// </summary>
+	private void UpdatePlayer(GameTime gameTime, KeyboardState keyboard)
+	{
+		if (keyboard.IsKeyDown(Keys.F5) && _previousKeyboard.IsKeyUp(Keys.F5))
+		{
+			_thirdPerson = !_thirdPerson;
+		}
+
+		var viewport = GraphicsDevice.Viewport;
+		var centerX = viewport.Width / 2;
+		var centerY = viewport.Height / 2;
+
+		if (IsActive)
+		{
+			var mouse = Mouse.GetState();
+			var dx = mouse.X - centerX;
+			var dy = mouse.Y - centerY;
+			if (dx != 0 || dy != 0)
+			{
+				_mouseYaw += dx * 0.0025f;
+				_mousePitch = MathHelper.Clamp(_mousePitch - dy * 0.0025f, -1.4f, 1.4f);
+				Mouse.SetPosition(centerX, centerY);
+			}
+		}
+
+		var forward = new Vector3(MathF.Sin(_mouseYaw), 0f, -MathF.Cos(_mouseYaw));
+		var right = new Vector3(MathF.Cos(_mouseYaw), 0f, MathF.Sin(_mouseYaw));
+
+		var wish = Vector3.Zero;
+		if (keyboard.IsKeyDown(Keys.W)) wish += forward;
+		if (keyboard.IsKeyDown(Keys.S)) wish -= forward;
+		if (keyboard.IsKeyDown(Keys.D)) wish += right;
+		if (keyboard.IsKeyDown(Keys.A)) wish -= right;
+
+		_controller.Step(gameTime.ElapsedGameTime, wish);
+		_physics.Update(_controller.Position);
+
+		Camera.Yaw = _mouseYaw;
+		Camera.Pitch = _mousePitch;
+
+		var feet = _controller.Position - Vector3.UnitY * _controller.HalfHeight;
+
+		if (!_thirdPerson)
+		{
+			Camera.Position = feet + Vector3.UnitY * 160f;
+			return;
+		}
+
+		var target = feet + Vector3.UnitY * 150f;
+		var back = -Camera.Forward;
+		var distance = 320f;
+		if (_physics.RayCast(target, back, distance + 10f, false, out var hit))
+		{
+			distance = MathF.Max(70f, hit.Distance - 10f);
+		}
+
+		Camera.Position = target + back * distance;
 	}
 
 	/// <summary>

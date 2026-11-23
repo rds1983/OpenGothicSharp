@@ -144,6 +144,7 @@ namespace OpenGothic
 			}
 
 			var result = new WorldGrid();
+			result.MeshBounds = boundingBox;
 			for (var i = 0; i < Constants.GridSize; ++i)
 			{
 				for (var j = 0; j < Constants.GridSize; ++j)
@@ -483,24 +484,27 @@ namespace OpenGothic
 			// geometry. Only a material that disables collision is left out.
 			if (DebugSettings.CollisionEnabled)
 			{
-				BuildTerrainCollision(zkWorld.Mesh, result.StaticCollision);
+				BuildTerrainCollision(zkWorld.Mesh, result);
 				Log.Info(
-					$"World collision: {result.StaticCollision.TriangleCount:N0} triangles in " +
-					$"{result.StaticCollision.Surfaces.Count} material groups.");
+					$"World collision: {result.CollisionChunks.Count} chunks over " +
+					$"{result.MeshBounds.Min}..{result.MeshBounds.Max}.");
 			}
 
 			return result;
 		}
 
 		/// <summary>
-		/// Triangulates the level mesh for physics, grouped by the friction of each material.
-		/// The polygons are fan-triangulated exactly like the render path, but every material
-		/// is kept regardless of whether it has a texture.
+		/// Triangulates the level mesh for physics, grouped by the friction of each material
+		/// and bucketed into collision chunks. The polygons are fan-triangulated exactly like
+		/// the render path, but every material is kept regardless of whether it has a texture.
 		/// </summary>
-		private static void BuildTerrainCollision(IMesh mesh, CollisionSurfaceSet collision)
+		private static void BuildTerrainCollision(IMesh mesh, WorldGrid result)
 		{
 			var positions = mesh.Positions;
 			var materials = mesh.Materials;
+			var bounds = result.MeshBounds;
+			var origin = bounds.Min;
+			const float size = WorldGrid.CollisionChunkSize;
 
 			foreach (var polygon in mesh.Polygons)
 			{
@@ -524,9 +528,33 @@ namespace OpenGothic
 				{
 					var second = positions[indices[i - 1]].ToXna();
 					var third = positions[indices[i]].ToXna();
-					collision.AddTriangle(friction, sensor, first, second, third);
+					AddToChunks(result, origin, size, bounds, first, second, third, friction, sensor);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Adds a triangle to the chunk that contains its centroid. One owner per triangle keeps
+		/// chunk seams free of duplicate colliders; the streaming radius is wide enough that a
+		/// loaded neighbourhood always contains the player's adjacent chunks.
+		/// </summary>
+		private static void AddToChunks(WorldGrid result, Vector3 origin, float size, BoundingBox meshBounds,
+			Vector3 a, Vector3 b, Vector3 c, float friction, bool sensor)
+		{
+			var center = (a + b + c) / 3f;
+			var x = (int)MathF.Floor((center.X - origin.X) / size);
+			var z = (int)MathF.Floor((center.Z - origin.Z) / size);
+
+			var key = (x, z);
+			if (!result.CollisionChunks.TryGetValue(key, out var chunk))
+			{
+				var chunkMin = new Vector3(origin.X + x * size, meshBounds.Min.Y, origin.Z + z * size);
+				var chunkMax = new Vector3(chunkMin.X + size, meshBounds.Max.Y, chunkMin.Z + size);
+				chunk = new CollisionChunk(new BoundingBox(chunkMin, chunkMax));
+				result.CollisionChunks[key] = chunk;
+			}
+
+			chunk.Surfaces.AddTriangle(friction, sensor, a, b, c);
 		}
 
 		public WorldGrid GetWorld(GraphicsDevice device, string name) => Get(device, name, LoadWorld);

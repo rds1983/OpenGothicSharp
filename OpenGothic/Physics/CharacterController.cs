@@ -106,24 +106,47 @@ public sealed class CharacterController
 		Velocity.X = MoveTowards(Velocity.X, wish.X * WalkSpeed, acceleration * dt);
 		Velocity.Z = MoveTowards(Velocity.Z, wish.Z * WalkSpeed, acceleration * dt);
 
-		MoveWithSlide(Velocity * dt);
+		// A grounded body moves horizontally and then follows the ground. Integrating gravity
+		// while grounded would project the downward step onto a slope and make the capsule
+		// creep downhill with no input; the snap below is what keeps it on the surface.
+		if (Grounded)
+		{
+			Velocity.Y = 0f;
+			MoveWithSlide(new Vector3(Velocity.X, 0f, Velocity.Z) * dt);
+		}
+		else
+		{
+			Velocity.Y += Gravity * dt;
+			MoveWithSlide(Velocity * dt);
+		}
 
 		// Follow the ground after the horizontal move. Only snap downward: going up is what
 		// the step assist is for, and a ray should not teleport the capsule onto a ledge.
-		if (Grounded && ProbeGround(out var support))
+		if (Grounded)
 		{
-			var targetY = support.Position.Y + HalfHeight + GroundClearance;
-			var difference = targetY - Position.Y;
-
-			// Follow the ground down a slope, and correct the small sinking caused by the
-			// downward component of the movement. A rise is limited to the clearance: a real
-			// step is the step assist's job.
-			if (difference <= GroundClearance + 1f && difference >= -SnapDistance)
+			if (!ProbeGround(out var support))
 			{
-				Position.Y = targetY;
-				if (Velocity.Y < 0f)
+				Grounded = false;
+			}
+			else
+			{
+				var targetY = support.Position.Y + HalfHeight + GroundClearance;
+				var difference = targetY - Position.Y;
+
+				// Follow the ground down a slope, and correct the small sinking caused by the
+				// horizontal slide. A rise is limited to the clearance: a real step is the
+				// step assist's job.
+				if (difference <= GroundClearance + 1f && difference >= -SnapDistance)
 				{
-					Velocity.Y = 0f;
+					Position.Y = targetY;
+					if (Velocity.Y < 0f)
+					{
+						Velocity.Y = 0f;
+					}
+				}
+				else if (difference < -SnapDistance)
+				{
+					Grounded = false;
 				}
 			}
 		}

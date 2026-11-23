@@ -36,6 +36,38 @@ public class CommandLine
 	public bool Physics { get; private set; }
 
 	/// <summary>
+	/// Whether to start in walking mode: a player capsule driven by WASD and mouse look, with
+	/// collision streamed around it. Without it the camera is the static diagnostic view.
+	/// </summary>
+	/// <summary>
+	/// Whether walking mode was explicitly requested. A normal launch walks without it; the
+	/// flag forces walking alongside diagnostic options.
+	/// </summary>
+	public bool Walk { get; private set; }
+
+	/// <summary>Force the static diagnostic camera even for a normal launch.</summary>
+	public bool NoWalk { get; private set; }
+
+	/// <summary>Whether walking mode starts in the third-person camera instead of first person.</summary>
+	public bool ThirdPerson { get; private set; }
+
+	/// <summary>
+	/// Whether the game should start with the playable capsule. Explicit <see cref="Walk"/> or
+	/// <see cref="ThirdPerson"/> wins; otherwise a plain launch walks, while a diagnostic launch
+	/// (a spawned/composed/attached model, a camera override, a screenshot or the physics
+	/// self-check) keeps the fixed camera that the capture or inspection expects.
+	/// </summary>
+	public bool StartWalking =>
+		!NoWalk &&
+		(Walk || ThirdPerson || (!Physics &&
+			string.IsNullOrEmpty(SpawnModel) &&
+			string.IsNullOrEmpty(ComposedSkeleton) &&
+			string.IsNullOrEmpty(AttachPoint) &&
+			!CameraPosition.HasValue &&
+			!LookAtTarget.HasValue &&
+			string.IsNullOrEmpty(ScreenshotPath)));
+
+	/// <summary>
 	/// Where to write a PNG of the rendered frame, or null to not capture one. The image is
 	/// read straight from the backbuffer, so it works where an OS screenshot of the window
 	/// yields black for hardware-accelerated content.
@@ -202,6 +234,18 @@ public class CommandLine
 
 				case "-physics":
 					result.Physics = true;
+					break;
+
+				case "-walk":
+					result.Walk = true;
+					break;
+
+				case "-nowalk":
+					result.NoWalk = true;
+					break;
+
+				case "-thirdperson":
+					result.ThirdPerson = true;
 					break;
 
 				default:
@@ -445,7 +489,7 @@ public class CommandLine
 			DebugSettings.AnimationsEnabled = Animations.Value;
 		}
 
-		if (Physics)
+		if (Physics || StartWalking)
 		{
 			DebugSettings.CollisionEnabled = true;
 		}
@@ -490,7 +534,7 @@ public class CommandLine
 
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
-		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] " +
+		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] " +
 		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
 		"[-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 

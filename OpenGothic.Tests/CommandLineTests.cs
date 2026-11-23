@@ -361,6 +361,89 @@ public class CommandLineTests
 	}
 
 	[Fact]
+	public void Parse_Walk_IsABareFlag()
+	{
+		var result = CommandLine.Parse(new[] { "-walk" });
+
+		Assert.True(result.Walk);
+		Assert.False(result.ThirdPerson);
+	}
+
+	[Fact]
+	public void Parse_ThirdPerson_IsABareFlag()
+	{
+		var result = CommandLine.Parse(new[] { "-walk", "-thirdperson" });
+
+		Assert.True(result.Walk);
+		Assert.True(result.ThirdPerson);
+	}
+
+	[Fact]
+	public void StartWalking_IsTheDefaultForAPlainLaunch()
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic" });
+
+		Assert.True(result.StartWalking);
+	}
+
+	[Theory]
+	[InlineData("-model:ARMOR_PRISONER")]
+	[InlineData("-compose:HUMANS:HUM_BODY_NAKED0")]
+	[InlineData("-attach:BIP01 HEAD:BENCH_NW_CITY_02.ASC")]
+	[InlineData("-cam:0,100,0")]
+	[InlineData("-lookat:0,0,0")]
+	[InlineData("-screenshot:out.png")]
+	[InlineData("-physics")]
+	public void StartWalking_IsOffForDiagnosticLaunches(string option)
+	{
+		var result = CommandLine.Parse(new[] { option });
+
+		Assert.False(result.StartWalking);
+	}
+
+	[Fact]
+	public void StartWalking_CanBeForcedOffAndOn()
+	{
+		Assert.False(CommandLine.Parse(new[] { "-nowalk" }).StartWalking);
+		Assert.False(CommandLine.Parse(new[] { "-nowalk", "-walk" }).StartWalking);
+		Assert.True(CommandLine.Parse(new[] { "-model:ARMOR_PRISONER", "-walk" }).StartWalking);
+	}
+
+	[Fact]
+	public void Apply_DefaultLaunchEnablesCollision()
+	{
+		DebugSettings.CollisionEnabled = false;
+
+		try
+		{
+			CommandLine.Parse(new[] { "-g", @"C:\Gothic" }).Apply();
+
+			Assert.True(DebugSettings.CollisionEnabled);
+		}
+		finally
+		{
+			DebugSettings.CollisionEnabled = false;
+		}
+	}
+
+	[Fact]
+	public void Apply_WalkEnablesCollision()
+	{
+		DebugSettings.CollisionEnabled = false;
+
+		try
+		{
+			CommandLine.Parse(new[] { "-walk" }).Apply();
+
+			Assert.True(DebugSettings.CollisionEnabled);
+		}
+		finally
+		{
+			DebugSettings.CollisionEnabled = false;
+		}
+	}
+
+	[Fact]
 	public void Parse_BareDebugViewFlags_EnableThem()
 	{
 		var result = CommandLine.Parse(new[] { "-wireframe", "-bounds" });
