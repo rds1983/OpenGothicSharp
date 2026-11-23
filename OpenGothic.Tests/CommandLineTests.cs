@@ -370,6 +370,27 @@ public class CommandLineTests
 
 		Assert.Equal("ARMOR_PRISONER", result.SpawnModel);
 		Assert.Equal(250.5f, result.SpawnDistance);
+		Assert.Null(result.SpawnOffset);
+	}
+
+	[Fact]
+	public void Parse_SpawnOffset_ReadsCameraSpaceOffset()
+	{
+		var result = CommandLine.Parse(new[] { "-model:ARMOR_PRISONER", "-modeloffset:120,-15,8.5" });
+
+		Assert.Equal(new Vector3(120f, -15f, 8.5f), result.SpawnOffset);
+	}
+
+	[Theory]
+	[InlineData("1,2")]
+	[InlineData("1,2,3,4")]
+	[InlineData("left,2,3")]
+	public void Parse_InvalidSpawnOffset_IsRejected(string value)
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", $"-modeloffset:{value}" });
+
+		Assert.Null(result.SpawnOffset);
+		Assert.False(result.Validate());
 	}
 
 	[Fact]

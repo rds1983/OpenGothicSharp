@@ -212,12 +212,14 @@ public class Renderer : IDisposable
 	/// </para>
 	/// <para>
 	/// A skinned part's box is the pose it was built in — for a model, the bind pose, which
-	/// is the box the vertices form as loaded. Animation moves vertices outside that box, so
-	/// whoever plays a clip is responsible for growing the box to cover it (see
-	/// <see cref="DrMeshPart.BoundingBox"/>); an unexpanded box culls a limb mid-swing.
+	/// is the box the vertices form as loaded. Animation moves vertices outside that box, so a
+	/// player that animates the skeleton widens <see cref="DrMeshPartTag.CullBounds"/> and the
+	/// caller passes it as <paramref name="bounds"/> (see
+	/// <see cref="DigitalRiseModelTagExtensions.GetCullBounds"/>); an unexpanded box culls a
+	/// limb mid-swing.
 	/// </para>
 	/// </summary>
-	public void DrawMeshPart(DrMeshPart part, Matrix transform, Matrix[] boneTransforms = null, Material customMaterial = null, bool cull = true)
+	public void DrawMeshPart(DrMeshPart part, Matrix transform, Matrix[] boneTransforms = null, Material customMaterial = null, bool cull = true, BoundingBox? bounds = null)
 	{
 		EnsureFrameOpen(nameof(DrawMeshPart));
 
@@ -250,7 +252,8 @@ public class Renderer : IDisposable
 
 		if (cull && DebugSettings.CullEnabled)
 		{
-			var worldBounds = part.BoundingBox.Transform(ref transform);
+			var cullBox = bounds ?? part.BoundingBox;
+			var worldBounds = cullBox.Transform(ref transform);
 			if (!_frustum.Intersects(worldBounds))
 			{
 				return;
@@ -349,7 +352,8 @@ public class Renderer : IDisposable
 	/// <paramref name="boneTransforms"/>, so the wireframe shows the posed geometry rather
 	/// than the bind pose.
 	/// </summary>
-	public void DrawMeshPartWireframe(DrMeshPart part, Matrix transform, Color color, Matrix[] boneTransforms = null)
+	public void DrawMeshPartWireframe(DrMeshPart part, Matrix transform, Color color, Matrix[] boneTransforms = null,
+		BoundingBox? bounds = null)
 	{
 		EnsureFrameOpen(nameof(DrawMeshPartWireframe));
 
@@ -367,7 +371,7 @@ public class Renderer : IDisposable
 		_wireframeMaterial.DepthStencilState = source?.DepthStencilState ?? DepthStencilState.Default;
 		_wireframeMaterial.RasterizerState = _wireframeRasterizerState;
 
-		DrawMeshPart(part, transform, boneTransforms, _wireframeMaterial);
+		DrawMeshPart(part, transform, boneTransforms, _wireframeMaterial, bounds: bounds);
 	}
 
 	/// <summary>

@@ -58,6 +58,7 @@ default chosen elsewhere.
 | `-lookat:<x,y,z>` | Point the camera at a world position (implies yaw and pitch). |
 | `-model:<name>` | Spawn a model directly in front of the camera, with or without an extension. Reaches models no world vob uses. |
 | `-modeldist:<n>` | How far ahead to place `-model` (default 400). |
+| `-modeloffset:<x,y,z>` | Move the `-model` spawn in camera space (right, up, forward), so a capture can put it at the edge of the view. |
 | `-screenshot:<file.png>` | Write the rendered frame to a PNG once it is ready, then exit. |
 | `-screenshotframe:<n>` | Which frame to capture, counting from one (default 1). |
 
@@ -312,6 +313,21 @@ A model is a `DrModel` (skeleton plus meshes) placed in the world by a `ModelNod
   out at 36 joints and a skeleton at 47 bones, so no model needs a custom effect. The draw
   path throws if a caller hands it more bones than the effect supports, and throws if a
   skinned part is drawn without its bone transforms.
+
+Culling is per part, and a skinned part's own box describes the pose it was built in. Playing
+a clip moves vertices outside that box, so the playing node widens
+`DrMeshPartTag.CullBounds`: every frame of the clip is evaluated once on a throw-away
+`DrModelInstance`, and each part's box is unioned with the part box transformed by every one
+of its skin joints. A blended vertex lies inside the hull of its joints' rigid copies, so the
+union is conservative, and `Renderer.DrawMeshPart` culls with it.
+
+The union lives on the part tag because it belongs to the model rather than to a node: it only
+ever widens, so every instance of a shared model sees a box valid for any clip any of them
+plays, and a cross-fade needs no special case. `DrModelTag.MeasuredClips` records which clips
+have already been merged, so each clip is measured once per model, not once per instance and
+certainly not per frame. It cannot go on `AnimationClipTag`: a clip is shared by every model
+with the same script and bone layout — the ~40 armour models share one set — while their
+meshes, and therefore their part boxes, differ.
 
 `Assets.GetModel(name, ...)` resolves a model name from the level (the authoring `.ASC` /
 `.MDS` name) to a file: `STEM.MDL` if present, otherwise the `STEM.MDH` + `STEM.MDM` pair.

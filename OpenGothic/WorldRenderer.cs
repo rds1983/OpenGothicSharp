@@ -135,26 +135,27 @@ public class WorldRenderer : IDisposable
 					transform = instance.GetBoneGlobalTransform(mesh.ParentBone.Index) * node.Transform;
 				}
 
-				DrawMeshPart(renderer, part, transform, boneTransforms, debug);
+				DrawMeshPart(renderer, part, transform, boneTransforms, part.GetCullBounds(), debug);
 			}
 		}
 	}
 
-	private static void DrawMeshPart(Renderer renderer, DrMeshPart part, Matrix transform, Matrix[] boneTransforms, DebugDraw debug)
+	private static void DrawMeshPart(Renderer renderer, DrMeshPart part, Matrix transform, Matrix[] boneTransforms,
+		BoundingBox bounds, DebugDraw debug)
 	{
 		if (debug?.Wireframe == true)
 		{
-			renderer.DrawMeshPartWireframe(part, transform, debug.WireframeColor, boneTransforms);
+			renderer.DrawMeshPartWireframe(part, transform, debug.WireframeColor, boneTransforms, bounds);
 		}
 		else
 		{
-			renderer.DrawMeshPart(part, transform, boneTransforms);
+			renderer.DrawMeshPart(part, transform, boneTransforms, bounds: bounds);
 		}
 	}
 
 	private static void DrawMeshPart(Renderer renderer, DrMeshPart part, Matrix transform, DebugDraw debug)
 	{
-		DrawMeshPart(renderer, part, transform, null, debug);
+		DrawMeshPart(renderer, part, transform, null, part.BoundingBox, debug);
 	}
 
 	public void Dispose()

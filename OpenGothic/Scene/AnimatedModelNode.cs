@@ -1,5 +1,6 @@
 using DigitalRiseModel;
 using DigitalRiseModel.Animation;
+using Microsoft.Xna.Framework;
 using OpenGothic.Utility;
 using System;
 
@@ -105,6 +106,10 @@ public sealed class AnimatedModelNode : ModelNode
 		_clip = clip;
 		_endHandled = false;
 
+		// Merge this clip's poses into the parts' cull bounds before the first frame drawn with
+		// it. Each clip is measured once per model; other nodes of the same model reuse it.
+		MeasureClip(clip);
+
 		return true;
 	}
 
@@ -187,6 +192,74 @@ public sealed class AnimatedModelNode : ModelNode
 			// is a rare event, unlike the per-frame sampling around it.
 			Log.Info($"Animation '{_clip.Name}' finished; continuing with '{next}'.");
 			Play(next);
+		}
+	}
+
+	/// <summary>
+	/// Widens every skinned part's box so it covers the clip's whole pose range, in model space.
+	/// The clip is sampled on a throw-away instance, which leaves the node's own skeleton
+	/// untouched and uses exactly the sampling playback would.
+	/// </summary>
+	private void MeasureClip(AnimationClip clip)
+	{
+		if (clip?.Tag is not AnimationClipTag clipTag)
+		{
+			return;
+		}
+
+		var info = clipTag.info;
+		var model = Instance.Model;
+		if (info == null || model == null || info.Fps <= 0f || info.FrameCount <= 0)
+		{
+			return;
+		}
+
+		// The measured boxes live on the model's parts, so "already measured" is a model-level
+		// fact: every instance of the same model can reuse the union.
+		if (model.Tag is not DrModelTag modelTag)
+		{
+			modelTag = new DrModelTag();
+			model.Tag = modelTag;
+		}
+
+		if (!modelTag.MeasuredClips.Add(clipTag.Id))
+		{
+			return;
+		}
+
+		var probe = new DrModelInstance(model);
+		var controller = new AnimationController(probe);
+		controller.StartClip(new AnimationClipNode(clip, AnimationFlags.Looped));
+
+		for (var frame = 0; frame < info.FrameCount; ++frame)
+		{
+			controller.Time = TimeSpan.FromSeconds(frame / (double)info.Fps);
+
+			foreach (var mesh in model.Meshes)
+			{
+				foreach (var part in mesh.MeshParts)
+				{
+					if (part.Skin == null || part.Tag is not DrMeshPartTag tag)
+					{
+						continue;
+					}
+
+					// A blended vertex lies inside the hull of its joints' rigidly transformed
+					// copies, so the union over the skin's joints is conservative. Interpolation
+					// between two frames can bulge a hair outside both, which the 25 fps spacing
+					// keeps negligible.
+					var joints = probe.GetSkinTransforms(part.Skin.SkinIndex);
+					var box = tag.CullBounds ?? part.BoundingBox;
+
+					foreach (var joint in joints)
+					{
+						var matrix = joint;
+						box = BoundingBox.CreateMerged(box, part.BoundingBox.Transform(ref matrix));
+					}
+
+					tag.CullBounds = box;
+				}
+			}
 		}
 	}
 

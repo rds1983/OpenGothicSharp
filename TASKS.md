@@ -55,8 +55,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - Debug views: F2 toggles wireframe, F3 toggles bounding boxes; independent of F1 and off by
   default. Both can be started on from the command line with `-wireframe`/`-bounds`.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
-  **C1 (Model rendering), C2 (Animation clips) and C3 (Animation playback) complete.** Current
-  milestone: **C — Models and animation**, next task **C4**.
+  **C1 (Model rendering), C2 (Animation clips), C3 (Animation playback) and C4 (Animated
+  culling boxes) complete.** Current milestone: **C — Models and animation**, next task **C5**.
 
 ---
 
@@ -214,14 +214,19 @@ pop. — `-play:<clip>` on a `-model:` plays it through `AnimatedModelNode` and
 `AnimationController`; a looping clip wraps pixel-exactly at its duration and reverse clips
 mirror the forward walk.
 
-### C4. Animated culling boxes
+### C4. Animated culling boxes — DONE
 A skinned part's box is its **bind pose**, which stops being true once a clip moves the
 skeleton: a swinging limb leaves the box and gets frustum-culled. Playing a clip must
 therefore grow each skinned part's `BoundingBox` to cover the whole clip — a per-part update,
 with no change to the draw path. Compute it from the clip's bone poses (or precompute a union
 per clip), not by disabling culling.
 **Done when:** no limb vanishes at the edge of the view while a model animates, and an
-off-screen animating model still draws almost nothing.
+off-screen animating model still draws almost nothing. — A playing node measures its clip once
+per model and merges, per part, the part box transformed by every skin joint into
+`DrMeshPartTag.CullBounds`; `DrModelTag.MeasuredClips` keys the "already measured" question by
+clip id. `Renderer` culls with that box when given one. With the model on the right edge
+(`-modeloffset:270`) the bind-box build loses 99 px against `-nocull`; the widened box matches
+`-nocull` at every offset from 120 to 300.
 
 ### C5. Vob hierarchy
 C1 places a model vob at its own ZEN rotation/translation, but the vob **hierarchy** is still

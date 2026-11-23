@@ -112,7 +112,11 @@ public class OgGame : Game
 		var instance = new DrModelInstance(model);
 
 		var distance = CommandLine.Instance.SpawnDistance ?? 400f;
-		var position = Camera.Position + Camera.Forward * distance;
+		var offset = CommandLine.Instance.SpawnOffset ?? Vector3.Zero;
+		var position = Camera.Position
+			+ Camera.Right * offset.X
+			+ Camera.Up * offset.Y
+			+ Camera.Forward * (distance + offset.Z);
 		var transform = Matrix.CreateTranslation(position);
 
 		// A model driven by a script gets the animating node; a prop keeps the plain one. The

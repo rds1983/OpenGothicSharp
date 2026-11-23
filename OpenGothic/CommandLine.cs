@@ -104,6 +104,13 @@ public class CommandLine
 	/// </summary>
 	public float? SpawnDistance { get; private set; }
 
+	/// <summary>
+	/// Offset in camera space — right, up, forward — added when placing
+	/// <see cref="SpawnModel"/>. Lets a capture put the model at the edge of the view, where
+	/// culling mistakes show.
+	/// </summary>
+	public Vector3? SpawnOffset { get; private set; }
+
 	private bool _invalid;
 
 	public static CommandLine Parse(string[] args)
@@ -286,6 +293,10 @@ public class CommandLine
 							result._invalid = true;
 						}
 					}
+					else if (arg.StartsWith("-modeloffset:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.SpawnOffset = result.ParseVector(arg.Substring("-modeloffset:".Length), arg);
+					}
 					else
 					{
 						Log.Warning($"Ignoring unknown command line argument '{arg}'.");
@@ -351,7 +362,7 @@ public class CommandLine
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
 		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] " +
-		"[-model:<name>] [-modeldist:<n>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
+		"[-model:<name>] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
 		"[-play:<clip>] [-freeze] [-animtime:<seconds>]";
 
 	private Vector3? ParseVector(string value, string option)
