@@ -91,4 +91,19 @@ public class CharacterControllerTests
 		Assert.True(controller.Position.X - start.X > 200f);
 		Assert.True(-10f - controller.Position.Z >= CharacterController.DefaultRadius - 2f);
 	}
+
+	[Fact]
+	public void PushesOutOfAnOverlappingStatic()
+	{
+		using var world = CreateWorld(out var controller);
+
+		// A small box loaded around the capsule: every sweep would otherwise start inside it.
+		world.AddStaticBox(new Vector3(0f, controller.Position.Y, 0f), new Vector3(40f, 40f, 40f),
+			PhysicsMaterials.DefaultFriction, PhysicsSurfaceKind.Vob);
+
+		var start = controller.Position;
+		Step(controller, Vector3.UnitZ, 60);
+
+		Assert.True((controller.Position - start).Length() > 10f);
+	}
 }

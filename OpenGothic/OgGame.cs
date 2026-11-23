@@ -25,6 +25,7 @@ public class OgGame : Game
 	private float _mouseYaw;
 	private float _mousePitch;
 	private bool _thirdPerson;
+	private float _walkTestSeconds;
 	private Desktop _desktop;
 	private Hud _hud;
 	private KeyboardState _previousKeyboard;
@@ -333,8 +334,10 @@ public class OgGame : Game
 			_physics = new PhysicsWorld();
 
 			// TODO(K1): read the start point the game scripts select. Until the session exists,
-			// the plaza ahead of the default camera is the stable standing place.
-			var center = Camera.Position + Camera.Forward * 260f;
+			// the plaza ahead of the default camera is the stable standing place; -player:
+			// overrides it for a diagnostic spot.
+			var center = CommandLine.Instance.PlayerPosition ??
+			             (Camera.Position + Camera.Forward * 260f);
 			_physics.Initialize(_world, center, 3000f);
 
 			if (CommandLine.Instance.StartWalking)
@@ -358,7 +361,13 @@ public class OgGame : Game
 
 	private void StartPlayer(Vector3 center)
 	{
-		if (!_physics.RayCast(center + Vector3.UnitY * 1000f, -Vector3.UnitY, 2000f, false, out var ground))
+		// A diagnostic -player: point is an interior eye position; drop from just above it so a
+		// roof does not become the ground. The placeholder plaza uses a long sky ray instead.
+		var explicitStart = CommandLine.Instance.PlayerPosition.HasValue;
+		var rayOrigin = explicitStart ? center + Vector3.UnitY * 10f : center + Vector3.UnitY * 1000f;
+		var rayDistance = explicitStart ? 500f : 2000f;
+
+		if (!_physics.RayCast(rayOrigin, -Vector3.UnitY, rayDistance, false, out var ground))
 		{
 			Log.Warning("Unable to find ground for the player; walking is disabled.");
 			return;
@@ -374,6 +383,7 @@ public class OgGame : Game
 		_mouseYaw = Camera.Yaw;
 		_mousePitch = Camera.Pitch;
 		_thirdPerson = CommandLine.Instance.ThirdPerson;
+		_walkTestSeconds = CommandLine.Instance.WalkTestSeconds ?? 0f;
 		Mouse.SetPosition(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height / 2);
 
 		Log.Info($"Player spawned at ({_controller.Position.X:0.#}, {_controller.Position.Y:0.#}, {_controller.Position.Z:0.#}) on {ground.Kind}.");
@@ -454,8 +464,21 @@ public class OgGame : Game
 		if (keyboard.IsKeyDown(Keys.D)) wish += right;
 		if (keyboard.IsKeyDown(Keys.A)) wish -= right;
 
+		var walkTestEnded = false;
+		if (_walkTestSeconds > 0f)
+		{
+			wish += forward;
+			_walkTestSeconds -= (float)gameTime.ElapsedGameTime.TotalSeconds;
+			walkTestEnded = _walkTestSeconds <= 0f;
+		}
+
 		_controller.Step(gameTime.ElapsedGameTime, wish);
 		_physics.Update(_controller.Position);
+
+		if (walkTestEnded)
+		{
+			Log.Info($"Walk test ended at ({_controller.Position.X:0.#}, {_controller.Position.Y:0.#}, {_controller.Position.Z:0.#}).");
+		}
 
 		Camera.Yaw = _mouseYaw;
 		Camera.Pitch = _mousePitch;

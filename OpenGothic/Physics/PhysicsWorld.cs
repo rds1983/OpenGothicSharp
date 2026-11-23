@@ -205,6 +205,14 @@ public sealed class PhysicsWorld : IDisposable
 				continue;
 			}
 
+			// Never drop a static around the player: a source that is being loaded because it
+			// just entered the radius must not enclose the capsule, or every sweep would start
+			// inside it. It is retried after the player moves.
+			if (OverlapsPlayer(source.Bounds, center))
+			{
+				continue;
+			}
+
 			var colliders = AddSource(source);
 			if (colliders.Count == 0)
 			{
@@ -246,6 +254,13 @@ public sealed class PhysicsWorld : IDisposable
 		return new BoundingBox(
 			center - new Vector3(radius),
 			center + new Vector3(radius));
+	}
+
+	/// <summary>Whether a source's box intersects the capsule the player occupies.</summary>
+	private static bool OverlapsPlayer(BoundingBox bounds, Vector3 center)
+	{
+		var half = new Vector3(CapsuleRadius, CapsuleRadius + CapsuleLength * 0.5f, CapsuleRadius);
+		return bounds.Intersects(new BoundingBox(center - half, center + half));
 	}
 
 	private static long ChunkKey(int x, int z) => ((long)x << 32) | (uint)z;

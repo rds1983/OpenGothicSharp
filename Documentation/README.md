@@ -59,6 +59,8 @@ default chosen elsewhere.
 | `-walk` | Force the playable capsule. A plain launch already starts walking; this is for combining walking with a diagnostic option. |
 | `-nowalk` | Keep the fixed diagnostic camera even for a plain launch. |
 | `-thirdperson` | Start walking in the chase camera instead of first person. |
+| `-player:<x,y,z>` | Start the walking capsule at a world position instead of the placeholder plaza; the player drops to the ground below the point. |
+| `-walktest:<seconds>` | Hold forward for a diagnostic run and log the final position. Useful for reproducing a stuck spot. |
 | `-cam:<x,y,z>` | Override the camera position. |
 | `-lookat:<x,y,z>` | Point the camera at a world position (implies yaw and pitch). |
 | `-model:<name>` | Spawn a model directly in front of the camera, with or without an extension. Reaches models no world vob uses. |
@@ -560,6 +562,10 @@ three behaviours explicit:
   the capsule's lower sphere grazes the step's top corner.
 - **Wall slide** is the normal projection of whatever displacement remains after a hit. A
   diagonal walk into a wall keeps its distance from the face and keeps moving along it.
+- **Overlap recovery** probes the capsule's sides with short rays and pushes out of a static
+  that was loaded around it; the streaming loader also defers a source whose bounds would
+  enclose the capsule. Without this, every sweep would start at zero time and the player would
+  be stuck until a key press, or forever.
 
 The controller is driven by `-walk`; the self-checks drive it directly.
 

@@ -120,6 +120,11 @@ frame it sweeps the displacement against the static meshes and resolves the cont
   capsule fits (a short upward sweep checks the ceiling). Sweeping the capsule upward does not
   work for this: its lower sphere grazes the step's top corner, which is why the probe is a
   ray.
+- **Overlap recovery** short-rays the four sides of the lower sphere and body; if a static
+  penetrates the capsule, it is pushed out along the shallowest exit. If nothing penetrates,
+  the controller steps back along the attempted movement by the 0.5-unit skin. The streaming
+  loader also defers a source whose bounds intersect the player capsule, so a prop cannot be
+  dropped around the player in the first place.
 
 A plain launch (or `-walk`) drives the capsule from WASD and mouse look, streams collision
 around its position, and places a first-person or (F5 / `-thirdperson`) chase camera. The

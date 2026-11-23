@@ -89,6 +89,13 @@ public sealed class CharacterController
 			return;
 		}
 
+		// A loaded static can land around the player; resolve that before doing any movement so
+		// the capsule does not need a key press to escape an overlap.
+		if (TryUnstick(Vector3.Zero))
+		{
+			Log.Info($"Unstuck player at ({Position.X:0.#}, {Position.Y:0.#}, {Position.Z:0.#}).");
+		}
+
 		Grounded = ProbeGround(out _);
 
 		// A grounded body is pressed into the ground so slopes are followed without
@@ -168,7 +175,7 @@ public sealed class CharacterController
 	{
 		var canStep = Grounded;
 
-		for (var iteration = 0; iteration < 4; ++iteration)
+		for (var iteration = 0; iteration < 6; ++iteration)
 		{
 			var length = delta.Length();
 			if (length < 1e-4f)
@@ -180,6 +187,19 @@ public sealed class CharacterController
 			{
 				Position += delta;
 				return;
+			}
+
+			if (t <= 0f)
+			{
+				// The shape starts inside something. A sweep cannot say which way is out, so
+				// resolve the overlap with short rays and retry instead of treating the hit as
+				// a ground contact and freezing the capsule.
+				if (!TryUnstick(delta))
+				{
+					return;
+				}
+
+				continue;
 			}
 
 			// Stop just short of the surface; starting the next sweep exactly on it would
@@ -208,6 +228,53 @@ public sealed class CharacterController
 			delta = remaining;
 			canStep = false;
 		}
+	}
+
+	/// <summary>
+	/// Pushes the capsule out of a static it overlaps. When a streaming load or a seam puts
+	/// geometry around the player, every sweep starts at zero time and the controller cannot
+	/// move; probing the four sides of the lower sphere finds the shallowest exit. If nothing
+	/// is actually penetrating, step back along the attempted movement and try again.
+	/// </summary>
+	private bool TryUnstick(Vector3 delta)
+	{
+		var lower = Position - Vector3.UnitY * (HalfHeight - Radius);
+
+		if (TryPush(lower, Vector3.UnitX) ||
+		    TryPush(lower, -Vector3.UnitX) ||
+		    TryPush(lower, Vector3.UnitZ) ||
+		    TryPush(lower, -Vector3.UnitZ) ||
+		    TryPush(Position, Vector3.UnitX) ||
+		    TryPush(Position, -Vector3.UnitX) ||
+		    TryPush(Position, Vector3.UnitZ) ||
+		    TryPush(Position, -Vector3.UnitZ))
+		{
+			Velocity = Vector3.Zero;
+			return true;
+		}
+
+		var length = delta.Length();
+		if (length > 1e-4f)
+		{
+			Position -= delta / length * Skin;
+			Velocity = Vector3.Zero;
+			return true;
+		}
+
+		return false;
+	}
+
+	private bool TryPush(Vector3 origin, Vector3 direction)
+	{
+		var reach = Radius + 1f;
+		if (!_world.RayCast(origin, direction, reach, false, out var hit) ||
+		    hit.Distance >= Radius - 0.01f)
+		{
+			return false;
+		}
+
+		Position -= direction * (Radius - hit.Distance + Skin);
+		return true;
 	}
 
 	/// <summary>

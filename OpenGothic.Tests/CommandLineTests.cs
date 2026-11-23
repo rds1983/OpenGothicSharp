@@ -511,6 +511,23 @@ public class CommandLineTests
 	}
 
 	[Fact]
+	public void Parse_PlayerStart_ReadsPosition()
+	{
+		var result = CommandLine.Parse(new[] { "-walk", "-player:92.1,22.8,-695.9" });
+
+		Assert.Equal(new Vector3(92.1f, 22.8f, -695.9f), result.PlayerPosition);
+		Assert.True(result.StartWalking);
+	}
+
+	[Fact]
+	public void Parse_WalkTest_ReadsSeconds()
+	{
+		var result = CommandLine.Parse(new[] { "-walktest:2.5" });
+
+		Assert.Equal(2.5f, result.WalkTestSeconds);
+	}
+
+	[Fact]
 	public void Parse_InvalidSpawnYaw_IsRejected()
 	{
 		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-modelrot:sideways" });

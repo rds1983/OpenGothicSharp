@@ -166,6 +166,18 @@ public class CommandLine
 	public Vector3? SpawnOffset { get; private set; }
 
 	/// <summary>
+	/// World position to start the walking capsule at, or null for the placeholder plaza
+	/// spot. The value is treated as the eye; the player is dropped to the ground below it.
+	/// </summary>
+	public Vector3? PlayerPosition { get; private set; }
+
+	/// <summary>
+	/// Seconds to hold the forward key automatically after spawning the player. Null leaves
+	/// input to the developer; a value makes a diagnostic run walk on its own.
+	/// </summary>
+	public float? WalkTestSeconds { get; private set; }
+
+	/// <summary>
 	/// Yaw in degrees applied to the placed <see cref="SpawnModel"/> or composed model, or null
 	/// for none. A model faces away from the default camera, so 180 shows its front.
 	/// </summary>
@@ -430,6 +442,23 @@ public class CommandLine
 					{
 						result.SpawnOffset = result.ParseVector(arg.Substring("-modeloffset:".Length), arg);
 					}
+					else if (arg.StartsWith("-player:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.PlayerPosition = result.ParseVector(arg.Substring("-player:".Length), arg);
+					}
+					else if (arg.StartsWith("-walktest:", StringComparison.OrdinalIgnoreCase))
+					{
+						var value = arg.Substring("-walktest:".Length);
+						if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0f)
+						{
+							result.WalkTestSeconds = seconds;
+						}
+						else
+						{
+							Log.Error($"Option '-walktest:' requires a positive duration, got '{value}'.");
+							result._invalid = true;
+						}
+					}
 					else if (arg.StartsWith("-modelrot:", StringComparison.OrdinalIgnoreCase))
 					{
 						var value = arg.Substring("-modelrot:".Length);
@@ -536,7 +565,7 @@ public class CommandLine
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
 		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] " +
 		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
-		"[-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
+		"[-player:<x,y,z>] [-walktest:<seconds>] [-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 
 	private Vector3? ParseVector(string value, string option)
 	{
