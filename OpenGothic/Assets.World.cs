@@ -295,21 +295,25 @@ namespace OpenGothic
 
 			// Virtual objects
 
-			// Enqueue root objects
-			var vobs = new List<Tuple<Matrix, IVirtualObject>>();
+			// Enqueue root objects. Gothic stores a vob's transform in world space, so a child's
+			// local transform is derived against its parent's. Rendering then composes the
+			// chain, which is what lets a moving parent carry its children; a static world
+			// still lands exactly where the file puts it.
+			var vobs = new List<(SceneNode node, Matrix world, IVirtualObject vob)>();
 			foreach (var vob in zkWorld.RootObjects)
 			{
-				vobs.Add(new Tuple<Matrix, IVirtualObject>(Matrix.Identity, vob));
+				vobs.Add((null, Matrix.Identity, vob));
 			}
 
 			while (vobs.Count > 0)
 			{
-				var top = vobs[0];
+				var (parentNode, parentWorld, vob) = vobs[0];
 				vobs.RemoveAt(0);
 
-				var vob = top.Item2;
+				var world = vob.Rotation.ToXna() * Matrix.CreateTranslation(vob.Position.ToXna());
+				var local = parentNode == null ? world : world * Matrix.Invert(parentWorld);
 
-				var transform = vob.Rotation.ToXna() * Matrix.CreateTranslation(vob.Position.ToXna());
+				SceneNode node = null;
 
 				var asModel = vob.Visual as VisualModel;
 				if (asModel != null && DebugSettings.ModelsEnabled)
@@ -336,17 +340,22 @@ namespace OpenGothic
 						// model with no geometry yields a degenerate box at the vob's own
 						// position, which is still the right cell to register it in.
 						var bb = instance.BoundingBox ?? new BoundingBox(vob.Position.ToXna(), vob.Position.ToXna());
-						var worldBounds = bb.Transform(ref transform);
+						var worldBounds = bb.Transform(ref world);
 
 						var cell = result.FindCellByBox(worldBounds);
 						if (cell != null)
 						{
 							cell.ObjectBounds.Add(worldBounds);
-							cell.Children.Add(new ModelNode
+
+							var modelNode = new ModelNode
 							{
 								Instance = instance,
-								Transform = transform
-							});
+								Transform = local
+							};
+
+							cell.Children.Add(modelNode);
+							parentNode?.Children.Add(modelNode);
+							node = modelNode;
 						}
 					}
 				}
@@ -354,10 +363,12 @@ namespace OpenGothic
 				var asMesh = vob.Visual as VisualMultiResolutionMesh;
 				if (asMesh != null)
 				{
+					// Instanced transforms stay in world space, so a multi-mesh does not take
+					// part in the node hierarchy; no mover uses one as a child today.
 					var n = Path.ChangeExtension(asMesh.Name, "MRM");
 					var mesh = GetMultiMesh(device, n);
 
-					var bb = mesh.BoundingBox.Transform(ref transform);
+					var bb = mesh.BoundingBox.Transform(ref world);
 
 					var cell = result.FindCellByBox(bb);
 					if (cell != null)
@@ -381,7 +392,7 @@ namespace OpenGothic
 							// Add instance
 							foreach (var mm in multiMeshes)
 							{
-								mm.InstancesTransforms.Add(transform);
+								mm.InstancesTransforms.Add(world);
 							}
 						}
 						else
@@ -405,7 +416,19 @@ namespace OpenGothic
 
 				foreach (var child in vob.Children)
 				{
-					vobs.Add(new Tuple<Matrix, IVirtualObject>(transform, child));
+					// A vob with children needs something to hang them from even when it has no
+					// visual of its own.
+					if (node == null)
+					{
+						node = new SceneNode
+						{
+							Transform = local
+						};
+
+						parentNode?.Children.Add(node);
+					}
+
+					vobs.Add((node, world, child));
 				}
 			}
 

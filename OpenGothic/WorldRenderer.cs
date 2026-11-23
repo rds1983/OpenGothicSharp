@@ -97,7 +97,7 @@ public class WorldRenderer : IDisposable
 				break;
 
 			case MeshNode mesh:
-				DrawMeshPart(renderer, mesh.Mesh, mesh.Transform, debug);
+				DrawMeshPart(renderer, mesh.Mesh, mesh.WorldTransform, debug);
 				break;
 
 			case ModelNode model:
@@ -117,6 +117,7 @@ public class WorldRenderer : IDisposable
 	{
 		var instance = node.Instance;
 		var model = instance.Model;
+		var world = node.WorldTransform;
 
 		foreach (var mesh in model.Meshes)
 		{
@@ -127,12 +128,12 @@ public class WorldRenderer : IDisposable
 
 				if (part.Skin != null)
 				{
-					transform = node.Transform;
+					transform = world;
 					boneTransforms = instance.GetSkinTransforms(part.Skin.SkinIndex);
 				}
 				else
 				{
-					transform = instance.GetBoneGlobalTransform(mesh.ParentBone.Index) * node.Transform;
+					transform = instance.GetBoneGlobalTransform(mesh.ParentBone.Index) * world;
 				}
 
 				DrawMeshPart(renderer, part, transform, boneTransforms, part.GetCullBounds(), debug);

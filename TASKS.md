@@ -55,8 +55,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - Debug views: F2 toggles wireframe, F3 toggles bounding boxes; independent of F1 and off by
   default. Both can be started on from the command line with `-wireframe`/`-bounds`.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
-  **C1 (Model rendering), C2 (Animation clips), C3 (Animation playback) and C4 (Animated
-  culling boxes) complete.** Current milestone: **C — Models and animation**, next task **C5**.
+  **C1–C5 complete** (model rendering, clips, playback, animated culling boxes, vob hierarchy).
+  Current milestone: **C — Models and animation**, next task **C6**.
 
 ---
 
@@ -228,22 +228,32 @@ clip id. `Renderer` culls with that box when given one. With the model on the ri
 (`-modeloffset:270`) the bind-box build loses 99 px against `-nocull`; the widened box matches
 `-nocull` at every offset from 120 to 300.
 
-### C5. Vob hierarchy
-C1 places a model vob at its own ZEN rotation/translation, but the vob **hierarchy** is still
-flattened: the child walk in `Assets.World.cs` enqueues each child with the parent's
-transform and then recomputes the child's from its own fields alone, so the parent transform
-is discarded. Nested vobs therefore do not follow their parent.
-**Done when:** a child vob follows its parent instead of sitting at its own absolute
-position.
+### C5. Vob hierarchy — DONE
+C1 places a model vob at its own ZEN rotation/translation. Gothic stores every vob transform in
+**world space**, so a child already lands in the right place and the flat loader was not
+misplacing it; what it dropped was the link, which only matters once a parent moves.
+
+`Assets.World.cs` now derives each child's local transform (`world * inverse(parentWorld)`) and
+attaches the node to its parent through `SceneNode.Children`; a vob with children but no visual
+gets a bare node for them to hang from. `SceneNode.WorldTransform` composes the chain and caches
+it, and a transform change invalidates the node and its descendants. Over the 1,870 parented
+vobs of `newworld.zen` the recomposition error is at most 0.0125 units, and the static world
+renders pixel-identically.
+**Done when:** a child vob follows its parent instead of sitting at its own absolute position. —
+`SceneNode` composes local transforms up the chain; `SceneNodeTests` covers composition, a moved
+parent and a moved grandparent, and the world's placement is unchanged. A mover that changes a
+vob's transform also has to re-register the affected subtrees with their grid cells and bounds,
+which is why this lands before movers rather than with them.
 
 ### C6. Attach points
 `IModelMesh.Attachments` names attach points on a model (93 in the shipped `newworld.zen`
 data), and an actor's armour and weapon meshes are meant to follow those named nodes, which
 `ModelNode` cannot express yet.
 
-Add an `AttachNode` that resolves an attach-point name to a model bone and inherits that
-bone's world transform. This is also where the clips' nine `ZS_*` channels that a bare armour
-model cannot pose become relevant: those nodes exist for attaching, not for deforming.
+Add an `AttachNode` that resolves an attach-point name to a model bone, is added to the model
+node's `Children`, and sets its local transform from that bone (once, or per frame if the pose
+moves). This is also where the clips' nine `ZS_*` channels that a bare armour model cannot pose
+become relevant: those nodes exist for attaching, not for deforming.
 **Done when:** a model parented to another model's attach point follows that bone without a
 manual offset.
 

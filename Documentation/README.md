@@ -338,10 +338,15 @@ including why the root translation goes on the root bone's default pose rather t
 bind matrices — are in
 [Specifications/gothic-model-format.md](Specifications/gothic-model-format.md).
 
-`Assets.World.cs` creates a `ModelNode` for every `VisualModel` vob, using the vob rotation
-and position as its transform, and registers the instance's world bounds in the owning
-grid cell so debug bounds and the existing cell culling still apply. `-nomodels` skips this
-so a frame can be compared against the same world without model geometry.
+`Assets.World.cs` creates a `ModelNode` for every `VisualModel` vob and registers the
+instance's world bounds in the owning grid cell so debug bounds and the existing cell culling
+still apply. A vob's transform in the file is already in world space, so the loader derives the
+node's local transform against its parent and records the parent link; `SceneNode.WorldTransform`
+composes the chain and caches it until the node or an ancestor moves. That keeps every static
+vob exactly where the file puts it (the 1,870 parented vobs of `newnorld.zen` recompose within
+0.0125 units) while letting a parent that moves carry its children. `-nomodels` skips this so a
+frame can be compared against the same world without model geometry. Details in
+[Specifications/zen-vob-transform.md](Specifications/zen-vob-transform.md).
 
 Model parts are **texture-driven the same way as static meshes**: the material comes from
 `DrMeshPartTag`, with the white fallback when a texture is missing. Wireframe and bounds
