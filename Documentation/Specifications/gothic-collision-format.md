@@ -87,26 +87,52 @@ uses `sqrt(frictionA * frictionB)`. Sensors are rejected in `AllowContactGenerat
 
 ## Cost
 
-For `newworld.zen` the source data is 367k terrain plus 1.47M vob triangles. Duplicating each
-for the two-sided mesh gives about 3.7M triangles, which takes around 15–25 seconds and a few
-hundred megabytes to build with a single-threaded build. The CPU triangle data is kept only
-when `DebugSettings.CollisionEnabled` is set (the `-physics` switch), and the physics world is
-built on request, because no gameplay uses it yet. Streaming collision by cell will be needed
-before it can be always-on.
+The whole of `newworld.zen` is 367k terrain plus 1.47M vob source triangles, and doubling
+every one for the two-sided mesh gives about 3.7M triangles — roughly 15–25 seconds and a few
+hundred megabytes with a single-threaded build. That is too much to do at every startup while
+there is no gameplay streaming it, so `PhysicsWorld.Build` takes a centre and a radius and
+keeps only the terrain triangles whose bounds touch that box and the vob parts whose world
+bounds do. For the harbour with a 3000-unit radius, that is **4,601 terrain** and **32,755
+vob** source triangles in **9** static bodies, built in well under a second.
 
-## Self-check
+The world mesh and the vob collision tags are produced only when
+`DebugSettings.CollisionEnabled` is set (by `-physics`). Streamed updates as the player walks
+out of the built neighbourhood are the next step; the controller does not yet request them.
 
-`-physics` builds the world and runs `PhysicsWorld.RunCapsuleTest` from the plaza ahead of the
-camera:
+## Character controller
 
-1. Raycast down to find the ground.
-2. Drop a `Capsule(radius 30, length 110)` from 200 units above it and step four seconds. It
-   must end up off the surface (center between the radius and the upright half-height above
-   the support) and nearly stationary.
-3. Cast 16 horizontal rays from the resting point, prefer a vob over terrain, move the capsule
-   to just in front of the nearest wall and drive it into the surface for a second. The center
-   must stay outside the wall by roughly the capsule radius.
+`CharacterController` is a kinematic capsule (`radius 30`, cylinder length `110`, so it is
+175 units tall) with its own gravity (`-981 cm/s²`). It does not use a dynamic body: each
+frame it sweeps the displacement against the static meshes and resolves the contact itself.
 
-A run on `newworld.zen` reports a capsule resting on terrain, a vob wall about 159 units away,
-and a final center 35 units from the wall with a radius of 30 — blocked rather than passed
-through. Both lines are in `log.txt`, so a regression is visible without a physics overlay.
+- **Grounding** is a downward ray from the capsule's bottom. A normal with `Y >= 0.55`
+  (about 57°) is walkable, and the controller keeps a 0.5-unit clearance while following it.
+  A gap up to 12 units is snapped downward; a rise is corrected only by the clearance so a
+  real step goes through the step path.
+- **Slide** is the projection of the remaining displacement onto the contact plane. Four
+  iterations cover a corner. A sweep that starts already touching is pulled back by a
+  0.5-unit skin so the next sweep is not a zero-time hit.
+- **Step-up** probes for a walkable surface up to 35 units high just past the capsule's front
+  when a near-vertical wall blocks a grounded body. The controller moves there only if the
+  capsule fits (a short upward sweep checks the ceiling). Sweeping the capsule upward does not
+  work for this: its lower sphere grazes the step's top corner, which is why the probe is a
+  ray.
+
+## Self-checks
+
+`-physics` runs four checks from the plaza ahead of the camera (the default camera sits over
+the harbour basin, so the plaza is the stable starting point):
+
+1. **Walk** — pick the most open of 16 directions, then walk 8 seconds. The capsule must stay
+   grounded and near the surface, with no large per-step rise.
+2. **Step** — in a separate flat test world, walk into a 30-unit block; the capsule must end
+   up 30 units higher.
+3. **Wall** — in a flat test world, walk diagonally into a wall; the capsule must keep its
+   radius from the face and keep moving along it.
+4. **Drop** — drop a dynamic capsule on the level and drive it into the nearest vob wall. It
+   must rest on a surface and stop outside the wall.
+
+A run on `newworld.zen` reports 2,390 units walked with 100% grounded, clearance 0.5..0.5 and
+maximum rise 0.32; the step climbed 30; the wall slide moved 382 units and held 30.4 from the
+face for a radius of 30; and the dropped capsule rested on terrain 29.2 above it and stayed 35
+from a wall. All lines are in `log.txt`, so a regression is visible without a physics overlay.

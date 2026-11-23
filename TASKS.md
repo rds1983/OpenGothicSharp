@@ -55,10 +55,13 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   `ZS_*` attach nodes, which no armour file has. `-modelrot:<degrees>` turns the spawn so a
   capture can show its front.
 - Static collision exists: BepuPhysics2 triangle meshes for the level and for static vobs,
-  grouped by material friction with water as a contact-free sensor. `-physics` builds it and
-  runs a capsule drop/wall-push self-check; it is opt-in because the whole level costs ~20 s
-  and a few hundred MB to build.
-- No input, physics movement, audio, or scripting yet.
+  grouped by material friction with water as a contact-free sensor. The build is limited to a
+  3000-unit neighbourhood around the player (4.6k terrain + 33k vob source triangles, under a
+  second) while there is no streaming. `-physics` builds it and runs the walk, step, wall-slide
+  and capsule checks.
+- A kinematic character controller walks the terrain with gravity, ground snap, slope slide and
+  a 35-unit step assist. It is exercised by the `-physics` self-checks; input arrives in D3.
+- No input, audio, or scripting yet.
 - UI exists: Myra `Desktop` rooted at a `Hud` panel with two independently anchored blocks
   — an always-visible `Controls` list (bottom-right) and a toggleable `DebugOverlay`
   (top-left, F1) showing FPS, camera position, draw-call and triangle counts and the active
@@ -69,7 +72,7 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
   **Milestone C (Models and animation) complete** — C1–C8: model rendering, clips, playback,
   animated culling boxes, vob hierarchy, attach points, animation layers, composed models.
-  Current milestone: **D — Physics and movement**, D1 complete, next task **D2**.
+  Current milestone: **D — Physics and movement**, D1–D2 complete, next task **D3**.
 
 ---
 
@@ -380,16 +383,40 @@ skinned collision, and `-nomodels` removes vob colliders. The doubled CPU soup i
 after the meshes are built. Details in
 [Specifications/gothic-collision-format.md](Documentation/Specifications/gothic-collision-format.md).
 
-### D2. Character controller
-Capsule character with gravity, slope handling, step-up, and slide-along-wall
-response. The collision set from D1 is currently opt-in because the whole level costs ~20 s
-and hundreds of MB; the controller needs it on for normal play, so this task also has to make
-that acceptable (drop the source soup after building, and stream or split colliders if the
-cost still shows).
-**Done when:** the capsule walks the terrain without jitter or falling through.
+### D2. Character controller — DONE
+Capsule character with gravity, slope handling, step-up, and slide-along-wall response.
+`OpenGothic/Physics/CharacterController.cs` is a kinematic capsule rather than a dynamic
+body: it sweeps the frame's displacement against the static meshes and resolves the contact
+itself. That keeps the pose upright and makes the behaviours explicit.
+
+- **Grounding** is a short downward ray from the capsule bottom. A normal above ~57° is
+  walkable; the controller keeps a 0.5-unit clearance, snaps down up to 12 units, and only
+  corrects a rise by the clearance so a real step goes through the step path.
+- **Wall slide** projects the remaining displacement onto the contact plane for up to four
+  iterations. A 0.5-unit skin keeps the next sweep from starting inside the surface.
+- **Step-up** probes with a ray just past the capsule front for a walkable surface within 35
+  units and moves there only if the capsule fits. Shape sweeps cannot do this reliably: the
+  lower sphere grazes the step's top corner, which is why the first attempt failed.
+- **Cost**: the physics build is limited to a 3000-unit neighbourhood — 4,601 terrain and
+  32,755 vob source triangles, 9 static bodies, under a second — instead of the whole level.
+
+**Done when:** the capsule walks the terrain without jitter or falling through. — `-physics`
+walks 2,390 units in 8 s with 100% grounded, 0.5..0.5 clearance, a maximum per-step rise of
+0.32 and no fall-throughs; in a flat test world the same controller climbs a 30-unit block by
+exactly 30 and slides 382 units along a wall while holding 30.4 from it for a radius of 30.
+Four hermetic controller tests cover the same paths, and the old D1 drop/wall checks still
+pass. Rendering captures are pixel-identical.
+
+Known limits: the neighbourhood is fixed at build time, so walking beyond 3000 units would
+leave collision behind; streaming around the moving player is D3. `-physics` is still opt-in
+until input needs it. Details in
+[Specifications/gothic-collision-format.md](Documentation/Specifications/gothic-collision-format.md).
 
 ### D3. Player input & camera modes
-WASD + mouse look, first/third-person camera, and collision-aware movement.
+WASD + mouse look, first/third-person camera, and collision-aware movement. This is where the
+kinematic controller meets the game: enable the collision build for normal play, rebuild or
+stream the 3000-unit collision neighbourhood as the player moves, and drive the controller from
+input. The frame's ground state and eye position then feed the camera modes.
 **Done when:** the developer can walk around a level with mouse and keyboard.
 
 ---

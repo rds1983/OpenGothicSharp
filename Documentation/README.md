@@ -55,7 +55,7 @@ default chosen elsewhere.
 | `-freeze` | Pin playback to `-animtime:` instead of advancing it, so a capture does not depend on how long the process has been running. |
 | `-animtime:<seconds>` | Playback position used with `-freeze`. A looping clip wraps it; a one-shot clamps. |
 | `-wireframe` / `-bounds` | Start with the F2 / F3 debug views already on. |
-| `-physics` | Build the static collision world and run the capsule self-check at startup; its result is logged. Off by default because the collision set costs time and memory to build. |
+| `-physics` | Build the local static collision world and run the capsule/controller self-checks at startup; their results are logged. Off by default because the collision set still costs time and memory to build. |
 | `-cam:<x,y,z>` | Override the camera position. |
 | `-lookat:<x,y,z>` | Point the camera at a world position (implies yaw and pitch). |
 | `-model:<name>` | Spawn a model directly in front of the camera, with or without an extension. Reaches models no world vob uses. |
@@ -518,12 +518,37 @@ material group (`PhysicsMaterials`) and is stored per collidable in a Bepu
 `CollidableProperty`; contacts use the geometric mean of the two surfaces' coefficients.
 Water material is added as a sensor: it is present for queries but refuses contacts.
 
-`-physics` enables the CPU triangle data and builds the world. It costs about 20 seconds and
-a few hundred megabytes for `newworld.zen` (367k terrain + 1.47M vob source triangles, doubled
-for the two-sided meshes), which is why it is opt-in while there is no gameplay that needs it.
-The startup self-check drops a capsule on the plaza and drives it into the nearest wall,
-logging the rest height and the final wall separation. The format details and measurements
-are in [Specifications/gothic-collision-format.md](Specifications/gothic-collision-format.md).
+`-physics` enables the CPU triangle data and builds the world. Because building the whole
+level takes ~15–25 s and a few hundred MB, only a **3000-unit neighbourhood** around the
+player is built: for the harbour that is 4,601 terrain and 32,755 vob source triangles and
+well under a second. Streaming the neighbourhood as the player moves is the next step; until
+then the build is centred on the spawn point.
+
+The startup self-checks cover the pieces D2 needs: a capsule dropped on the plaza (D1), a
+capsule that walks the terrain, a capsule that steps onto a 30-unit block, and one that walks
+diagonally into a wall and slides along it. Each prints a single line to `log.txt`.
+
+### Character controller
+
+`OpenGothic/Physics/CharacterController.cs` is a kinematic capsule. Rather than throwing a
+dynamic body at the solver and hoping it stays upright, it sweeps the frame's displacement
+against the static meshes and slides the remainder along the contact plane. That makes the
+three behaviours explicit:
+
+- **Grounding** is a short downward ray from the capsule's bottom. A walkable normal (above
+  ~57°) keeps a 0.5-unit clearance and lets the controller follow a slope; a gap up to 12
+  units is snapped, so a downhill step does not become a hop.
+- **Step-up** probes for a walkable surface within 35 units just past the capsule's front
+  when a sweep is blocked by a near-vertical wall. The capsule is placed on the surface only
+  if it fits; a low ceiling aborts the step. Shape sweeps cannot do this reliably because
+  the capsule's lower sphere grazes the step's top corner.
+- **Wall slide** is the normal projection of whatever displacement remains after a hit. A
+  diagonal walk into a wall keeps its distance from the face and keeps moving along it.
+
+The controller is used by the self-checks; player input arrives in D3.
+
+The format details and measurements are in
+[Specifications/gothic-collision-format.md](Specifications/gothic-collision-format.md).
 
 ### Sky, fog and lighting
 

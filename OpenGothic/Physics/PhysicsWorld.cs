@@ -11,6 +11,7 @@ using OpenGothic.Scene;
 using OpenGothic.Utility;
 using System;
 using System.Runtime.CompilerServices;
+using BoundingBox = Microsoft.Xna.Framework.BoundingBox;
 using Matrix = Microsoft.Xna.Framework.Matrix;
 using Num = System.Numerics;
 
@@ -60,6 +61,9 @@ public sealed class PhysicsWorld : IDisposable
 
 	public Simulation Simulation { get; }
 
+	/// <summary>Pool the sweeps and ray tests borrow their scratch buffers from.</summary>
+	public BufferPool BufferPool => _bufferPool;
+
 	/// <summary>Material state per collidable, looked up by the contact callback.</summary>
 	public CollidableProperty<PhysicsSurface> Surfaces { get; }
 
@@ -81,49 +85,60 @@ public sealed class PhysicsWorld : IDisposable
 	}
 
 	/// <summary>
-	/// Adds the level's own triangles and every static vob mesh in the scene. A vob is
-	/// collidable only where its model has rigid geometry: a skinned mesh deforms with its
-	/// skeleton and is left out, matching the reference.
+	/// Adds the level's own triangles and the static vobs near <paramref name="center"/>. A
+	/// vob is collidable only where its model has rigid geometry: a skinned mesh deforms with
+	/// its skeleton and is left out, matching the reference. The radius keeps the build local
+	/// while there is no streaming: the whole level costs about 20 seconds and hundreds of
+	/// megabytes.
 	/// </summary>
-	public void Build(WorldGrid world)
+	public void Build(WorldGrid world, Vector3 center, float radius)
 	{
+		var area = new BoundingBox(
+			center - new Vector3(radius),
+			center + new Vector3(radius));
+
 		foreach (var surface in world.StaticCollision.Surfaces)
 		{
-			AddSurface(surface, PhysicsSurfaceKind.Terrain);
-			TerrainTriangles += surface.TriangleCount;
+			TerrainTriangles += AddSurface(surface, PhysicsSurfaceKind.Terrain, area);
 		}
 
 		foreach (var cell in world.Cells)
 		{
 			foreach (var node in cell.Children)
 			{
-				AddSceneNode(node);
+				AddSceneNode(node, area);
 			}
 		}
 
 		foreach (var surface in _vobSurfaces.Surfaces)
 		{
-			AddSurface(surface, PhysicsSurfaceKind.Vob);
-			VobTriangles += surface.TriangleCount;
+			VobTriangles += AddSurface(surface, PhysicsSurfaceKind.Vob, null);
 		}
 
 		Log.Info(
-			$"Physics: {TerrainTriangles:N0} terrain triangles, {VobTriangles:N0} vob triangles, " +
-			$"{_staticCount} static bodies.");
+			$"Physics: {TerrainTriangles:N0} terrain triangles, {VobTriangles:N0} vob triangles " +
+			$"within {radius:0} of ({center.X:0.#}, {center.Z:0.#}), {_staticCount} static bodies.");
 	}
 
-	private void AddSceneNode(SceneNode node)
+	private void AddSceneNode(SceneNode node, BoundingBox area)
 	{
 		switch (node)
 		{
 			case MeshNode mesh:
-				AddPart(mesh.Mesh, mesh.WorldTransform);
+				if (IsNear(mesh.Mesh.BoundingBox, mesh.WorldTransform, area))
+				{
+					AddPart(mesh.Mesh, mesh.WorldTransform);
+				}
+
 				break;
 
 			case InstancedMeshNode instanced:
 				foreach (var transform in instanced.InstancesTransforms)
 				{
-					AddPart(instanced.Mesh, transform);
+					if (IsNear(instanced.Mesh.BoundingBox, transform, area))
+					{
+						AddPart(instanced.Mesh, transform);
+					}
 				}
 
 				break;
@@ -131,6 +146,12 @@ public sealed class PhysicsWorld : IDisposable
 			case ModelNode model:
 				var instance = model.Instance;
 				var modelWorld = model.WorldTransform;
+				var modelBounds = instance.BoundingBox ?? new BoundingBox(modelWorld.Translation, modelWorld.Translation);
+
+				if (!IsNear(modelBounds, modelWorld, area))
+				{
+					break;
+				}
 
 				foreach (var mesh in instance.Model.Meshes)
 				{
@@ -144,12 +165,21 @@ public sealed class PhysicsWorld : IDisposable
 
 					foreach (var part in mesh.MeshParts)
 					{
-						AddPart(part, transform);
+						if (IsNear(part.BoundingBox, transform, area))
+						{
+							AddPart(part, transform);
+						}
 					}
 				}
 
 				break;
 		}
+	}
+
+	private static bool IsNear(BoundingBox local, Matrix transform, BoundingBox area)
+	{
+		var world = local.Transform(ref transform);
+		return area.Intersects(world);
 	}
 
 	private void AddPart(DrMeshPart part, Matrix transform)
@@ -162,32 +192,38 @@ public sealed class PhysicsWorld : IDisposable
 		_vobSurfaces.AddTriangles(tag.Friction, tag.Sensor, tag.Collision.Vertices, transform);
 	}
 
-	private void AddSurface(CollisionSurface surface, PhysicsSurfaceKind kind)
+	/// <summary>
+	/// Adds one friction/sensor group as a Bepu mesh, optionally limited to the triangles that
+	/// touch <paramref name="area"/>. Returns the number of source triangles taken.
+	/// </summary>
+	private int AddSurface(CollisionSurface surface, PhysicsSurfaceKind kind, BoundingBox? area)
 	{
 		var vertices = surface.Vertices;
 
 		// Count first, so the buffer holds exactly the triangles that are stored. Meshes
 		// cannot have trailing unused entries: they would become degenerate triangles at the
 		// origin.
-		var count = 0;
+		var source = 0;
 		for (var i = 0; i + 2 < vertices.Count; i += 3)
 		{
-			if (!IsDegenerate(vertices[i], vertices[i + 1], vertices[i + 2]))
+			if (!IsUsable(vertices[i], vertices[i + 1], vertices[i + 2], area))
 			{
-				// Bepu triangle meshes are one-sided: only the winding that faces the body
-				// generates contacts and ray hits. Gothic's meshes have no consistent winding
-				// (the renderer draws without back-face culling), so each triangle is added in
-				// both directions to make the surface solid from either side.
-				count += 2;
+				continue;
 			}
+
+			// Bepu triangle meshes are one-sided: only the winding that faces the body
+			// generates contacts and ray hits. Gothic's meshes have no consistent winding
+			// (the renderer draws without back-face culling), so each triangle is added in
+			// both directions to make the surface solid from either side.
+			++source;
 		}
 
-		if (count == 0)
+		if (source == 0)
 		{
-			return;
+			return 0;
 		}
 
-		_bufferPool.Take<Triangle>(count, out var triangles);
+		_bufferPool.Take<Triangle>(source * 2, out var triangles);
 
 		var target = 0;
 		for (var i = 0; i + 2 < vertices.Count; i += 3)
@@ -195,7 +231,7 @@ public sealed class PhysicsWorld : IDisposable
 			var a = vertices[i];
 			var b = vertices[i + 1];
 			var c = vertices[i + 2];
-			if (IsDegenerate(a, b, c))
+			if (!IsUsable(a, b, c, area))
 			{
 				continue;
 			}
@@ -215,12 +251,29 @@ public sealed class PhysicsWorld : IDisposable
 		};
 
 		++_staticCount;
+		return source;
 	}
 
-	private static bool IsDegenerate(Vector3 a, Vector3 b, Vector3 c)
+	private static bool IsUsable(Vector3 a, Vector3 b, Vector3 c, BoundingBox? area)
 	{
 		var normal = Vector3.Cross(b - a, c - a);
-		return normal.LengthSquared() < 1e-6f;
+		if (normal.LengthSquared() < 1e-6f)
+		{
+			return false;
+		}
+
+		if (!area.HasValue)
+		{
+			return true;
+		}
+
+		var bounds = area.Value;
+		var min = Vector3.Min(a, Vector3.Min(b, c));
+		var max = Vector3.Max(a, Vector3.Max(b, c));
+
+		return min.X <= bounds.Max.X && max.X >= bounds.Min.X &&
+		       min.Y <= bounds.Max.Y && max.Y >= bounds.Min.Y &&
+		       min.Z <= bounds.Max.Z && max.Z >= bounds.Min.Z;
 	}
 
 	/// <summary>
@@ -256,6 +309,186 @@ public sealed class PhysicsWorld : IDisposable
 		};
 
 		return true;
+	}
+
+	/// <summary>Adds a solid static box, used by the step self-check.</summary>
+	public void AddStaticBox(Vector3 center, Vector3 size, float friction, PhysicsSurfaceKind kind)
+	{
+		var box = new Box(size.X, size.Y, size.Z);
+		var shape = Simulation.Shapes.Add(box);
+		var handle = Simulation.Statics.Add(new StaticDescription(ToNumerics(center), shape));
+
+		Surfaces.Allocate(handle) = new PhysicsSurface
+		{
+			Friction = friction,
+			Kind = kind
+		};
+
+		++_staticCount;
+	}
+
+	/// <summary>
+	/// Walks a capsule across the local terrain and reports whether it stayed on the surface.
+	/// This is the D2 self-check: it exercises slopes, ground following and long walks without
+	/// a renderer or input.
+	/// </summary>
+	public void RunWalkTest(Vector3 start)
+	{
+		if (!RayCast(start + Vector3.UnitY * 1000f, -Vector3.UnitY, 2000f, false, out var ground))
+		{
+			Log.Warning("Physics walk: no ground below the start.");
+			return;
+		}
+
+		var controller = new CharacterController(this)
+		{
+			Position = ground.Position + Vector3.UnitY * (CharacterController.DefaultRadius + CharacterController.DefaultLength * 0.5f + CharacterController.GroundClearance)
+		};
+
+		// Walk toward the most open direction rather than into the nearest building. A fixed
+		// circle spent most of its time sliding along one wall, which says little about
+		// walking over terrain.
+		var wish = Vector3.UnitZ;
+		var openDistance = 0f;
+		for (var i = 0; i < 16; ++i)
+		{
+			var angle = MathF.Tau * i / 16f;
+			var direction = new Vector3(MathF.Cos(angle), 0f, MathF.Sin(angle));
+			var distance = RayCast(controller.Position, direction, 2000f, false, out var hit)
+				? hit.Distance
+				: 2000f;
+
+			if (distance > openDistance)
+			{
+				openDistance = distance;
+				wish = direction;
+			}
+		}
+
+		const int steps = 480;
+		const float dt = 1f / 60f;
+
+		var previous = controller.Position;
+		var distanceWalked = 0f;
+		var minClearance = float.MaxValue;
+		var maxClearance = -float.MaxValue;
+		var maxRise = 0f;
+		var groundedSteps = 0;
+		var fallThroughs = 0;
+
+		for (var i = 0; i < steps; ++i)
+		{
+			controller.Step(TimeSpan.FromSeconds(dt), wish);
+
+			var position = controller.Position;
+			var moved = new Vector3(position.X - previous.X, 0f, position.Z - previous.Z);
+			distanceWalked += moved.Length();
+			maxRise = MathF.Max(maxRise, MathF.Abs(position.Y - previous.Y));
+			previous = position;
+
+			var bottom = position - Vector3.UnitY * controller.HalfHeight;
+			if (RayCast(bottom + Vector3.UnitY * 2f, -Vector3.UnitY, 100f, false, out var support))
+			{
+				var clearance = bottom.Y - support.Position.Y;
+				minClearance = MathF.Min(minClearance, clearance);
+				maxClearance = MathF.Max(maxClearance, clearance);
+				if (clearance < -2f)
+				{
+					++fallThroughs;
+				}
+			}
+			else
+			{
+				++fallThroughs;
+			}
+
+			if (controller.Grounded)
+			{
+				++groundedSteps;
+			}
+		}
+
+		var seconds = steps * dt;
+		var grounded = groundedSteps * 100f / steps;
+		var walks = fallThroughs == 0 && grounded >= 80f && maxRise < 60f;
+
+		Log.Info(
+			$"Physics walk: {seconds:0.0} s toward ({wish.X:0.##}, {wish.Z:0.##}) with {openDistance:0} units open, " +
+			$"{distanceWalked:N0} units walked, grounded {grounded:0.#}%, " +
+			$"clearance {minClearance:0.##}..{maxClearance:0.##}, max rise {maxRise:0.##}, " +
+			$"fall-throughs {fallThroughs} → {(walks ? "walks" : "FAILED")}.");
+	}
+
+	/// <summary>
+	/// Verifies the step assist on a flat, controlled floor: the world's terrain is too uneven
+	/// to place deterministic test geometry on. The capsule walks into a 30-unit block and
+	/// must end up on its top instead of stalling at the face.
+	/// </summary>
+	public void RunStepTest()
+	{
+		using var world = new PhysicsWorld();
+
+		// A floor whose top is y = 0, and a 30-unit step 100 units ahead.
+		world.AddStaticBox(new Vector3(0f, -50f, 0f), new Vector3(2000f, 100f, 2000f),
+			PhysicsMaterials.DefaultFriction, PhysicsSurfaceKind.Terrain);
+		world.AddStaticBox(new Vector3(0f, 15f, 150f), new Vector3(300f, 30f, 300f),
+			PhysicsMaterials.DefaultFriction, PhysicsSurfaceKind.Vob);
+
+		var controller = new CharacterController(world)
+		{
+			Position = new Vector3(0f, CharacterController.DefaultRadius + CharacterController.DefaultLength * 0.5f + CharacterController.GroundClearance, -100f)
+		};
+
+		var before = controller.Position.Y;
+		var maxY = before;
+		for (var i = 0; i < 120; ++i)
+		{
+			controller.Step(TimeSpan.FromSeconds(1f / 60f), Vector3.UnitZ);
+			maxY = MathF.Max(maxY, controller.Position.Y);
+		}
+
+		var climbed = maxY - before;
+		var stepped = controller.StepSuccesses > 0 && climbed >= 25f && climbed <= 40f;
+
+		Log.Info(
+			$"Physics step: walked into a 30-unit block, climbed {climbed:0.#} → " +
+			$"{(stepped ? "steps" : $"FAILED ({controller.LastStepFailure})")}.");
+	}
+
+	/// <summary>
+	/// Walks diagonally into a wall on a flat floor. The controller must keep its distance
+	/// from the wall and keep moving along it; that is the slide response D2 calls for.
+	/// </summary>
+	public void RunWallSlideTest()
+	{
+		using var world = new PhysicsWorld();
+		world.AddStaticBox(new Vector3(0f, -50f, 0f), new Vector3(2000f, 100f, 2000f),
+			PhysicsMaterials.DefaultFriction, PhysicsSurfaceKind.Terrain);
+		world.AddStaticBox(new Vector3(0f, 100f, 0f), new Vector3(2000f, 200f, 20f),
+			PhysicsMaterials.DefaultFriction, PhysicsSurfaceKind.Vob);
+
+		var controller = new CharacterController(world)
+		{
+			Position = new Vector3(-100f, CharacterController.DefaultRadius + CharacterController.DefaultLength * 0.5f + CharacterController.GroundClearance, -100f)
+		};
+
+		var start = controller.Position;
+		var direction = new Vector3(1f, 0f, 1f);
+		direction.Normalize();
+
+		for (var i = 0; i < 120; ++i)
+		{
+			controller.Step(TimeSpan.FromSeconds(1f / 60f), direction);
+		}
+
+		var slid = controller.Position.X - start.X;
+		var wallGap = -10f - controller.Position.Z; // the near face is at z = -10
+		var slides = slid > 200f && wallGap >= CharacterController.DefaultRadius - 2f;
+
+		Log.Info(
+			$"Physics wall: slanted walk into a wall, slid {slid:0} units along it, " +
+			$"held {wallGap:0.#} from the face (radius {CharacterController.DefaultRadius:0}) → " +
+			$"{(slides ? "slides" : "FAILED")}.");
 	}
 
 	/// <summary>

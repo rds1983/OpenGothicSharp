@@ -316,11 +316,16 @@ public class OgGame : Game
 			try
 			{
 				_physics = new PhysicsWorld();
-				_physics.Build(_world);
 
 				// The default camera sits over the harbour basin; the model spawn point ahead
-				// is on the plaza, which is a stable place to drop the test capsule.
-				_physics.RunCapsuleTest(Camera.Position + Camera.Forward * 260f);
+				// is on the plaza, which is a stable place to start the self-checks. Until
+				// collision streams, only this neighbourhood is built.
+				var center = Camera.Position + Camera.Forward * 260f;
+				_physics.Build(_world, center, 3000f);
+				_physics.RunWalkTest(center);
+				_physics.RunStepTest();
+				_physics.RunWallSlideTest();
+				_physics.RunCapsuleTest(center);
 			}
 			catch (Exception ex)
 			{
