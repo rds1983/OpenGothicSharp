@@ -90,6 +90,12 @@ public class CommandLine
 	public string PlayAnimation { get; private set; }
 
 	/// <summary>
+	/// Clip to play on a layer over <see cref="PlayAnimation"/>, or null. Its script layer
+	/// decides which bones it overrides, so an upper-body clip leaves the legs alone.
+	/// </summary>
+	public string OverlayAnimation { get; private set; }
+
+	/// <summary>
 	/// Freezes clip playback at a fixed pose, which makes a capture reproducible: the frame
 	/// depends on <see cref="PlayTime"/> rather than on how long the process has been running.
 	/// </summary>
@@ -207,6 +213,19 @@ public class CommandLine
 						else
 						{
 							result.PlayAnimation = clip;
+						}
+					}
+					else if (arg.StartsWith("-overlay:", StringComparison.OrdinalIgnoreCase))
+					{
+						var clip = arg.Substring("-overlay:".Length);
+						if (string.IsNullOrEmpty(clip))
+						{
+							Log.Error("Option '-overlay:' requires a clip name.");
+							result._invalid = true;
+						}
+						else
+						{
+							result.OverlayAnimation = clip;
 						}
 					}
 					else if (arg.StartsWith("-animtime:", StringComparison.OrdinalIgnoreCase))
@@ -388,7 +407,7 @@ public class CommandLine
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
 		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] " +
 		"[-model:<name>] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
-		"[-play:<clip>] [-freeze] [-animtime:<seconds>]";
+		"[-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 
 	private Vector3? ParseVector(string value, string option)
 	{

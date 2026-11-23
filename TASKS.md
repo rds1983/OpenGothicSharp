@@ -41,12 +41,16 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   `Documentation/Specifications/gothic-model-format.md`.
 - Models carry their script's animation clips in `DrModel.Animations`, plus the playback
   metadata a `ModelAnimationSet` keeps. Clips load per model (nothing beyond the world's
-  scripts is read), are shared by models with the same skeleton, and are not played yet, so
-  everything renders in the bind pose; `-noanims` skips them. `-animdump:<script>` with
-  `-animclip:<clip>` prints a script's clip list and a clip's first-frame bone tracks.
-  Format and model-to-script mapping are in
+  scripts is read) and are shared by models with the same skeleton; `-noanims` skips them.
+  `-animdump:<script>` with `-animclip:<clip>` prints a script's clip list and a clip's
+  first-frame bone tracks. Format and model-to-script mapping are in
   `Documentation/Specifications/gothic-animation-format.md`.
-- No animation playback yet. No input, physics, audio, or scripting yet.
+- Animation playback exists: `-play:<clip>` runs a clip through `AnimationData` (looping,
+  `Next` chaining, script blend times, reverse clips), `-overlay:<clip>` adds a clip on its
+  script layer so an upper-body gesture leaves the legs running, and a playing clip widens its
+  parts' cull bounds. `-freeze`/`-animtime:` pin a pose for captures.
+- A model attached with `-attach:<point>:<model>` follows that bone of the `-model:` spawn.
+  No input, physics, audio, or scripting yet.
 - UI exists: Myra `Desktop` rooted at a `Hud` panel with two independently anchored blocks
   — an always-visible `Controls` list (bottom-right) and a toggleable `DebugOverlay`
   (top-left, F1) showing FPS, camera position, draw-call and triangle counts and the active
@@ -55,8 +59,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - Debug views: F2 toggles wireframe, F3 toggles bounding boxes; independent of F1 and off by
   default. Both can be started on from the command line with `-wireframe`/`-bounds`.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
-  **C1–C6 complete** (model rendering, clips, playback, animated culling boxes, vob hierarchy,
-  attach points). Current milestone: **C — Models and animation**, next task **C7**.
+  **C1–C7 complete** (model rendering, clips, playback, animated culling boxes, vob hierarchy,
+  attach points, animation layers). Current milestone: **C — Models and animation**, next
+  task **C8**.
 
 ---
 
@@ -275,15 +280,31 @@ and reassigns its `ParentBone` (safe only because the wrapper's single bone is i
 the wrapper must not be disposed); attachments are not registered in `cell.ObjectBounds`, so
 the `-bounds` view omits them.
 
-### C7. Animation layers
+### C7. Animation layers — DONE
 The script gives every clip a `Layer`, and the reference blends layers so an upper-body
 attack can play over a moving lower body. `AnimationClipTag` already carries the field, but
-playback currently runs one clip at a time, so the value is unused.
+playback used to run one clip at a time, so the value was unused.
 
 Blend the active clips by layer, using `AnimationBlendLayer.BoneFilter` to mask each layer to
 the bones it drives. The lower layer stays authoritative for unclaimed bones.
-**Done when:** a walk and an attack can play simultaneously on one model without the attack
-resetting the legs.
+
+Over `HUMANS`, layer 1 is 644 full-body clips (locomotion **and** attacks), layer 2 is 67
+upper-body overrides, 4 is 18 bow clips, 9 is 9 head-only `C_LOOK_*`, 11 is 9 arm `C_POINT_*`,
+and 20 is 37 turns — so "walk and attack" is not shipped as a layered case; attacks reset the
+legs by design and the gestures are the layered ones.
+
+`AnimationData` puts every active clip in one `AnimationBlendNode` ordered by layer: each
+layer's `BoneFilter` is its bones minus those of higher layers, and its `TimeOffset` turns the
+controller's single clock into that clip's own time, so a layered change needs no second
+instance. `-overlay:<clip>` exercises it.
+**Done when:** an upper-body clip plays over a moving lower body without disturbing the legs. —
+`C_POINT_1` over `S_RUN` changes 6,539 px confined to the upper body (y 12–142), where the same
+clip as the base changes 17,103 px across the whole model (y 0–240); captures without an
+overlay are pixel-identical to before the task.
+
+Known gaps: a layered change snaps, where the reference ramps a new layer in over its blend
+time; a one-shot overlay holds its last frame until `StopLayer`/`Stop`, which the game's
+overlay lifecycle (F1) will drive.
 
 ### C8. Composed model
 An actor is not one file: the body (`HUM_BODY_NAKED0.MDM`) and its armour (`ARMOR_*.MDL`) share

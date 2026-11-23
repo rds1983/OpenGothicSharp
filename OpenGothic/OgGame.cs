@@ -128,17 +128,42 @@ public class OgGame : Game
 		// A model placed this way has no vob, so it is also the only place a clip can be
 		// started from the command line.
 		var clipName = CommandLine.Instance.PlayAnimation;
-		if (hasClips && !string.IsNullOrEmpty(clipName))
+		var overlayName = CommandLine.Instance.OverlayAnimation;
+
+		if (hasClips && (!string.IsNullOrEmpty(clipName) || !string.IsNullOrEmpty(overlayName)))
 		{
 			var animation = new AnimationData(instance);
-			if (animation.Play(clipName, blend: false))
+			var used = false;
+
+			if (!string.IsNullOrEmpty(clipName))
+			{
+				if (animation.Play(clipName, blend: false))
+				{
+					used = true;
+					Log.Info($"Playing '{clipName}' on '{name}' ({animation.CurrentClip}); {DescribeClip(animation.CurrentInfo)}.");
+				}
+				else
+				{
+					Log.Error($"Model '{name}' has no playable clip '{clipName}'.");
+				}
+			}
+
+			if (!string.IsNullOrEmpty(overlayName))
+			{
+				if (animation.PlayLayer(overlayName))
+				{
+					used = true;
+					Log.Info($"Overlay '{overlayName}' on '{name}'.");
+				}
+				else
+				{
+					Log.Error($"Model '{name}' has no playable overlay clip '{overlayName}'.");
+				}
+			}
+
+			if (used)
 			{
 				node.AnimationData = animation;
-				Log.Info($"Playing '{clipName}' on '{name}' ({animation.CurrentClip}); {DescribeClip(animation.CurrentInfo)}.");
-			}
-			else
-			{
-				Log.Error($"Model '{name}' has no playable clip '{clipName}'.");
 			}
 		}
 		else if (hasClips)

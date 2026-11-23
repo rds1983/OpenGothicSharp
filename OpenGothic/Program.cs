@@ -44,7 +44,7 @@ internal static class Program
 			Log.Info($"Spawn model: {commandLine.SpawnModel ?? "(none)"}, distance: {commandLine.SpawnDistance?.ToString() ?? "(default)"}, offset: {commandLine.SpawnOffset?.ToString() ?? "(none)"}");
 		Log.Info($"Attach: {commandLine.AttachPoint ?? "(none)"} <- {commandLine.AttachVisual ?? "(none)"}");
 			Log.Info($"Animation dump: {commandLine.AnimationDump ?? "(off)"}, clip: {commandLine.AnimationClip ?? "(none)"}");
-			Log.Info($"Play: {commandLine.PlayAnimation ?? "(none)"}, freeze: {commandLine.FrozenTime?.ToString() ?? "(off)"}, time: {commandLine.PlayTime?.ToString() ?? "(live)"}");
+			Log.Info($"Play: {commandLine.PlayAnimation ?? "(none)"}, overlay: {commandLine.OverlayAnimation ?? "(none)"}, freeze: {commandLine.FrozenTime?.ToString() ?? "(off)"}, time: {commandLine.PlayTime?.ToString() ?? "(live)"}");
 
 			var settings = new Settings();
 			settings.Load(commandLine.GothicPath, Directory.GetCurrentDirectory());

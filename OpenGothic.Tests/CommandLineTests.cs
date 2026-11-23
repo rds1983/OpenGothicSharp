@@ -416,6 +416,24 @@ public class CommandLineTests
 	}
 
 	[Fact]
+	public void Parse_Overlay_ReadsClip()
+	{
+		var result = CommandLine.Parse(new[] { "-model:ARMOR_PRISONER", "-play:S_RUN", "-overlay:C_POINT_1" });
+
+		Assert.Equal("S_RUN", result.PlayAnimation);
+		Assert.Equal("C_POINT_1", result.OverlayAnimation);
+	}
+
+	[Fact]
+	public void Parse_OverlayWithoutClip_IsRejected()
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-overlay:" });
+
+		Assert.Null(result.OverlayAnimation);
+		Assert.False(result.Validate());
+	}
+
+	[Fact]
 	public void Parse_SpawnModelWithoutName_IsRejected()
 	{
 		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-model:" });

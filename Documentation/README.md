@@ -51,6 +51,7 @@ default chosen elsewhere.
 | `-noanims` / `-anims:true\|false` | Attach the animation clips a model's script lists. Off keeps the bind pose and reads no `.MAN` file, which separates an animation problem from a model or world one. |
 | `-animdump:<script>` | Log a script's clip list — nodes, frames, fps, duration, next clip — for the shipped data. `-animclip:<clip>` adds the first frame of that clip's bone tracks. |
 | `-play:<clip>` | Play a clip on the `-model:` model. Accepts an alias name. Without it the model holds its bind pose. |
+| `-overlay:<clip>` | Play a clip on its script layer over `-play:`, so an upper-body gesture leaves the legs alone. |
 | `-freeze` | Pin playback to `-animtime:` instead of advancing it, so a capture does not depend on how long the process has been running. |
 | `-animtime:<seconds>` | Playback position used with `-freeze`. A looping clip wraps it; a one-shot clamps. |
 | `-wireframe` / `-bounds` | Start with the F2 / F3 debug views already on. |
@@ -400,6 +401,22 @@ A clip's script-side parameters travel on `AnimationClip.Tag` as an `AnimationCl
 alias is a clip of its own that shares the target's channels and carries its own tag. The
 node reads its clips from `Instance.Model.Animations`, so nothing else has to keep the set
 alive at playback time.
+
+#### Layers
+
+The script gives every clip a `Layer`, and the shipped `HUMANS` data uses it: layer 1 is
+full-body locomotion, layer 2 is upper-body combat overrides (`T_MOVE_2_FISTMOVE`, 14 bones),
+9 is head-only (`C_LOOK_*`), 11 is an arm gesture (`C_POINT_*`), and 20 is full-body turns.
+Attacks (`S_1HATTACK`, …) are layer 1 and full body, so they do reset the legs by design.
+
+`AnimationData.PlayLayer(name)` runs a clip on top of the base at the layer its script gives
+it. All active clips are layers of one `AnimationBlendNode`, ordered by that layer value, and
+each layer's `BoneFilter` keeps only the bones no higher layer drives — so a higher layer wins
+on exactly the bones it animates and everything else keeps the pose below. A per-layer
+`TimeOffset` turns the controller's single clock into each clip's own time, which is what lets
+a walk keep looping while a gesture starts mid-stride. A layered change snaps rather than
+fading — the reference ramps a new layer in over its blend time, which is the one piece not
+ported yet. `-overlay:<clip>` exercises it from the command line.
 
 The playback rules come from the script, not from guesswork:
 

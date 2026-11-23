@@ -208,6 +208,27 @@ be implemented locally are the library's. The outgoing layer is advanced through
 not frozen at the value it held when the switch happened; the reference freezes it, so a
 fade longer than a frame can show the old clip continuing to move for its duration.
 
+### Layers
+
+Every script entry carries a `Layer`, and it is not decorative. Over all `HUMANS` clips:
+layer 1 has 644 clips (locomotion, full 34-node skeleton), layer 2 has 67 (combat overrides
+covering only `BIP01 SPINE1` upward, e.g. `T_MOVE_2_FISTMOVE` with 14 nodes), layer 4 has 18
+(bow stance, 17 nodes), layer 9 has 9 (head only, `C_LOOK_*`), layer 11 has 9 (an arm
+gesture, `C_POINT_*` with 8 nodes), and layer 20 has 37 (full-body turns, 25–26 nodes).
+
+Layers are sorted ascending and applied in order: a bone is taken from the highest layer that
+drives it, and a layer leaves every bone it does not have a channel for untouched. That is why
+a `C_POINT_1` overlay over `S_RUN` moves the arm and leaves the legs running — measured as
+6,539 changed pixels confined to the upper body, versus 17,103 across the whole model when the
+same clip is played as the base. The port expresses the two rules as layers of one
+`AnimationBlendNode`: `BoneFilter` gives each layer only the bones no higher layer drives, and
+`TimeOffset` gives each clip its own clock.
+
+Attacks are layer 1 and full body, so "walking and attacking at once" is not something the
+shipped data does through this mechanism; the game's layered clips are the transitions and
+gestures above. The reference also ramps a new layer in over its blend time, which is not
+ported yet: a layered change snaps.
+
 ### `FirstFrame` and `LastFrame`
 
 These are **not** the clip's own frame range. They index a shared frame timeline across the
