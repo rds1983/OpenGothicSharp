@@ -26,9 +26,6 @@ partial class Assets
 	/// </summary>
 	private readonly Dictionary<string, ModelAnimationSet> _animationSets = new Dictionary<string, ModelAnimationSet>(StringComparer.OrdinalIgnoreCase);
 
-	/// <summary>Model to the set already attached to it, so the set can be handed back.</summary>
-	private readonly Dictionary<DrModel, ModelAnimationSet> _modelAnimationSets = new Dictionary<DrModel, ModelAnimationSet>();
-
 	/// <summary>
 	/// Builds the model-to-script index. A model file carries no reference to a script, so the
 	/// only way to find a model's clips is to read every script once and index them both by the
@@ -194,9 +191,128 @@ partial class Assets
 			_animationSets[cacheKey] = set;
 		}
 
-		// Clips are immutable, so every model of a set shares the same instances.
+		// Clips are immutable, so every model of a set shares the same instances. The model
+		// keeps the name-to-clip map; the set itself stays in the assets' build cache.
 		model.Animations = set.ClipsByName;
-		_modelAnimationSets[model] = set;
+	}
+
+	/// <summary>Whether the clip is a one-shot that must not cycle, from the script.</summary>
+	private static bool IsOneShot(IAnimation entry)
+	{
+		// A clip with an interaction window is a one-shot even when it names itself: the
+		// shipped attack animations name themselves in Next but must be interruptible at the
+		// combo window, so the window wins over the self-reference.
+		foreach (var tag in entry.EventTags)
+		{
+			if (tag.Type == EventType.ComboWindow)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/// <summary>
+	/// Decides how a clip runs from the script's own fields, and where it goes next. The
+	/// shipped data encodes looping by naming the clip itself in <c>Next</c>; every other case
+	/// is a transition.
+	/// </summary>
+	private static ModelClipInfo MakeClipInfo(IAnimation entry, float fps, int frameCount,
+		Dictionary<string, IAnimation> scriptByName, ISet<string> scriptClipNames)
+	{
+		var oneShot = IsOneShot(entry);
+
+		var nextClip = entry.Next;
+		if (string.IsNullOrEmpty(nextClip))
+		{
+			nextClip = null;
+		}
+		else if (scriptClipNames.Contains(nextClip))
+		{
+			// Keep the script's own spelling so the name matches the clip it created.
+			foreach (var name in scriptClipNames)
+			{
+				if (string.Equals(name, entry.Next, StringComparison.OrdinalIgnoreCase))
+				{
+					nextClip = name;
+					break;
+				}
+			}
+		}
+		else if (!scriptByName.ContainsKey(nextClip))
+		{
+			// The script pointed at a name that has no clip; playing it would dead-end, so
+			// the clip holds its last frame instead. Recorded in NextClip for the audit.
+			nextClip = null;
+		}
+
+		var loop = !oneShot && nextClip != null &&
+		           string.Equals(nextClip, entry.Name, StringComparison.OrdinalIgnoreCase);
+
+		return new ModelClipInfo
+		{
+			Name = entry.Name,
+			Next = entry.Next,
+			Layer = entry.Layer,
+			Flags = entry.Flags,
+			BlendIn = entry.BlendIn,
+			BlendOut = entry.BlendOut,
+			Speed = entry.Speed,
+			Reverse = entry.Direction != AnimationDirection.Forward,
+			FirstFrame = entry.FirstFrame,
+			LastFrame = entry.LastFrame,
+			FrameCount = frameCount,
+			Fps = fps,
+			Loop = loop,
+			PlaybackNext = loop ? null : nextClip,
+			NextClip = nextClip,
+		};
+	}
+
+	/// <summary>
+	/// Playback parameters for an alias. The frames and rate come from the clip the alias
+	/// names; direction, next, layer and blend times come from the alias itself, because the
+	/// script uses those to expose the same motion under a different name.
+	/// </summary>
+	private static ModelClipInfo MakeAliasInfo(IAnimationAlias alias, string targetName,
+		ModelClipInfo target, ISet<string> scriptClipNames, ISet<string> aliasNames)
+	{
+		// An alias's Next addresses the script's names, which include the other aliases — a
+		// looping alias names itself just like a looping clip does. Checking only the clip
+		// list would demote every self-naming alias to a one-shot.
+		var nextClip = alias.Next;
+		if (string.IsNullOrEmpty(nextClip))
+		{
+			nextClip = null;
+		}
+		else if (!scriptClipNames.Contains(nextClip) && !aliasNames.Contains(nextClip))
+		{
+			// A name no clip or alias provides would dead-end; hold the last frame instead.
+			nextClip = null;
+		}
+
+		var loop = nextClip != null &&
+		           string.Equals(nextClip, alias.Name, StringComparison.OrdinalIgnoreCase);
+
+		return new ModelClipInfo
+		{
+			Name = alias.Name,
+			Next = alias.Next,
+			Layer = alias.Layer,
+			Flags = alias.Flags,
+			BlendIn = alias.BlendIn,
+			BlendOut = alias.BlendOut,
+			Speed = target?.Speed ?? 0f,
+			Reverse = alias.Direction != AnimationDirection.Forward,
+			FirstFrame = target?.FirstFrame ?? 0,
+			LastFrame = target?.LastFrame ?? 0,
+			FrameCount = target?.FrameCount ?? 0,
+			Fps = target?.Fps ?? 0f,
+			Loop = loop,
+			PlaybackNext = loop ? null : nextClip,
+			NextClip = targetName,
+		};
 	}
 
 	/// <summary>
@@ -238,6 +354,16 @@ partial class Assets
 			}
 		}
 
+		// Next is resolved against the script's own clip list, so build it before any clip is
+		// converted: a clip can name a clip the loop has not reached yet.
+		var scriptByName = new Dictionary<string, IAnimation>(StringComparer.OrdinalIgnoreCase);
+		var scriptClipNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var entry in script.Animations)
+		{
+			scriptByName.TryAdd(entry.Name, entry);
+			scriptClipNames.Add(entry.Name);
+		}
+
 		foreach (var entry in script.Animations)
 		{
 			var manName = scriptStem + "-" + entry.Name + ".MAN";
@@ -261,7 +387,8 @@ partial class Assets
 			}
 
 			// The .MAN frame rate is the authoritative one: 161 clips disagree with their script
-			// and the file is the only source that also stores the frames.
+			// and the file is the only source that also stores the frames. The 149 clips that
+			// store a rate of 1 are single-frame poses, where any rate gives the same result.
 			var fps = man.Fps > 0f ? man.Fps : entry.Fps;
 			if (!(fps > 0f))
 			{
@@ -272,21 +399,7 @@ partial class Assets
 			var frameCount = man.FrameCount;
 			var samples = man.Samples;
 
-			var info = new ModelClipInfo
-			{
-				Name = entry.Name,
-				Next = entry.Next,
-				Layer = entry.Layer,
-				Flags = entry.Flags,
-				BlendIn = entry.BlendIn,
-				BlendOut = entry.BlendOut,
-				Speed = entry.Speed,
-				Reverse = entry.Direction != AnimationDirection.Forward,
-				FirstFrame = entry.FirstFrame,
-				LastFrame = entry.LastFrame,
-				FrameCount = frameCount,
-				Fps = fps,
-			};
+			var info = MakeClipInfo(entry, fps, frameCount, scriptByName, scriptClipNames);
 
 			var channels = new List<AnimationChannel>();
 			var keyframeCount = 0L;
@@ -295,10 +408,21 @@ partial class Assets
 			// than trusting it, so a malformed file costs one warning and not a crash.
 			if (nodeCount > 0 && frameCount > 0 && samples.Count == nodeCount * frameCount)
 			{
-				var times = new TimeSpan[frameCount];
+				// A looping clip gets one extra key that repeats frame 0 at the end of its
+				// duration. That is what closes the cycle: sampling the final frame interval
+				// interpolates the last frame back into the first instead of holding the last
+				// frame and then snapping when the time wraps.
+				var keyCount = info.Loop && frameCount > 1 ? frameCount + 1 : frameCount;
+
+				var times = new TimeSpan[keyCount];
 				for (var frame = 0; frame < frameCount; ++frame)
 				{
 					times[frame] = TimeSpan.FromSeconds(frame / (double)fps);
+				}
+
+				if (keyCount > frameCount)
+				{
+					times[frameCount] = TimeSpan.FromSeconds(frameCount / (double)fps);
 				}
 
 				for (var slot = 0; slot < nodeCount; ++slot)
@@ -322,17 +446,20 @@ partial class Assets
 						continue;
 					}
 
-					var keyframes = new AnimationChannelKeyframe[frameCount];
-					for (var frame = 0; frame < frameCount; ++frame)
+					var keyframes = new AnimationChannelKeyframe[keyCount];
+					for (var frame = 0; frame < keyCount; ++frame)
 					{
-						var sample = samples[frame * nodeCount + slot];
+						// The closing key repeats the first frame rather than reading past the
+						// end of the sample block.
+						var source = frame == frameCount ? 0 : frame;
+						var sample = samples[source * nodeCount + slot];
 						var pose = new SrtTransform(sample.Position.ToXna(), sample.Rotation.ToXna(), Vector3.One);
 
 						keyframes[frame] = new AnimationChannelKeyframe(times[frame], pose);
 					}
 
 					channels.Add(new AnimationChannel(boneIndex, keyframes));
-					keyframeCount += frameCount;
+					keyframeCount += keyCount;
 				}
 			}
 			else if (nodeCount > 0 && frameCount > 0)
@@ -352,12 +479,84 @@ partial class Assets
 				continue;
 			}
 
-			result.Add(new AnimationClip(entry.Name, duration, channels.ToArray()), info, keyframeCount);
+			var clip = new AnimationClip(entry.Name, duration, channels.ToArray())
+			{
+				// The script side of the clip: what an AnimationClip itself cannot hold.
+				Tag = new AnimationClipTag(info)
+			};
+
+			result.Add(clip, keyframeCount);
+		}
+
+		// An alias is a second name for a clip: it plays the target's samples but keeps its own
+		// next/layer/blend/direction, so a backward alias of a forward clip is a reverse
+		// animation. It becomes a clip of its own that shares the target's channels and carries
+		// its own ModelClipInfo in Tag.
+		var aliasNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var aliasTargets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var alias in script.AnimationAliases)
+		{
+			aliasNames.Add(alias.Name);
+
+			if (!string.IsNullOrEmpty(alias.Name) && !string.IsNullOrEmpty(alias.Alias))
+			{
+				aliasTargets[alias.Name] = alias.Alias;
+			}
+		}
+
+		// Targets are names too, so resolve through the alias list: a few scripts alias an
+		// alias.
+		string ResolveAliasTarget(string name)
+		{
+			for (var hops = 0; hops < 4; ++hops)
+			{
+				if (result.ClipsByName.ContainsKey(name))
+				{
+					return name;
+				}
+
+				if (!aliasTargets.TryGetValue(name, out var target))
+				{
+					return null;
+				}
+
+				name = target;
+			}
+
+			return result.ClipsByName.ContainsKey(name) ? name : null;
+		}
+
+		foreach (var alias in script.AnimationAliases)
+		{
+			if (string.IsNullOrEmpty(alias.Name) || string.IsNullOrEmpty(alias.Alias))
+			{
+				continue;
+			}
+
+			if (string.Equals(alias.Name, alias.Alias, StringComparison.OrdinalIgnoreCase))
+			{
+				continue;
+			}
+
+			var targetName = ResolveAliasTarget(alias.Alias);
+			if (targetName == null || !result.ClipsByName.TryGetValue(targetName, out var targetClip))
+			{
+				continue;
+			}
+
+			var aliasInfo = MakeAliasInfo(alias, alias.Alias, targetClip.GetPlaybackInfo(),
+				scriptClipNames, aliasNames);
+
+			result.AddAlias(new AnimationClip(alias.Name, targetClip.Duration, targetClip.Channels)
+			{
+				Tag = new AnimationClipTag(aliasInfo)
+			});
 		}
 
 		Log.Info(
 			$"Animation set '{scriptStem}' ({result.SkeletonNodeCount}-node skeleton) for {boneNames.Length} bones: " +
-			$"{result.ClipNames.Count} clips ({result.EmptyClips} empty), {result.KeyframeCount:N0} keyframes, " +
+			$"{result.ClipNames.Count} clips ({result.EmptyClips} empty; {result.LoopingClips} loop, " +
+			$"{result.TransitionClips} one-shot), {result.AliasCount} aliases, {result.KeyframeCount:N0} keyframes, " +
 			$"{result.UnmappedChannels} channels the model cannot pose, {result.MissingClips} missing.");
 
 		return result;

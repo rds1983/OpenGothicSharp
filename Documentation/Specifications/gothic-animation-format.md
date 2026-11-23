@@ -146,15 +146,109 @@ Channels that survive that translation become `AnimationChannel(boneIndex, keyfr
 with one keyframe per sample at `frame / Fps` seconds and a clip duration of
 `FrameCount / Fps`.
 
+## Playback rules
+
+Playback is decided by the script, and the shipped data confirms each rule. These are the
+findings a player has to reproduce; they are measured across all 117 scripts, 3,949 clips
+and 1,847 aliases.
+
+### Looping versus one-shot
+
+The script has no explicit "loop" flag that is used. Instead:
+
+- A clip whose `Next` names **itself** cycles. 1,309 clips do this.
+- A clip whose `Next` names **another clip** runs once and hands over. 2,640 clips, 1,228 of
+  which name nothing and therefore just stop on their last frame.
+- **Override:** a clip carrying a `ComboWindow` event is a one-shot regardless of a
+  self-reference, and its `Next` is treated as cleared. 17 clips fall in this group (the
+  attack animations), which is what lets a sound attack be interrupted at its combo window
+  instead of restarting forever.
+
+### Frame rate and duration
+
+`fps` is the `.MAN` value and duration is `FrameCount / Fps`. The `.MAN` wins over the
+script for 161 clips because it is the only file that also stores the frame count. The 149
+clips whose `.MAN` stores `fps = 1` are all single-frame poses (`C_LOOK_*`, `C_CBOW_*`), so
+any rate yields the same picture.
+
+`speed` is not used. **All 3,949 shipped clips store `speed == 0`**, so a player that
+multiplied by it would freeze every animation. Ignoring it is a data-driven decision, not an
+oversight.
+
+### Direction
+
+`AnimationDirection.Backward` mirrors the sample walk: time 0 shows the last stored frame and
+time increases toward frame 0. 197 clips are backward. The walk has to be mirrored rather
+than negated in time, because the stored frames are the forward-order samples; for a looping
+clip the mirror also has to skip the closing wrap key, or the clip would appear to run
+forward.
+
+DigitalRiseModel's `AnimationFlags.PlayBackwards` samples `duration - time`, which puts a
+reverse clip on frame 0 at t = 0 — the opposite of the convention above. Measured on a
+3-frame looping clip, the flag alone yields frame 0 where the data means frame 2. One frame
+period of `AnimationBlendLayer.TimeOffset`, with the flag set on the layer, yields frame 2
+and mirrors the walk for the whole clip. The offset belongs on the layer rather than on
+`AnimationController.Time`, so the controller's clock stays equal to game time.
+
+### How the player uses `AnimationController`
+
+The controller samples and blends; `AnimatedModelNode` keeps the state machine, which is the
+part the script owns: `Next` chaining, per-alias direction and blend times, and the
+`ComboWindow` one-shot rule. Two conventions need bridging:
+
+- **Reverse** — as described above, a one-layer `AnimationBlendNode` whose layer carries
+  `PlayBackwards` plus one frame period of `TimeOffset`.
+- **Zero-length fades** — 917 of the 1,253 declared transitions ask for no ramp, so those go
+  through `StartClip`; `CrossfadeToClip` would divide by its fade length and evaluate a `NaN`
+  weight on the first frame.
+
+A bone the incoming clip does not drive now eases toward the bind pose across the fade, and
+`StartClip` applies its first pose immediately, so the two behaviours that previously had to
+be implemented locally are the library's. The outgoing layer is advanced through the ramp,
+not frozen at the value it held when the switch happened; the reference freezes it, so a
+fade longer than a frame can show the old clip continuing to move for its duration.
+
+### `FirstFrame` and `LastFrame`
+
+These are **not** the clip's own frame range. They index a shared frame timeline across the
+whole script: consecutive single-frame poses show `first == last == 0, 1, 2, …`. They are
+only meaningful for converting event frames to times, never for the sample walk.
+
+### Aliases
+
+An alias is a second name with its **own** playback metadata: 542 are backward, 659 name a
+different `Next`, and 782 loop by naming themselves. The samples come from the target clip,
+but the direction, next, layer and blend times come from the alias. Treating an alias as a
+plain rename is wrong in a visible way — it plays every backward alias forward and demotes
+every self-naming alias to a one-shot.
+
+Alias resolution is by name, one hop in practice (aliases never collide with a clip name and
+never name a missing target across the shipped data), with a bounded loop for the few
+scripts that alias an alias.
+
+### Blend times
+
+`BlendIn`/`BlendOut` go up to 0.8 s / 1.0 s. A clip change ramps over the longer of the
+outgoing clip's `BlendOut` and the incoming clip's `BlendIn`, and switches immediately when
+both are zero — which is most of the declared transitions (917 of 1,253), so a default ramp
+would soften clip changes the data asks to be instant.
+
+### Loop seams are authored, not a sampler bug
+
+488 of 789 measurable looping clips have a last-to-first seam that exceeds 3× their own
+median frame-to-frame rotation delta — `HUMANS/T_CBOWSNEAKTURNR` reaches 703×. That is a
+property of the data, not of the interpolation. The fix is the closing wrap key described
+above (last interval interpolates back to frame 0) plus blend-in on clip changes; a hardcoded
+seam cross-fade would paper over authored poses and is deliberately not used.
+
 ## Edge cases and open questions
 
 - Whether a script may drive models with genuinely different bone names beyond the
   attach-node case above is not observed here; every measured pair maps by name.
-- 161 clips disagree with their script on frame rate, and the file's value was used. Which
-  one the game honoured is not established; the file is the only source that also stores
-  the frames.
-- Aliases (1,847) and combinations (58) in the scripts are named clip variants with their
-  own blend/next settings that reuse another clip's keys. They are not needed to enumerate
-  or read clips and are left to playback.
-- `AnimationDirection` other than forward, `Combo`/cycle flags and event tags are recorded
-  but not interpreted yet.
+- Combinations (58) are named blends of two clips and are not interpreted yet; nothing in
+  the current playback path needs them.
+- Event tags are read (they decide the `ComboWindow` one-shot rule) but not yet dispatched as
+  gameplay events: hit frames, item handling and sounds belong to the combat milestone.
+- Whether the game blends `BlendOut` of the outgoing clip as well as `BlendIn` of the
+  incoming one is not established; only `BlendIn` is used, matching the reference's
+  single-ramp blend.

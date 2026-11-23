@@ -55,8 +55,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - Debug views: F2 toggles wireframe, F3 toggles bounding boxes; independent of F1 and off by
   default. Both can be started on from the command line with `-wireframe`/`-bounds`.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
-  **C1 (Model rendering) and C2 (Animation clips) complete.** Current milestone:
-  **C — Models and animation**, next task **C3**.
+  **C1 (Model rendering), C2 (Animation clips) and C3 (Animation playback) complete.** Current
+  milestone: **C — Models and animation**, next task **C4**.
 
 ---
 
@@ -189,22 +189,30 @@ readable, with an audit of how many shipped models have clips at all. — `-anim
 -animclip:S_RUN` enumerates and prints them; `ModelAnimationSet` exposes names, keyframes and
 per-clip metadata.
 
-### C3. Animation playback
+### C3. Animation playback — DONE
 Play `AnimationClip`s on a `DrModelInstance` with correct looping and blending between clips.
-`ModelAnimationSet` already carries the per-clip metadata the clip object cannot hold, so this
-task is deciding how it is honoured. Open questions the C2 audit left open, and the first thing
-to check in `Try/OpenGothic`:
+Each clip carries its script-side parameters in `AnimationClip.Tag` as a `ModelClipInfo`; the
+rules for honouring them were resolved from the shipped data and are recorded in
+`Documentation/Specifications/gothic-animation-format.md`:
 
-- **Which fps governs.** `HUMANS` disagrees with the `.MAN`'s own frame count on 161 clips, and
-  only the `.MAN` stores the frame count, so the `.MAN` value is used today.
-- **`AnimationDirection.Backward`** — whether the sample array is walked in reverse.
-- **Cycle flags** (`AnimationFlags`) — 1,847 script-side aliases and 58 combines are recorded
-  but not interpreted; aliases matter as soon as an NPC plays a scripted animation by name.
-- **`FirstFrame`/`LastFrame` do not index the samples** — 444 clips disagree with
-  `FrameCount`, so they are playback metadata, not a sub-range of the keyframes.
+- **Which fps governs.** The `.MAN` value, as C2 already used: it disagrees with the script on
+  161 clips and is the only file that stores the frames. The 149 clips with `fps == 1` are all
+  single-frame poses.
+- **`AnimationDirection.Backward`** mirrors the sample walk (time 0 = last stored frame), and
+  for a looping clip must skip the closing wrap key. 197 clips and 542 aliases are backward.
+- **Looping.** A clip with `Next` naming itself loops; another clip means a one-shot hand-over;
+  nothing means stop. Override: any clip carrying a `ComboWindow` event is a one-shot (17
+  clips).
+- **Aliases** keep their own next/layer/blend/direction and reuse the target's samples — 782
+  loop, 141 reversed — so resolving one to a bare rename is wrong.
+- **`FirstFrame`/`LastFrame`** index the script's shared frame timeline, not the clip's samples;
+  they are only for converting event frames.
+- **`speed` is ignored**: all 3,949 shipped clips store zero.
 
 **Done when:** a model plays an idle/animation clip at the right speed and loops without a
-pop.
+pop. — `-play:<clip>` on a `-model:` plays it through `AnimatedModelNode` and
+`AnimationController`; a looping clip wraps pixel-exactly at its duration and reverse clips
+mirror the forward walk.
 
 ### C4. Animated culling boxes
 A skinned part's box is its **bind pose**, which stops being true once a clip moves the
@@ -233,6 +241,16 @@ bone's world transform. This is also where the clips' nine `ZS_*` channels that 
 model cannot pose become relevant: those nodes exist for attaching, not for deforming.
 **Done when:** a model parented to another model's attach point follows that bone without a
 manual offset.
+
+### C7. Animation layers
+The script gives every clip a `Layer`, and the reference blends layers so an upper-body
+attack can play over a moving lower body. `AnimationClipTag` already carries the field, but
+playback currently runs one clip at a time, so the value is unused.
+
+Blend the active clips by layer, using `AnimationBlendLayer.BoneFilter` to mask each layer to
+the bones it drives. The lower layer stays authoritative for unclaimed bones.
+**Done when:** a walk and an attack can play simultaneously on one model without the attack
+resetting the legs.
 
 ---
 
@@ -279,6 +297,9 @@ Render and pick up world items; inventory add/remove core.
 
 ### F1. Npc entity
 Npc runtime: attributes, guild, animation state machine basics, name/messages hooks.
+`Scene/AnimatedModelNode` already plays a named clip and follows the script's `Next` chains;
+this task is the body-state layer that decides *which* clip (idle, walk, attack) an NPC asks
+for and when to interrupt one.
 **Done when:** an Npc spawns from a ZEN instance, idles, and can be damaged.
 
 ### F2. Way matrix & routines

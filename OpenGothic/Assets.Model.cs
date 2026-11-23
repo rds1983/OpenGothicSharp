@@ -387,20 +387,6 @@ partial class Assets
 		return model;
 	}
 
-	/// <summary>
-	/// The clips a model can play, or null when no script drives it. The same set is shared by
-	/// every model with the same script and bone layout.
-	/// </summary>
-	public ModelAnimationSet GetModelAnimations(DrModel model)
-	{
-		if (model == null)
-		{
-			return null;
-		}
-
-		return _modelAnimationSets.TryGetValue(model, out var set) ? set : null;
-	}
-
 	private DrMesh LoadMultiMesh(GraphicsDevice device, string name)
 	{
 		var record = GetLastRecord(name);

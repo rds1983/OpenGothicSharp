@@ -50,6 +50,9 @@ default chosen elsewhere.
 | `-nomodels` / `-models:true\|false` | Instantiate vobs that carry a model. Off shows the level without model geometry, which separates a model bug from a world one. |
 | `-noanims` / `-anims:true\|false` | Attach the animation clips a model's script lists. Off keeps the bind pose and reads no `.MAN` file, which separates an animation problem from a model or world one. |
 | `-animdump:<script>` | Log a script's clip list — nodes, frames, fps, duration, next clip — for the shipped data. `-animclip:<clip>` adds the first frame of that clip's bone tracks. |
+| `-play:<clip>` | Play a clip on the `-model:` model. Accepts an alias name. Without it the model holds its bind pose. |
+| `-freeze` | Pin playback to `-animtime:` instead of advancing it, so a capture does not depend on how long the process has been running. |
+| `-animtime:<seconds>` | Playback position used with `-freeze`. A looping clip wraps it; a one-shot clamps. |
 | `-wireframe` / `-bounds` | Start with the F2 / F3 debug views already on. |
 | `-cam:<x,y,z>` | Override the camera position. |
 | `-lookat:<x,y,z>` | Point the camera at a world position (implies yaw and pitch). |
@@ -297,8 +300,9 @@ included.
 
 A model is a `DrModel` (skeleton plus meshes) placed in the world by a `ModelNode`
 (`OpenGothic/Scene/ModelNode.cs`), which holds a `DrModelInstance` and a world transform in
-`Transform`. `WorldRenderer.DrawModel` walks `instance.Model.Meshes` and dispatches per
-part:
+`Transform`. A model driven by a script is an `AnimatedModelNode`, the same node plus an
+`AnimationController` and the script's playback state. `WorldRenderer.DrawModel` walks
+`instance.Model.Meshes` and dispatches per part:
 
 - **Static part** — drawn with the owning bone's global transform times the node
   transform, exactly as a hand-authored prop expects.
@@ -344,16 +348,71 @@ armour model, which is why `-animdump:` reports that count.
 
 Converted sets are cached by script plus the exact bone-name sequence, so the ~40 armour
 models that share one 25-bone skeleton share one set of clip objects instead of re-reading
-`HUMANS`' 784 `.MAN` files each. Clips are populated into `DrModel.Animations` and also
-kept as a `ModelAnimationSet`, which carries the per-clip playback metadata (next clip,
-layer, blend in/out, direction, speed) that `AnimationClip` cannot hold.
+`HUMANS`' 784 `.MAN` files each. Clips are populated into `DrModel.Animations`, and each clip
+carries its script-side playback metadata (next clip, layer, blend in/out, direction) in
+`AnimationClip.Tag` as an `AnimationClipTag`. The set object itself is only a load-time cache
+and is not consulted at playback.
 
-Nothing plays them yet, so a frame renders in the bind pose, and `-noanims` produces the
-same geometry. Measured on `newworld.zen`: 37 of 63 distinct model names resolve to a
-script (the other 26 are static props); all of the world's scripts together are 134 K
-keyframes, and the whole game is 3,949 clips / ≈ 2.3 M keyframes, which is why the load is
-per model rather than global. Details in
+#### Animation playback
+
+`Scene/AnimatedModelNode.cs` plays a set's clips on a `DrModelInstance` through
+DigitalRiseModel's `AnimationController`: the node owns the script's state machine and hands
+the controller a node to sample, so a pose reaches the GPU through the same
+`GetSkinTransforms` path a bind-pose model already used. The controller itself is the node's
+`Controller` property, and `OgGame.UpdateAnimations` advances every `AnimatedModelNode` in
+the grid, which keeps playback out of the draw path.
+
+A clip's script-side parameters travel on `AnimationClip.Tag` as an `AnimationClipTag`; an
+alias is a clip of its own that shares the target's channels and carries its own tag. The
+node reads its clips from `Instance.Model.Animations`, so nothing else has to keep the set
+alive at playback time.
+
+The playback rules come from the script, not from guesswork:
+
+- **Looping.** A clip cycles when its `Next` names *itself*; naming another clip makes it a
+  one-shot that hands over, and naming nothing makes it stop. One override: a clip carrying
+  a `ComboWindow` event is always a one-shot, because the attack animations name themselves
+  yet must stay interruptible at that window. 17 shipped clips are reclassified this way.
+- **Rate and duration.** `FrameCount / Fps`, both from the `.MAN`. Its rate is authoritative
+  because the file is the only source that also stores the frames (161 clips disagree with
+  their script). The 149 clips storing a rate of 1 are single-frame poses.
+- **Direction.** `AnimationDirection.Backward` mirrors the sample walk, so a backward clip
+  starts on its last stored frame. This is not cosmetic: 197 clips and 542 aliases use it,
+  and a backward walk is how the data spells "the same motion, reversed".
+- **Aliases.** A name in the script's alias list plays another clip's samples but keeps its
+  own next/layer/blend/direction, so `S_SNEAKBL` (backward) differs from `S_SNEAKL`
+  (forward). 782 of the 1,847 aliases loop, 141 of those reversed; treating an alias as a
+  plain rename would play those forward and one-shot.
+- **Seams.** A looping clip gets one extra key repeating frame 0 at its duration, so the
+  final frame interval interpolates back into the first instead of holding and snapping.
+  That closes authored seams; it does not invent motion where the data has none.
+- **Blending.** A clip change ramps over the longer of the outgoing clip's `BlendOut` and the
+  incoming clip's `BlendIn`; it switches immediately when both are zero (917 of the 1,253
+  declared transitions). The outgoing layer keeps playing through the ramp rather than being
+  frozen at the switch, and a bone the incoming clip does not drive eases back to the bind
+  pose instead of holding its old value.
+- **Speed is ignored**, as the reference does: all 3,949 shipped clips store `speed == 0`,
+  so honouring it would stop every animation.
+
+Nothing is allocated per frame: the controller reuses its accumulation buffer, and the only
+allocation happens when a clip starts and its node is built. `-play:` and
+`-freeze`/`-animtime:` exist to inspect a clip without walking to an NPC. Details in
 [Specifications/gothic-animation-format.md](Specifications/gothic-animation-format.md).
+
+`AnimationController` does the sampling and blending; the node keeps only the state machine,
+because that is the part the script owns and the library cannot know: `Next` chaining, aliases
+with their own direction and blend times, and the `ComboWindow` one-shot rule. Two details
+bridge the two conventions:
+
+- **Reverse.** The library's `PlayBackwards` samples `duration - time`, which puts a reverse
+  clip on frame 0. The game's reverse mirrors the sample walk and starts on the last stored
+  frame, so the node wraps the clip in a one-layer blend node and adds one frame period of
+  `AnimationBlendLayer.TimeOffset`. The shift stays on the layer rather than on the
+  controller's clock, so `AnimationController.Time` remains game time — which is what
+  `HasFinished` and the cross-fade progress are measured against.
+- **Zero-length fades.** 917 of the 1,253 declared transitions ask for no ramp at all, so the
+  node calls `StartClip` for those instead of `CrossfadeToClip`, whose progress would be
+  `0/0` at the first evaluation.
 
 ### Sky, fog and lighting
 

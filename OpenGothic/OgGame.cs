@@ -115,11 +115,32 @@ public class OgGame : Game
 		var position = Camera.Position + Camera.Forward * distance;
 		var transform = Matrix.CreateTranslation(position);
 
-		var node = new ModelNode
+		// A model driven by a script gets the animating node; a prop keeps the plain one. The
+		// clips are already on the model, so no separate set lookup is needed.
+		var animated = model.Animations != null && model.Animations.Count > 0
+			? new AnimatedModelNode(instance)
+			: null;
+		var node = (ModelNode)animated ?? new ModelNode { Instance = instance };
+		node.Transform = transform;
+
+		// A model placed this way has no vob, so it is also the only place a clip can be
+		// started from the command line.
+		var clipName = CommandLine.Instance.PlayAnimation;
+		if (animated != null && !string.IsNullOrEmpty(clipName))
 		{
-			Instance = instance,
-			Transform = transform
-		};
+			if (animated.Play(clipName, blend: false))
+			{
+				Log.Info($"Playing '{clipName}' on '{name}' ({animated.CurrentClip}); {DescribeClip(animated.CurrentInfo)}.");
+			}
+			else
+			{
+				Log.Error($"Model '{name}' has no playable clip '{clipName}'.");
+			}
+		}
+		else if (animated != null)
+		{
+			Log.Info($"Model '{name}' has clips but none was requested; add -play:<clip> to start one.");
+		}
 
 		var bounds = (instance.BoundingBox ?? new BoundingBox(position, position)).Transform(ref transform);
 		var cell = _world.FindCellByBox(bounds);
@@ -133,6 +154,23 @@ public class OgGame : Game
 		cell.Children.Add(node);
 
 		Log.Info($"Spawned model '{name}' at {position} ({distance} units ahead).");
+	}
+
+	/// <summary>One-line description of a clip's playback parameters, for the log.</summary>
+	private static string DescribeClip(ModelClipInfo info)
+	{
+		if (info == null)
+		{
+			return "no metadata";
+		}
+
+		var traits = info.Loop ? "loop" : info.PlaybackNext != null ? $"one-shot -> {info.PlaybackNext}" : "one-shot";
+		if (info.Reverse)
+		{
+			traits += ", reversed";
+		}
+
+		return $"{traits}, {info.FrameCount} frames at {info.Fps:0.##} fps, {info.Duration.TotalSeconds:0.###}s";
 	}
 
 	private void LoadWorld()
@@ -215,7 +253,45 @@ public class OgGame : Game
 
 		_previousKeyboard = keyboard;
 
+		UpdateAnimations(gameTime);
+
 		base.Update(gameTime);
+	}
+
+	/// <summary>
+	/// Advances every animating model in the world. <c>-freeze</c> pins the pose to
+	/// <c>-animtime</c> instead, so a capture does not depend on how long the process has run.
+	/// </summary>
+	private void UpdateAnimations(GameTime gameTime)
+	{
+		if (_world == null)
+		{
+			return;
+		}
+
+		var frozen = CommandLine.Instance?.FrozenTime == true;
+		var poseTime = TimeSpan.FromSeconds(CommandLine.Instance?.PlayTime ?? 0f);
+		var elapsed = gameTime.ElapsedGameTime;
+
+		foreach (var cell in _world.Cells)
+		{
+			foreach (var node in cell.Children)
+			{
+				if (node is not AnimatedModelNode animated)
+				{
+					continue;
+				}
+
+				if (frozen)
+				{
+					animated.Seek(poseTime);
+				}
+				else
+				{
+					animated.Update(elapsed);
+				}
+			}
+		}
 	}
 
 	protected override void Draw(GameTime gameTime)

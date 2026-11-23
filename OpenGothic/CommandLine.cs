@@ -84,6 +84,21 @@ public class CommandLine
 	public string AnimationClip { get; private set; }
 
 	/// <summary>
+	/// Clip to play on the model placed by <see cref="SpawnModel"/>, or null to leave the model
+	/// in its bind pose. Resolved through the script's aliases, so an alias name works too.
+	/// </summary>
+	public string PlayAnimation { get; private set; }
+
+	/// <summary>
+	/// Freezes clip playback at a fixed pose, which makes a capture reproducible: the frame
+	/// depends on <see cref="PlayTime"/> rather than on how long the process has been running.
+	/// </summary>
+	public bool? FrozenTime { get; private set; }
+
+	/// <summary>Playback position to use with <see cref="FrozenTime"/>; defaults to zero.</summary>
+	public float? PlayTime { get; private set; }
+
+	/// <summary>
 	/// Distance in front of the camera to place <see cref="SpawnModel"/>. Defaults to 400
 	/// world units, which fits an actor-sized model in view.
 	/// </summary>
@@ -129,6 +144,10 @@ public class CommandLine
 					result.Animations = false;
 					break;
 
+				case "-freeze":
+					result.FrozenTime = true;
+					break;
+
 				case "-wireframe":
 					result.Wireframe = true;
 					break;
@@ -158,6 +177,36 @@ public class CommandLine
 					else if (arg.StartsWith("-anims:", StringComparison.OrdinalIgnoreCase))
 					{
 						result.Animations = result.ParseBool(arg.Substring("-anims:".Length), arg);
+					}
+					else if (arg.StartsWith("-play:", StringComparison.OrdinalIgnoreCase))
+					{
+						var clip = arg.Substring("-play:".Length);
+						if (string.IsNullOrEmpty(clip))
+						{
+							// Leave the property null so "not specified" stays distinguishable
+							// from "specified but empty", like the other value options.
+							Log.Error("Option '-play:' requires a clip name.");
+							result._invalid = true;
+						}
+						else
+						{
+							result.PlayAnimation = clip;
+						}
+					}
+					else if (arg.StartsWith("-animtime:", StringComparison.OrdinalIgnoreCase))
+					{
+						if (float.TryParse(arg.Substring("-animtime:".Length),
+							System.Globalization.NumberStyles.Float,
+							System.Globalization.CultureInfo.InvariantCulture,
+							out var animTime))
+						{
+							result.PlayTime = animTime;
+						}
+						else
+						{
+							Log.Error("Option '-animtime:' requires a number of seconds.");
+							result._invalid = true;
+						}
 					}
 					else if (arg.StartsWith("-animdump:", StringComparison.OrdinalIgnoreCase))
 					{
@@ -302,7 +351,8 @@ public class CommandLine
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
 		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] " +
-		"[-model:<name>] [-modeldist:<n>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>]";
+		"[-model:<name>] [-modeldist:<n>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
+		"[-play:<clip>] [-freeze] [-animtime:<seconds>]";
 
 	private Vector3? ParseVector(string value, string option)
 	{

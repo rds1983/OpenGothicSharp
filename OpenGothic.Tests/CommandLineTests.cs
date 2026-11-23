@@ -489,4 +489,76 @@ public class CommandLineTests
 
 		Assert.False(result.Validate());
 	}
+
+	[Fact]
+	public void Parse_PlaybackIsUnsetByDefault()
+	{
+		var result = CommandLine.Parse(Array.Empty<string>());
+
+		Assert.Null(result.PlayAnimation);
+		Assert.Null(result.FrozenTime);
+		Assert.Null(result.PlayTime);
+	}
+
+	[Fact]
+	public void Parse_Play_ReadsClipName()
+	{
+		var result = CommandLine.Parse(new[] { "-play:S_RUN" });
+
+		Assert.Equal("S_RUN", result.PlayAnimation);
+	}
+
+	[Fact]
+	public void Parse_PlayWithoutName_IsRejected()
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-play:" });
+
+		Assert.Null(result.PlayAnimation);
+		Assert.False(result.Validate());
+	}
+
+	[Fact]
+	public void Parse_Freeze_IsABareFlag()
+	{
+		var result = CommandLine.Parse(new[] { "-freeze" });
+
+		Assert.True(result.FrozenTime);
+	}
+
+	[Fact]
+	public void Parse_AnimTime_ReadsSeconds()
+	{
+		var result = CommandLine.Parse(new[] { "-animtime:0.75" });
+
+		Assert.Equal(0.75f, result.PlayTime);
+	}
+
+	[Fact]
+	public void Parse_AnimTimeAcceptsZero()
+	{
+		var folder = CreateGothicFolder();
+
+		try
+		{
+			var result = CommandLine.Parse(new[] { "-g", folder, "-animtime:0" });
+
+			Assert.Equal(0f, result.PlayTime);
+			Assert.True(result.Validate());
+		}
+		finally
+		{
+			Directory.Delete(folder, true);
+		}
+	}
+
+	[Theory]
+	[InlineData("soon")]
+	[InlineData("")]
+	public void Parse_InvalidAnimTime_IsRejected(string value)
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", $"-animtime:{value}" });
+
+		Assert.Null(result.PlayTime);
+		Assert.False(result.Validate());
+	}
 }
