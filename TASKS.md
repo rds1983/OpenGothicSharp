@@ -39,6 +39,13 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   `-nomodels`/`-models:` to disable them. Bind transforms, root translation and the synthetic
   `_ROOT` arrangement are specified in
   `Documentation/Specifications/gothic-model-format.md`.
+- Models carry their script's animation clips in `DrModel.Animations`, plus the playback
+  metadata a `ModelAnimationSet` keeps. Clips load per model (nothing beyond the world's
+  scripts is read), are shared by models with the same skeleton, and are not played yet, so
+  everything renders in the bind pose; `-noanims` skips them. `-animdump:<script>` with
+  `-animclip:<clip>` prints a script's clip list and a clip's first-frame bone tracks.
+  Format and model-to-script mapping are in
+  `Documentation/Specifications/gothic-animation-format.md`.
 - No animation playback yet. No input, physics, audio, or scripting yet.
 - UI exists: Myra `Desktop` rooted at a `Hud` panel with two independently anchored blocks
   — an always-visible `Controls` list (bottom-right) and a toggleable `DebugOverlay`
@@ -48,7 +55,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - Debug views: F2 toggles wireframe, F3 toggles bounding boxes; independent of F1 and off by
   default. Both can be started on from the command line with `-wireframe`/`-bounds`.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
-  **C1 (Model rendering) complete.** Current milestone: **C — Models and animation**.
+  **C1 (Model rendering) and C2 (Animation clips) complete.** Current milestone:
+  **C — Models and animation**, next task **C3**.
 
 ---
 
@@ -159,19 +167,42 @@ bind positions the loader rebuilds, so it describes exactly what is drawn in the
 See [Documentation/README.md](Documentation/README.md#models) for the implemented render
 path and the debug switches used to inspect a model.
 
-### C2. Animation clips
+### C2. Animation clips — DONE
 Load the animation data a model references and expose it as playable `AnimationClip`s,
 without playing them yet.
 
-C1 deliberately left clip loading out of `LoadModel`: the `.MDL` script that lists clips does
-not parse for the models measured, so the `.MDS`/`.MSB` path has to be established first.
-Start with a data audit of which shipped models actually reference clips and where they live.
+Clips are not in any model file: a *model script* (`.MSB`; Gothic 1's `.MDS` is the same
+format) lists them, and each clip is a separate `<SCRIPT>-<CLIP>.MAN`. A script owns its
+models through the skeleton name it declares and through the `.ASC` meshes it can drive, and
+`Assets` indexes both once. A clip's channel indices address the *script's* skeleton, not the
+model's, so channels are remapped by node name and channels the model cannot pose are dropped
+— the human skeleton's nine `ZS_*` attach nodes are the common case.
+
+Converted sets are cached by script and bone-name sequence so models sharing a skeleton share
+one set of clip objects, and clips load per model rather than for the whole game. Audit in
+[Specifications/gothic-animation-format.md](Documentation/Specifications/gothic-animation-format.md):
+117 scripts, 3,949 clips, no missing `.MAN`, 37 of 63 `newworld` model names scripted (the
+rest are static props), ≈ 2.3 M keyframes total.
 
 **Done when:** a model's clips are enumerated and one clip's frames and bone tracks are
-readable, with an audit of how many shipped models have clips at all.
+readable, with an audit of how many shipped models have clips at all. — `-animdump:HUMANS
+-animclip:S_RUN` enumerates and prints them; `ModelAnimationSet` exposes names, keyframes and
+per-clip metadata.
 
 ### C3. Animation playback
 Play `AnimationClip`s on a `DrModelInstance` with correct looping and blending between clips.
+`ModelAnimationSet` already carries the per-clip metadata the clip object cannot hold, so this
+task is deciding how it is honoured. Open questions the C2 audit left open, and the first thing
+to check in `Try/OpenGothic`:
+
+- **Which fps governs.** `HUMANS` disagrees with the `.MAN`'s own frame count on 161 clips, and
+  only the `.MAN` stores the frame count, so the `.MAN` value is used today.
+- **`AnimationDirection.Backward`** — whether the sample array is walked in reverse.
+- **Cycle flags** (`AnimationFlags`) — 1,847 script-side aliases and 58 combines are recorded
+  but not interpreted; aliases matter as soon as an NPC plays a scripted animation by name.
+- **`FirstFrame`/`LastFrame` do not index the samples** — 444 clips disagree with
+  `FrameCount`, so they are playback metadata, not a sub-range of the keyframes.
+
 **Done when:** a model plays an idle/animation clip at the right speed and loops without a
 pop.
 
@@ -184,21 +215,23 @@ per clip), not by disabling culling.
 **Done when:** no limb vanishes at the edge of the view while a model animates, and an
 off-screen animating model still draws almost nothing.
 
-### C5. Vob hierarchy and attach points
+### C5. Vob hierarchy
 C1 places a model vob at its own ZEN rotation/translation, but the vob **hierarchy** is still
 flattened: the child walk in `Assets.World.cs` enqueues each child with the parent's
 transform and then recomputes the child's from its own fields alone, so the parent transform
 is discarded. Nested vobs therefore do not follow their parent.
+**Done when:** a child vob follows its parent instead of sitting at its own absolute
+position.
 
-Separately, `IModelMesh.Attachments` names attach points on a model (93 in the shipped
-`newworld.zen` data). An actor's armour and weapon meshes are meant to follow those named
-nodes, which `ModelNode` cannot express yet.
+### C6. Attach points
+`IModelMesh.Attachments` names attach points on a model (93 in the shipped `newworld.zen`
+data), and an actor's armour and weapon meshes are meant to follow those named nodes, which
+`ModelNode` cannot express yet.
 
 Add an `AttachNode` that resolves an attach-point name to a model bone and inherits that
-bone's world transform, and compose the parent transform in the vob walk so nested vobs
-inherit it.
-**Done when:** a child vob follows its parent instead of sitting at its own absolute
-position, and a model parented to another model's attach point follows that bone without a
+bone's world transform. This is also where the clips' nine `ZS_*` channels that a bare armour
+model cannot pose become relevant: those nodes exist for attaching, not for deforming.
+**Done when:** a model parented to another model's attach point follows that bone without a
 manual offset.
 
 ---

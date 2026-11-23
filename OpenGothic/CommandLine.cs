@@ -65,6 +65,25 @@ public class CommandLine
 	public string SpawnModel { get; private set; }
 
 	/// <summary>
+	/// Whether to attach animation clips to models. Null when the flag was not passed, so
+	/// <see cref="Apply"/> leaves <see cref="DebugSettings"/> alone.
+	/// </summary>
+	public bool? Animations { get; private set; }
+
+	/// <summary>
+	/// Name of an animation script to report on at startup, or null to report on none.
+	/// Prints the clip list, frame rate and the first frame of a clip's bone tracks, which is
+	/// the quickest way to see whether clips are reachable and readable.
+	/// </summary>
+	public string AnimationDump { get; private set; }
+
+	/// <summary>
+	/// Clip to print the first frame of, inside <see cref="AnimationDump"/>. Null prints only
+	/// the clip list.
+	/// </summary>
+	public string AnimationClip { get; private set; }
+
+	/// <summary>
 	/// Distance in front of the camera to place <see cref="SpawnModel"/>. Defaults to 400
 	/// world units, which fits an actor-sized model in view.
 	/// </summary>
@@ -106,6 +125,10 @@ public class CommandLine
 					result.Models = false;
 					break;
 
+				case "-noanims":
+					result.Animations = false;
+					break;
+
 				case "-wireframe":
 					result.Wireframe = true;
 					break;
@@ -131,6 +154,28 @@ public class CommandLine
 					else if (arg.StartsWith("-models:", StringComparison.OrdinalIgnoreCase))
 					{
 						result.Models = result.ParseBool(arg.Substring("-models:".Length), arg);
+					}
+					else if (arg.StartsWith("-anims:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.Animations = result.ParseBool(arg.Substring("-anims:".Length), arg);
+					}
+					else if (arg.StartsWith("-animdump:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.AnimationDump = arg.Substring("-animdump:".Length);
+						if (string.IsNullOrEmpty(result.AnimationDump))
+						{
+							Log.Error("Option '-animdump:' requires a script name.");
+							result._invalid = true;
+						}
+					}
+					else if (arg.StartsWith("-animclip:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.AnimationClip = arg.Substring("-animclip:".Length);
+						if (string.IsNullOrEmpty(result.AnimationClip))
+						{
+							Log.Error("Option '-animclip:' requires a clip name.");
+							result._invalid = true;
+						}
 					}
 					else if (arg.StartsWith("-screenshot:", StringComparison.OrdinalIgnoreCase))
 					{
@@ -216,6 +261,11 @@ public class CommandLine
 		{
 			DebugSettings.ModelsEnabled = Models.Value;
 		}
+
+		if (Animations.HasValue)
+		{
+			DebugSettings.AnimationsEnabled = Animations.Value;
+		}
 	}
 
 	public bool Validate()
@@ -250,9 +300,9 @@ public class CommandLine
 	}
 
 	private const string Usage =
-		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] " +
+		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
 		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] " +
-		"[-model:<name>] [-modeldist:<n>]";
+		"[-model:<name>] [-modeldist:<n>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>]";
 
 	private Vector3? ParseVector(string value, string option)
 	{

@@ -45,6 +45,8 @@ default chosen elsewhere.
 | `-devmode` | Developer mode. |
 | `-nocull` / `-cull:true\|false` | Per-part frustum culling; see "Frustum culling". |
 | `-nomodels` / `-models:true\|false` | Instantiate vobs that carry a model. Off shows the level without model geometry, which separates a model bug from a world one. |
+| `-noanims` / `-anims:true\|false` | Attach the animation clips a model's script lists. Off keeps the bind pose and reads no `.MAN` file, which separates an animation problem from a model or world one. |
+| `-animdump:<script>` | Log a script's clip list — nodes, frames, fps, duration, next clip — for the shipped data. `-animclip:<clip>` adds the first frame of that clip's bone tracks. |
 | `-wireframe` / `-bounds` | Start with the F2 / F3 debug views already on. |
 | `-cam:<x,y,z>` | Override the camera position. |
 | `-lookat:<x,y,z>` | Point the camera at a world position (implies yaw and pitch). |
@@ -322,6 +324,33 @@ Model parts are **texture-driven the same way as static meshes**: the material c
 `DrMeshPartTag`, with the white fallback when a texture is missing. Wireframe and bounds
 both extend to models: `DrawMeshPartWireframe` still applies the skeleton, so the edges show
 the posed geometry rather than the bind pose.
+
+#### Animation clips
+
+`Assets.Animation.cs` attaches the clips a model can play. A model file carries none: the
+clips are listed by a *model script* (`.MSB`, Gothic 1 spells it `.MDS`) and stored one
+`<SCRIPT>-<CLIP>.MAN` file per clip. A script reaches its models two ways — the skeleton
+name it declares (`SHEEP` → `SHEEP_BODY.MDL`) and the `.ASC` meshes it can drive
+(`HUMANS.MSB` lists `ARMOR_PRISONER.ASC`) — and `Assets` indexes both once.
+
+The non-obvious part is that **a clip's channel indices address the script's skeleton, not
+the model's hierarchy**. The human skeleton has 34 nodes; `ARMOR_PRISONER.MDL` has 25,
+because it omits the nine `ZS_*` attach nodes. So channels are resolved by node *name* and
+channels the model cannot pose are dropped — 1,710 of `HUMANS`' 26,656 channels for a bare
+armour model, which is why `-animdump:` reports that count.
+
+Converted sets are cached by script plus the exact bone-name sequence, so the ~40 armour
+models that share one 25-bone skeleton share one set of clip objects instead of re-reading
+`HUMANS`' 784 `.MAN` files each. Clips are populated into `DrModel.Animations` and also
+kept as a `ModelAnimationSet`, which carries the per-clip playback metadata (next clip,
+layer, blend in/out, direction, speed) that `AnimationClip` cannot hold.
+
+Nothing plays them yet, so a frame renders in the bind pose, and `-noanims` produces the
+same geometry. Measured on `newworld.zen`: 37 of 63 distinct model names resolve to a
+script (the other 26 are static props); all of the world's scripts together are 134 K
+keyframes, and the whole game is 3,949 clips / ≈ 2.3 M keyframes, which is why the load is
+per model rather than global. Details in
+[Specifications/gothic-animation-format.md](Specifications/gothic-animation-format.md).
 
 ### Sky, fog and lighting
 

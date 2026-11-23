@@ -391,4 +391,102 @@ public class CommandLineTests
 		Assert.Null(result.SpawnDistance);
 		Assert.False(result.Validate());
 	}
+
+	[Fact]
+	public void Parse_AnimationsIsUnsetByDefault()
+	{
+		var result = CommandLine.Parse(Array.Empty<string>());
+
+		Assert.Null(result.Animations);
+		Assert.Null(result.AnimationDump);
+		Assert.Null(result.AnimationClip);
+	}
+
+	[Fact]
+	public void Parse_NoAnims_DisablesAnimations()
+	{
+		var result = CommandLine.Parse(new[] { "-noanims" });
+
+		Assert.False(result.Animations);
+	}
+
+	[Theory]
+	[InlineData("true", true)]
+	[InlineData("false", false)]
+	[InlineData("1", true)]
+	[InlineData("0", false)]
+	public void Parse_AnimationsValue_IsRead(string value, bool expected)
+	{
+		var result = CommandLine.Parse(new[] { $"-anims:{value}" });
+
+		Assert.Equal(expected, result.Animations);
+	}
+
+	[Fact]
+	public void Parse_InvalidAnimationsValue_IsRejected()
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-anims:maybe" });
+
+		Assert.Null(result.Animations);
+		Assert.False(result.Validate());
+	}
+
+	[Fact]
+	public void Apply_LeavesAnimationsAloneWhenUnset()
+	{
+		DebugSettings.AnimationsEnabled = false;
+
+		try
+		{
+			CommandLine.Parse(Array.Empty<string>()).Apply();
+
+			Assert.False(DebugSettings.AnimationsEnabled);
+		}
+		finally
+		{
+			DebugSettings.AnimationsEnabled = true;
+		}
+	}
+
+	[Fact]
+	public void Apply_PushesAnimationsToDebugSettings()
+	{
+		DebugSettings.AnimationsEnabled = true;
+
+		try
+		{
+			CommandLine.Parse(new[] { "-noanims" }).Apply();
+
+			Assert.False(DebugSettings.AnimationsEnabled);
+		}
+		finally
+		{
+			DebugSettings.AnimationsEnabled = true;
+		}
+	}
+
+	[Fact]
+	public void Parse_AnimationDump_ReadsScriptAndClip()
+	{
+		var result = CommandLine.Parse(new[] { "-animdump:HUMANS", "-animclip:S_RUN" });
+
+		Assert.Equal("HUMANS", result.AnimationDump);
+		Assert.Equal("S_RUN", result.AnimationClip);
+	}
+
+	[Fact]
+	public void Parse_AnimationDumpWithoutScript_IsRejected()
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-animdump:" });
+
+		Assert.False(result.Validate());
+	}
+
+	[Fact]
+	public void Parse_AnimationClipWithoutName_IsRejected()
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-animclip:" });
+
+		Assert.False(result.Validate());
+	}
 }

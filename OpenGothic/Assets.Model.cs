@@ -2,6 +2,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Graphics.PackedVector;
+using OpenGothic.Scene;
 using OpenGothic.Utility;
 using OpenGothic.Vertices;
 using System;
@@ -369,9 +370,35 @@ partial class Assets
 			zkMesh = new ZenKit.ModelMesh(GetLastRecord(mdmName).Node.Buffer);
 		}
 
-		// Animation clips are a separate task (C2); the .MDL script that lists them does not
-		// parse for these models, so there is nothing to attach yet.
-		return LoadModel(device, zkHierarchy, zkMesh);
+		var model = LoadModel(device, zkHierarchy, zkMesh);
+
+		// A model carries no animation of its own: the clips come from the model script that
+		// owns it, so attaching them is a separate step. Props have no script and stay still.
+		// A clip problem must never cost the model itself, so a failure here is only logged.
+		try
+		{
+			AttachAnimations(model, stem);
+		}
+		catch (Exception ex)
+		{
+			Log.Error($"Unable to attach animations to model '{stem}': {ex.Message}");
+		}
+
+		return model;
+	}
+
+	/// <summary>
+	/// The clips a model can play, or null when no script drives it. The same set is shared by
+	/// every model with the same script and bone layout.
+	/// </summary>
+	public ModelAnimationSet GetModelAnimations(DrModel model)
+	{
+		if (model == null)
+		{
+			return null;
+		}
+
+		return _modelAnimationSets.TryGetValue(model, out var set) ? set : null;
 	}
 
 	private DrMesh LoadMultiMesh(GraphicsDevice device, string name)

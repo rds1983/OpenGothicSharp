@@ -59,6 +59,30 @@ public class OgGame : Game
 
 		LoadWorld();
 		SpawnRequestedModel();
+		DumpRequestedAnimations();
+	}
+
+	/// <summary>
+	/// Runs <c>-animdump</c> once the assets are loaded, so a clip can be inspected without
+	/// rendering anything. The model the dump is built for is the script's own skeleton, which
+	/// is the only model guaranteed to pose every channel.
+	/// </summary>
+	private void DumpRequestedAnimations()
+	{
+		var script = CommandLine.Instance?.AnimationDump;
+		if (string.IsNullOrEmpty(script) || _assets == null)
+		{
+			return;
+		}
+
+		try
+		{
+			_assets.DumpAnimations(GraphicsDevice, script.ToUpper(), CommandLine.Instance.AnimationClip);
+		}
+		catch (Exception ex)
+		{
+			Log.Error($"Unable to dump animations for '{script}': {ex.Message}");
+		}
 	}
 
 	/// <summary>

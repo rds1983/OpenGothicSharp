@@ -37,11 +37,12 @@ internal static class Program
 			commandLine.Apply();
 
 			Log.Info($"NoMenu: {commandLine.NoMenu}, DevMode: {commandLine.DevMode}");
-			Log.Info($"Cull: {DebugSettings.CullEnabled}, Models: {DebugSettings.ModelsEnabled}");
+			Log.Info($"Cull: {DebugSettings.CullEnabled}, Models: {DebugSettings.ModelsEnabled}, Animations: {DebugSettings.AnimationsEnabled}");
 			Log.Info($"Screenshot: {commandLine.ScreenshotPath ?? "(off)"}, frame: {commandLine.ScreenshotFrame?.ToString() ?? "(first)"}");
 			Log.Info($"Camera: {commandLine.CameraPosition?.ToString() ?? "(default)"}, look at: {commandLine.LookAtTarget?.ToString() ?? "(default)"}");
 			Log.Info($"Wireframe: {commandLine.Wireframe?.ToString() ?? "(off)"}, bounds: {commandLine.Bounds?.ToString() ?? "(off)"}");
 			Log.Info($"Spawn model: {commandLine.SpawnModel ?? "(none)"}, distance: {commandLine.SpawnDistance?.ToString() ?? "(default)"}");
+			Log.Info($"Animation dump: {commandLine.AnimationDump ?? "(off)"}, clip: {commandLine.AnimationClip ?? "(none)"}");
 
 			var settings = new Settings();
 			settings.Load(commandLine.GothicPath, Directory.GetCurrentDirectory());

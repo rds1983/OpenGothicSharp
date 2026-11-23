@@ -20,4 +20,11 @@ public static class DebugSettings
 	/// apart from a world-rendering one. Defaults to true.
 	/// </summary>
 	public static bool ModelsEnabled { get; set; } = true;
+
+	/// <summary>
+	/// Whether models get the animation clips their script lists. Turning it off keeps the
+	/// bind pose and skips reading any <c>.MAN</c> file, which separates an animation problem
+	/// from a model or world one. Defaults to true.
+	/// </summary>
+	public static bool AnimationsEnabled { get; set; } = true;
 }

@@ -19,8 +19,9 @@ meaningful, so a loader resolves `STEM.MDL` first and falls back to `STEM.MDH` +
 `STEM.MDM`. In the shipped `newworld.zen`, all 63 distinct visual model names resolve this
 way — 51 through `.MDL`, 12 through `.MDH`/`.MDM`, none unresolved.
 
-The model script (`.MDS`, animation names and frame rates) does **not** parse for these
-files, so animations cannot be reached through it.
+Animation does not live in these files at all: a model carries geometry and a skeleton, and
+the clips that drive it are listed by a separate model script and stored one `.MAN` file
+per clip. See [gothic-animation-format.md](gothic-animation-format.md).
 
 ## Hierarchy
 
@@ -157,5 +158,5 @@ part, so this is a per-part update rather than a change to the draw path.
 - Whether a model can reference a skeleton in a *different* `.MDH` (shared skeleton) is not
   observed here: every model resolves to a self-contained `.MDL` or to its own `.MDH`/`.MDM`
   pair with matching stems.
-- Animation data is out of scope for this document; the model script does not parse for
-  these files.
+- Animation data is out of scope for this document; see
+  [gothic-animation-format.md](gothic-animation-format.md).
