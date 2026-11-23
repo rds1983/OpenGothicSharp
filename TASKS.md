@@ -50,7 +50,11 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   script layer so an upper-body gesture leaves the legs running, and a playing clip widens its
   parts' cull bounds. `-freeze`/`-animtime:` pin a pose for captures.
 - A model attached with `-attach:<point>:<model>` follows that bone of the `-model:` spawn.
-  No input, physics, audio, or scripting yet.
+- Composed models build one `DrModel` from a shared skeleton and meshes that may each carry
+  their own: `-compose:HUMANS:HUM_BODY_NAKED0,ARMOR_PRISONER`. This is what carries the
+  `ZS_*` attach nodes, which no armour file has. `-modelrot:<degrees>` turns the spawn so a
+  capture can show its front.
+- No input, physics, audio, or scripting yet.
 - UI exists: Myra `Desktop` rooted at a `Hud` panel with two independently anchored blocks
   — an always-visible `Controls` list (bottom-right) and a toggleable `DebugOverlay`
   (top-left, F1) showing FPS, camera position, draw-call and triangle counts and the active
@@ -59,9 +63,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - Debug views: F2 toggles wireframe, F3 toggles bounding boxes; independent of F1 and off by
   default. Both can be started on from the command line with `-wireframe`/`-bounds`.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
-  **C1–C7 complete** (model rendering, clips, playback, animated culling boxes, vob hierarchy,
-  attach points, animation layers). Current milestone: **C — Models and animation**, next
-  task **C8**.
+  **Milestone C (Models and animation) complete** — C1–C8: model rendering, clips, playback,
+  animated culling boxes, vob hierarchy, attach points, animation layers, composed models.
+  Current milestone: **D — Physics and movement**, next task **D1**.
 
 ---
 
@@ -271,7 +275,7 @@ Two gaps remain, both data rather than design:
   the nine nodes, `HUMANS.MDH` has them without a matching `.MDL`/`.MDM`, and
   `HUM_BODY_NAKED0.MDM` has no `.MDH`. Attaching to `ZS_RIGHTHAND` needs the avatar
   composition — one model built from a hierarchy and meshes with different stems, sharing the
-  skeleton.
+  skeleton. **Resolved in C8** by `Assets.GetComposedModel`.
 - **An item's grip offset is unset.** `ModelBoneAttachment.Transform` is the slot; Gothic item
   definitions carry the scale/offset and name the attach node, and arrive with the item work.
 
@@ -306,17 +310,36 @@ Known gaps: a layered change snaps, where the reference ramps a new layer in ove
 time; a one-shot overlay holds its last frame until `StopLayer`/`Stop`, which the game's
 overlay lifecycle (F1) will drive.
 
-### C8. Composed model
+### C8. Composed model — DONE
 An actor is not one file: the body (`HUM_BODY_NAKED0.MDM`) and its armour (`ARMOR_*.MDL`) share
-one skeleton, and the `ZS_*` attach nodes live only in that skeleton. `LoadModel` requires a
-matching stem for a `.MDH`/`.MDM` pair, which is why no loadable model carries those nodes and
+one skeleton, and the `ZS_*` attach nodes live only in that skeleton. `LoadModel` required a
+matching stem for a `.MDH`/`.MDM` pair, which is why no loadable model carried those nodes and
 C6 could only attach to ordinary bones.
 
-Build a model from an explicit hierarchy plus one or more meshes whose stems differ, merging
-bones by name — the same name mapping `Assets.Animation` already performs for channels. This
-is the prerequisite for real attach points and for dressing an NPC.
+`Assets.GetComposedModel(skeleton, meshes...)` builds one `DrModel` from an explicit hierarchy
+plus one or more meshes: each source's nodes are mapped to the merged bones by name, the same
+mapping clip channels use, and a bare `.MDM` maps identity because its weights already address
+the shared skeleton. Each skinned mesh keeps its **own authored bind** rather than the merged
+rest: the armour's translations and scales match `HUMANS.MDH` but several rest rotations differ
+by up to ~34°, and using the merged bind displaces its weighted vertices by up to 34 units.
+`inverseBind * boneWorld` then carries the mesh from its authored rest into the skeleton's, as
+an animation would. Because the vertex data stays in authored space, each composed part's cull
+box is computed separately in the merged rest. `-compose:<skeleton>:<mesh>[,<mesh>...]` exposes
+it; `-modelrot:<degrees>` turns the spawn so a capture can show the front.
+
+Data: `HUMANS.MDH` has 34 nodes including the nine `ZS_*`; `HUM_BODY_NAKED0.MDM`'s weights stop
+at node 32; all 21 `ARMOR_*.MDL` files use a 25-name skeleton whose names are a subset of
+`HUMANS`. Other creatures' bare `.MDM`s address their own skeletons (up to 77 nodes) and are
+rejected unless the explicit skeleton covers them. None of the human armours has a rigid
+attachment mesh, so the static path only sees single-hierarchy models today.
 **Done when:** a body and an armour render on one skeleton, and a weapon attached to
-`ZS_RIGHTHAND` lands in the hand.
+`ZS_RIGHTHAND` lands in the hand. — `-compose:HUMANS:HUM_BODY_NAKED0,ARMOR_PRISONER` adds the
+body as one mesh (+1 draw call, +568 triangles) on top of the standalone armour; the composed
+`HUMANS` set maps all 784 clips with **0 channels the model cannot pose** (standalone armour
+drops 1,710); `-attach:ZS_RIGHTHAND:ITMW_1H_MACHETE_01.MRM` is drawn at the hand and moves with
+the arm (12,279 px between frozen `S_RUN` poses); a composed model animated at the view edge
+matches `-nocull` exactly. The item's grip offset/orientation is still unset, as C6 recorded —
+it arrives with the item definitions.
 
 ---
 

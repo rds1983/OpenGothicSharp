@@ -14,9 +14,10 @@ namespace OpenGothic;
 
 partial class Assets
 {
-	private DrMeshPart CreatePart(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, IMultiResolutionSubMesh zkSubMesh, Matrix[] bindTransforms, Dictionary<int, int> skinMap)
+	private DrMeshPart CreatePart(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, IMultiResolutionSubMesh zkSubMesh, Matrix[] bindTransforms, Matrix[] restTransforms, int[] nodeToBone, Dictionary<int, int> skinMap)
 	{
 		IMeshBuilder meshBuilder;
+		MeshBuilderS skinnedBuilder = null;
 		if (zkSkinnedMesh == null)
 		{
 			var mb = new MeshBuilderPNT();
@@ -36,7 +37,8 @@ partial class Assets
 		}
 		else
 		{
-			meshBuilder = CreateSkinnedBuilder(zkSkinnedMesh, zkSubMesh, bindTransforms, skinMap);
+			skinnedBuilder = CreateSkinnedBuilder(zkSkinnedMesh, zkSubMesh, bindTransforms, restTransforms, nodeToBone, skinMap);
+			meshBuilder = skinnedBuilder;
 		}
 
 		var triangles = zkSubMesh.Triangles;
@@ -64,6 +66,14 @@ partial class Assets
 		}
 
 		var result = meshBuilder.CreateMeshPart(device, true);
+
+		// A composed mesh is baked from its own bind, but the skeleton poses it at the merged
+		// rest, which is where it is culled and where a debug box should appear.
+		if (skinnedBuilder?.RestBounds is BoundingBox rest)
+		{
+			result.BoundingBox = rest;
+		}
+
 		result.Tag = new DrMeshPartTag(material);
 
 		return result;
@@ -79,12 +89,19 @@ partial class Assets
 	/// vertex positions at all.
 	/// </para>
 	/// <para>
+	/// The transform used here is the bind the mesh was authored in, which for a composed
+	/// model may not be the model's own skeleton: an armour mesh keeps its authored rest and
+	/// is carried into the shared pose by its inverse bind. The box, on the other hand, is
+	/// computed at the merged rest via <paramref name="restTransforms"/>, because that is
+	/// where the skeleton places the mesh.
+	/// </para>
+	/// <para>
 	/// Weights address hierarchy node indices, while the blend indices handed to the GPU
-	/// address the skin's joint array, so <paramref name="skinMap"/> translates between
-	/// the two.
+	/// address the skin's joint array, so <paramref name="nodeToBone"/> and
+	/// <paramref name="skinMap"/> translate between the three.
 	/// </para>
 	/// </summary>
-	private static MeshBuilderS CreateSkinnedBuilder(ISoftSkinMesh zkSkinnedMesh, IMultiResolutionSubMesh zkSubMesh, Matrix[] bindTransforms, Dictionary<int, int> skinMap)
+	private static MeshBuilderS CreateSkinnedBuilder(ISoftSkinMesh zkSkinnedMesh, IMultiResolutionSubMesh zkSubMesh, Matrix[] bindTransforms, Matrix[] restTransforms, int[] nodeToBone, Dictionary<int, int> skinMap)
 	{
 		var mb = new MeshBuilderS();
 
@@ -106,31 +123,37 @@ partial class Assets
 			for (var j = 0; j < count; ++j)
 			{
 				var item = weight[j];
+				var boneIndex = nodeToBone[item.NodeIndex];
 
 				// One weight is enough for the position: they all agree. Blending them would
 				// only add rounding error.
 				if (j == 0)
 				{
 					position = Vector3.Transform(item.Position.ToXna(), bindTransforms[item.NodeIndex]);
+
+					var rest = Vector3.Transform(item.Position.ToXna(), restTransforms[boneIndex]);
+					var vertexBounds = new BoundingBox(rest, rest);
+					mb.RestBounds = mb.RestBounds.HasValue
+						? BoundingBox.CreateMerged(mb.RestBounds.Value, vertexBounds)
+						: vertexBounds;
 				}
 
-				var boneIndex = skinMap[item.NodeIndex];
 				switch (j)
 				{
 					case 0:
-						blendIndices.X = boneIndex;
+						blendIndices.X = skinMap[boneIndex];
 						blendWeights.X = item.Weight;
 						break;
 					case 1:
-						blendIndices.Y = boneIndex;
+						blendIndices.Y = skinMap[boneIndex];
 						blendWeights.Y = item.Weight;
 						break;
 					case 2:
-						blendIndices.Z = boneIndex;
+						blendIndices.Z = skinMap[boneIndex];
 						blendWeights.Z = item.Weight;
 						break;
 					default:
-						blendIndices.W = boneIndex;
+						blendIndices.W = skinMap[boneIndex];
 						blendWeights.W = item.Weight;
 						break;
 				}
@@ -151,12 +174,12 @@ partial class Assets
 		return mb;
 	}
 
-	private DrMesh CreateMesh(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, Matrix[] bindTransforms = null, Dictionary<int, int> skinMap = null)
+	private DrMesh CreateMesh(GraphicsDevice device, ISoftSkinMesh zkSkinnedMesh, IMultiResolutionMesh zkMesh, Matrix[] bindTransforms = null, Matrix[] restTransforms = null, int[] nodeToBone = null, Dictionary<int, int> skinMap = null)
 	{
 		var mesh = new DrMesh();
 		foreach (var submesh in zkMesh.SubMeshes)
 		{
-			var meshPart = CreatePart(device, zkSkinnedMesh, zkMesh, submesh, bindTransforms, skinMap);
+			var meshPart = CreatePart(device, zkSkinnedMesh, zkMesh, submesh, bindTransforms, restTransforms, nodeToBone, skinMap);
 			mesh.MeshParts.Add(meshPart);
 		}
 
@@ -164,22 +187,45 @@ partial class Assets
 	}
 
 	/// <summary>
-	/// A skinned mesh plus the hierarchy nodes it deforms across, in blend-index order.
+	/// A skinned mesh plus the merged bones it deforms across, in blend-index order, and the
+	/// node each joint was authored as in its own hierarchy.
 	/// </summary>
 	private sealed class SkinnedMeshInfo
 	{
 		public DrMesh Mesh { get; }
+		public IReadOnlyList<int> JointBones { get; }
 		public IReadOnlyList<int> JointNodes { get; }
+		public Matrix[] BindTransforms { get; }
 
-		public SkinnedMeshInfo(DrMesh mesh, IReadOnlyList<int> jointNodes)
+		public SkinnedMeshInfo(DrMesh mesh, IReadOnlyList<int> jointBones, IReadOnlyList<int> jointNodes, Matrix[] bindTransforms)
 		{
 			Mesh = mesh;
+			JointBones = jointBones;
 			JointNodes = jointNodes;
+			BindTransforms = bindTransforms;
 		}
 	}
 
 	/// <summary>
-	/// Assembles a <see cref="DrModel"/> from a hierarchy and its meshes.
+	/// One mesh in a composed model and the hierarchy its weight node indices address. A bare
+	/// <c>.MDM</c> is authored against the shared skeleton, so it has no hierarchy of its own.
+	/// </summary>
+	private sealed class ModelMeshSource
+	{
+		public string Name { get; }
+		public IModelMesh Mesh { get; }
+		public IModelHierarchy Hierarchy { get; }
+
+		public ModelMeshSource(string name, IModelMesh mesh, IModelHierarchy hierarchy)
+		{
+			Name = name;
+			Mesh = mesh;
+			Hierarchy = hierarchy;
+		}
+	}
+
+	/// <summary>
+	/// Assembles a <see cref="DrModel"/> from a shared skeleton and one or more meshes.
 	/// <para>
 	/// A static mesh is attached to the hierarchy node that carries its name, so the node's
 	/// transform positions it. A skinned mesh cannot be: it deforms across many bones, and
@@ -187,14 +233,23 @@ partial class Assets
 	/// synthetic root and the real skeleton hangs beside them. The skin still references
 	/// the real bones, which is what makes the deformation follow the skeleton.
 	/// </para>
+	/// <para>
+	/// A composed mesh may have been authored against a hierarchy of its own. Its nodes are
+	/// mapped to the merged bones by name, and its skin keeps the authored bind; the
+	/// skeleton's rest is the explicit hierarchy's, so the mesh is carried from one rest into
+	/// the other exactly as an animation would carry it.
+	/// </para>
 	/// </summary>
-	private DrModel LoadModel(GraphicsDevice device, IModelHierarchy zkHierarchy, IModelMesh zkMesh)
+	private DrModel LoadModel(GraphicsDevice device, IModelHierarchy zkHierarchy, IReadOnlyList<ModelMeshSource> sources)
 	{
 		// Static meshes are named after the hierarchy node they belong to.
 		var staticMeshes = new Dictionary<string, DrMesh>(StringComparer.OrdinalIgnoreCase);
-		foreach (var pair in zkMesh.Attachments)
+		foreach (var source in sources)
 		{
-			staticMeshes[pair.Key] = CreateMesh(device, null, pair.Value);
+			foreach (var pair in source.Mesh.Attachments)
+			{
+				staticMeshes[pair.Key] = CreateMesh(device, null, pair.Value);
+			}
 		}
 
 		// One bone per hierarchy node, in hierarchy order, so a weight's node index
@@ -203,6 +258,7 @@ partial class Assets
 		var nodes = zkHierarchy.Nodes;
 		var bones = new DrModelBone[nodes.Count];
 		var parents = new int[nodes.Count];
+		var boneIndexByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
 		for (var i = 0; i < nodes.Count; ++i)
 		{
@@ -226,6 +282,7 @@ partial class Assets
 
 			bones[i] = bone;
 			parents[i] = node.ParentIndex;
+			boneIndexByName.TryAdd(node.Name, i);
 		}
 
 		for (var i = 0; i < bones.Length; ++i)
@@ -246,85 +303,107 @@ partial class Assets
 			}
 		}
 
-		// Absolute bind transforms, in hierarchy order. Computed here rather than through
-		// DrModel, whose bone numbering is a depth-first traversal order and therefore does
-		// not match the hierarchy order the weights use.
-		var bindTransforms = new Matrix[bones.Length];
+		// Absolute rest transforms of the shared skeleton, in hierarchy order. Computed here
+		// rather than through DrModel, whose bone numbering is a depth-first traversal order
+		// and therefore does not match the hierarchy order the weights use.
+		var restTransforms = new Matrix[bones.Length];
 		for (var i = 0; i < bones.Length; ++i)
 		{
 			var local = bones[i].CalculateDefaultLocalTransform();
-			bindTransforms[i] = parents[i] < 0 ? local : local * bindTransforms[parents[i]];
+			restTransforms[i] = parents[i] < 0 ? local : local * restTransforms[parents[i]];
 		}
 
 		var skinnedMeshes = new List<SkinnedMeshInfo>();
+		var rootChildren = new List<DrModelBone>();
+		var meshIndex = 0;
 
-		var root = bones[0];
-		var zkSkinnedMeshes = zkMesh.Meshes;
-		if (zkSkinnedMeshes.Count > 0)
+		foreach (var source in sources)
 		{
-			root = new DrModelBone("_ROOT");
+			var nodeToBone = BuildNodeToBone(source, bones.Length, boneIndexByName);
+			var bindTransforms = source.Hierarchy == null
+				? restTransforms
+				: ComputeBindTransforms(source.Hierarchy);
 
-			var children = new List<DrModelBone>();
-
-			for (var i = 0; i < zkSkinnedMeshes.Count; ++i)
+			for (var i = 0; i < source.Mesh.Meshes.Count; ++i)
 			{
-				var zkSkinnedMesh = zkSkinnedMeshes[i];
+				var zkSkinnedMesh = source.Mesh.Meshes[i];
 
 				// Every node a weight mentions must be a joint, so the skin's joint array is
 				// built from the mesh's node list first and any remaining weight nodes after.
+				var jointBones = new List<int>();
 				var jointNodes = new List<int>();
-				var blendIndexByNode = new Dictionary<int, int>();
+				var blendIndexByBone = new Dictionary<int, int>();
+
+				int MapNode(int nodeIndex)
+				{
+					if (nodeIndex < 0 || nodeIndex >= nodeToBone.Length)
+					{
+						throw new InvalidOperationException(
+							$"Mesh '{source.Name}' addresses node {nodeIndex}, but the shared skeleton has {nodeToBone.Length} nodes.");
+					}
+
+					return nodeToBone[nodeIndex];
+				}
+
+				void AddJoint(int nodeIndex)
+				{
+					var boneIndex = MapNode(nodeIndex);
+					if (blendIndexByBone.TryAdd(boneIndex, jointBones.Count))
+					{
+						jointBones.Add(boneIndex);
+						jointNodes.Add(nodeIndex);
+					}
+				}
 
 				foreach (var nodeIndex in zkSkinnedMesh.Nodes)
 				{
-					if (blendIndexByNode.TryAdd(nodeIndex, jointNodes.Count))
-					{
-						jointNodes.Add(nodeIndex);
-					}
+					AddJoint(nodeIndex);
 				}
 
 				foreach (var vertexWeights in zkSkinnedMesh.Weights)
 				{
 					foreach (var weight in vertexWeights)
 					{
-						if (blendIndexByNode.TryAdd(weight.NodeIndex, jointNodes.Count))
-						{
-							jointNodes.Add(weight.NodeIndex);
-						}
+						AddJoint(weight.NodeIndex);
 					}
 				}
 
-				if (jointNodes.Count > SkinnedEffect.MaxBones)
+				if (jointBones.Count > SkinnedEffect.MaxBones)
 				{
 					throw new NotSupportedException(
-						$"Skinned mesh {i} of this model has {jointNodes.Count} joints, but SkinnedEffect supports {SkinnedEffect.MaxBones}.");
+						$"Skinned mesh {i} of '{source.Name}' has {jointBones.Count} joints, but SkinnedEffect supports {SkinnedEffect.MaxBones}.");
 				}
 
-				var mesh = CreateMesh(device, zkSkinnedMesh, zkSkinnedMesh.Mesh, bindTransforms, blendIndexByNode);
+				var mesh = CreateMesh(device, zkSkinnedMesh, zkSkinnedMesh.Mesh, bindTransforms, restTransforms, nodeToBone, blendIndexByBone);
 
-				skinnedMeshes.Add(new SkinnedMeshInfo(mesh, jointNodes));
+				skinnedMeshes.Add(new SkinnedMeshInfo(mesh, jointBones, jointNodes, bindTransforms));
 
-				children.Add(new DrModelBone($"_MESH{i}", mesh));
+				rootChildren.Add(new DrModelBone($"_MESH{meshIndex++}", mesh));
 			}
+		}
 
-			children.Add(bones[0]);
-
-			root.Children = children.ToArray();
+		var root = bones[0];
+		if (rootChildren.Count > 0)
+		{
+			root = new DrModelBone("_ROOT");
+			rootChildren.Add(bones[0]);
+			root.Children = rootChildren.ToArray();
 		}
 
 		var result = new DrModel(root);
 
 		// Now that the parts exist, give each skinned mesh its skin. The GPU is handed
-		// inverseBind * boneWorld, so this must be the inverse of the bind pose.
+		// inverseBind * boneWorld, so this must be the inverse of the pose the mesh was
+		// authored in — the shared skeleton's for a bare mesh, its own otherwise.
 		for (var i = 0; i < skinnedMeshes.Count; ++i)
 		{
 			var info = skinnedMeshes[i];
 
-			var joints = new DrSkinJoint[info.JointNodes.Count];
+			var joints = new DrSkinJoint[info.JointBones.Count];
 			for (var j = 0; j < joints.Length; ++j)
 			{
 				var nodeIndex = info.JointNodes[j];
-				joints[j] = new DrSkinJoint(bones[nodeIndex], Matrix.Invert(bindTransforms[nodeIndex]));
+				joints[j] = new DrSkinJoint(bones[info.JointBones[j]], Matrix.Invert(info.BindTransforms[nodeIndex]));
 			}
 
 			var skin = new DrSkin(i, joints);
@@ -338,43 +417,154 @@ partial class Assets
 	}
 
 	/// <summary>
+	/// Maps a mesh's own hierarchy node indices to merged bone indices, by name. A mesh
+	/// without a hierarchy already addresses the shared skeleton, so its map is the identity.
+	/// </summary>
+	private static int[] BuildNodeToBone(ModelMeshSource source, int boneCount, Dictionary<string, int> boneIndexByName)
+	{
+		if (source.Hierarchy == null)
+		{
+			var identity = new int[boneCount];
+			for (var i = 0; i < identity.Length; ++i)
+			{
+				identity[i] = i;
+			}
+
+			return identity;
+		}
+
+		var nodes = source.Hierarchy.Nodes;
+		var result = new int[nodes.Count];
+		for (var i = 0; i < nodes.Count; ++i)
+		{
+			if (!boneIndexByName.TryGetValue(nodes[i].Name, out result[i]))
+			{
+				throw new InvalidOperationException(
+					$"Mesh '{source.Name}' uses bone '{nodes[i].Name}', which the composed skeleton does not have.");
+			}
+		}
+
+		return result;
+	}
+
+	/// <summary>Absolute bind transforms of a hierarchy, in its own node order.</summary>
+	private static Matrix[] ComputeBindTransforms(IModelHierarchy hierarchy)
+	{
+		var nodes = hierarchy.Nodes;
+		var result = new Matrix[nodes.Count];
+		var rootTranslation = hierarchy.RootTranslation.ToXna();
+
+		for (var i = 0; i < nodes.Count; ++i)
+		{
+			var pose = new SrtTransform(nodes[i].Transform.ToXna());
+			if (nodes[i].ParentIndex < 0)
+			{
+				pose.Translation += rootTranslation;
+			}
+
+			var local = pose.ToMatrix();
+			result[i] = nodes[i].ParentIndex < 0 ? local : local * result[nodes[i].ParentIndex];
+		}
+
+		return result;
+	}
+
+	/// <summary>
 	/// Loads a model by name. A self-contained <c>.MDL</c> carries its own hierarchy and
 	/// mesh and is preferred; otherwise the skeleton <c>.MDH</c> and mesh <c>.MDM</c> pair
-	/// is used. Names may be given with or without an extension.
+	/// is used. A bare <c>.MDM</c> has no skeleton of its own and is only loadable as part of
+	/// a composed model. Names may be given with or without an extension.
 	/// </summary>
 	private DrModel LoadModel(GraphicsDevice device, string name)
 	{
-		var stem = Path.GetFileNameWithoutExtension(name).ToUpper();
+		var source = LoadModelSource(name);
+		if (source.Hierarchy == null)
+		{
+			throw new InvalidOperationException($"Model '{source.Name}' has neither a .MDL nor a .MDH/.MDM pair.");
+		}
 
-		IModelHierarchy zkHierarchy;
-		IModelMesh zkMesh;
+		var model = LoadModel(device, source.Hierarchy, new[] { source });
+		AttachAnimationsQuietly(model, source.Name);
+
+		return model;
+	}
+
+	/// <summary>
+	/// Builds one model from an explicit skeleton and meshes that may each have their own.
+	/// This is how an actor is assembled: the body ships as a bare <c>.MDM</c>, the armour as
+	/// a <c>.MDL</c>, and only the skeleton (<c>HUMANS.MDH</c>) carries the <c>ZS_*</c> attach
+	/// nodes. Node indices are reconciled by name, the same mapping clip channels use.
+	/// </summary>
+	private DrModel LoadComposedModel(GraphicsDevice device, string hierarchyStem, string[] meshStems)
+	{
+		var hierarchyName = Path.GetFileNameWithoutExtension(hierarchyStem).ToUpper();
+
+		IModelHierarchy hierarchy;
+		var mdlName = hierarchyName + ".MDL";
+		var mdhName = hierarchyName + ".MDH";
+
+		if (_allRecords.ContainsKey(mdlName))
+		{
+			hierarchy = new ZenKit.Model(GetLastRecord(mdlName).Node.Buffer).Hierarchy;
+		}
+		else if (_allRecords.ContainsKey(mdhName))
+		{
+			hierarchy = new ModelHierarchy(GetLastRecord(mdhName).Node.Buffer);
+		}
+		else
+		{
+			throw new InvalidOperationException($"Composed model skeleton '{hierarchyName}' has neither a .MDL nor a .MDH.");
+		}
+
+		var sources = new ModelMeshSource[meshStems.Length];
+		for (var i = 0; i < meshStems.Length; ++i)
+		{
+			sources[i] = LoadModelSource(meshStems[i]);
+		}
+
+		var model = LoadModel(device, hierarchy, sources);
+		AttachAnimationsQuietly(model, hierarchyName);
+
+		return model;
+	}
+
+	/// <summary>
+	/// Resolves one stem to its mesh and the hierarchy that mesh was authored against. A
+	/// self-contained <c>.MDL</c> supplies both; an <c>.MDH</c>/<c>.MDM</c> pair supplies the
+	/// skeleton separately; a bare <c>.MDM</c> is authored against the shared skeleton.
+	/// </summary>
+	private ModelMeshSource LoadModelSource(string name)
+	{
+		var stem = Path.GetFileNameWithoutExtension(name).ToUpper();
 
 		var mdlName = stem + ".MDL";
 		if (_allRecords.ContainsKey(mdlName))
 		{
 			var mdl = new ZenKit.Model(GetLastRecord(mdlName).Node.Buffer);
-			zkHierarchy = mdl.Hierarchy;
-			zkMesh = mdl.Mesh;
+			return new ModelMeshSource(stem, mdl.Mesh, mdl.Hierarchy);
 		}
-		else
+
+		var mdmName = stem + ".MDM";
+		if (!_allRecords.ContainsKey(mdmName))
 		{
-			var mdhName = stem + ".MDH";
-			var mdmName = stem + ".MDM";
-
-			if (!_allRecords.ContainsKey(mdhName) || !_allRecords.ContainsKey(mdmName))
-			{
-				throw new InvalidOperationException($"Model '{stem}' has neither a .MDL nor a .MDH/.MDM pair.");
-			}
-
-			zkHierarchy = new ModelHierarchy(GetLastRecord(mdhName).Node.Buffer);
-			zkMesh = new ZenKit.ModelMesh(GetLastRecord(mdmName).Node.Buffer);
+			throw new InvalidOperationException($"Model '{stem}' has neither a .MDL nor a .MDM.");
 		}
 
-		var model = LoadModel(device, zkHierarchy, zkMesh);
+		var mdhName = stem + ".MDH";
+		IModelHierarchy hierarchy = _allRecords.ContainsKey(mdhName)
+			? new ModelHierarchy(GetLastRecord(mdhName).Node.Buffer)
+			: null;
 
-		// A model carries no animation of its own: the clips come from the model script that
-		// owns it, so attaching them is a separate step. Props have no script and stay still.
-		// A clip problem must never cost the model itself, so a failure here is only logged.
+		return new ModelMeshSource(stem, new ZenKit.ModelMesh(GetLastRecord(mdmName).Node.Buffer), hierarchy);
+	}
+
+	/// <summary>
+	/// A model carries no animation of its own: the clips come from the model script that
+	/// owns it, so attaching them is a separate step. Props have no script and stay still.
+	/// A clip problem must never cost the model itself, so a failure here is only logged.
+	/// </summary>
+	private void AttachAnimationsQuietly(DrModel model, string stem)
+	{
 		try
 		{
 			AttachAnimations(model, stem);
@@ -383,8 +573,6 @@ partial class Assets
 		{
 			Log.Error($"Unable to attach animations to model '{stem}': {ex.Message}");
 		}
-
-		return model;
 	}
 
 	private DrMesh LoadMultiMesh(GraphicsDevice device, string name)
@@ -396,5 +584,22 @@ partial class Assets
 	}
 
 	public DrModel GetModel(GraphicsDevice device, string name) => Get(device, name, LoadModel);
+
+	/// <summary>
+	/// One model built from <paramref name="hierarchyStem"/> and the listed meshes, cached
+	/// under the composition rather than under any one file's name.
+	/// </summary>
+	public DrModel GetComposedModel(GraphicsDevice device, string hierarchyStem, params string[] meshStems)
+	{
+		var names = new string[meshStems.Length];
+		for (var i = 0; i < meshStems.Length; ++i)
+		{
+			names[i] = Path.GetFileNameWithoutExtension(meshStems[i]).ToUpper();
+		}
+
+		var key = "compose:" + Path.GetFileNameWithoutExtension(hierarchyStem).ToUpper() + ":" + string.Join(",", names);
+		return Get(device, key, (d, _) => LoadComposedModel(d, hierarchyStem, meshStems));
+	}
+
 	public DrMesh GetMultiMesh(GraphicsDevice device, string name) => Get(device, name, LoadMultiMesh);
 }

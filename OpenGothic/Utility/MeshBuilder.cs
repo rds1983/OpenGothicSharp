@@ -134,6 +134,13 @@ internal class MeshBuilderPNT : MeshBuilder<VertexPositionNormalTexture>
 
 internal class MeshBuilderS : MeshBuilder<VertexSkinned>
 {
+	/// <summary>
+	/// Bind-pose bounds in the model's rest space, when the vertices were baked in another
+	/// mesh's own bind space. A composed mesh is skinned from its own bind, so its vertex
+	/// positions are not where it stands in the skeleton; culling needs the latter.
+	/// </summary>
+	public BoundingBox? RestBounds;
+
 	protected override VertexBuffer CreateVertexBuffer(GraphicsDevice device, VertexSkinned[] vertices) => vertices.CreateVertexBuffer(device);
 
 	protected override BoundingBox CreateBoundingBox(IEnumerable<VertexSkinned> vertices) => BoundingBox.CreateFromPoints(vertices.GetPositions());

@@ -123,6 +123,55 @@ attachment must be attached to the node rather than assumed to sit at the origin
 A model can have both kinds at once (e.g. `BOOK_BLUE` has one attachment plus one skinned
 mesh), so a loader must support a model whose geometry is partly rigid and partly skinned.
 
+## Composed models
+
+An actor's visible model is not always one file. The shipped data splits it:
+
+| File | Contents | Bone count |
+| --- | --- | --- |
+| `HUMANS.MDH` | the human skeleton, including the nine `ZS_*` attach nodes | 34 |
+| `HUM_BODY_NAKED0.MDM` | the undressed body mesh, no hierarchy | mesh weights address nodes 0–32 |
+| `ARMOR_PRISONER.MDL` | one armour, hierarchy and mesh | 25 |
+
+The body and every armour are driven by `HUMANS.MSB`, whose skeleton name is
+`HUM_BODY_NAKED0`, but neither carries the `ZS_*` nodes: only the shared hierarchy does. A
+model that needs those attach points is therefore assembled from an explicit hierarchy plus
+one or more meshes.
+
+Two facts make that possible:
+
+- A bare `.MDM`'s weights already address the shared skeleton. `HUM_BODY_NAKED0`'s weights
+  top out at node 32 of `HUMANS.MDH`'s 34, so its node indices need no translation.
+- An `.MDL`'s weights address its **own** hierarchy. All 21 `ARMOR_*.MDL` files have node
+  names that also exist in `HUMANS.MDH`, so the indices are reconciled **by name** — the
+  same mapping clip channels use. The mapping is not an identity: `ARMOR_PRISONER` lacks
+  all nine `ZS_*` nodes, so its 25 nodes spread differently through the 34.
+
+Composition must keep each mesh's own bind, not the merged skeleton's:
+
+- The shared node translations and scales match exactly between `HUMANS.MDH` and
+  `ARMOR_PRISONER`, but several orientations differ — by up to **0.29** in quaternion
+  distance (~34°) at the shoulders. Rebuilding the armour's bind vertices through
+  `HUMANS`'s transforms displaces its weighted vertices by up to **34 units**.
+- The root translations differ too: `HUMANS.MDH` has `(0, 99.95, 7.38)`,
+  `ARMOR_PRISONER` `(-0.11, 98.15, -6.47)`.
+
+So the skin of a composed mesh keeps `inverseBind` from the hierarchy it was authored in.
+With the skeleton posing the merged bones, `inverseBind * boneWorld` maps the mesh from its
+authored rest into the shared rest — exactly the transform an animation applies — and body
+and armour land in one pose. The baked vertex positions (which the vertex buffer passes to
+the shader) are in that authored space, so a composed part's **cull box** is computed
+separately in the merged rest via a second transform, because that is where the skeleton
+places the mesh. A normal single-file model has one hierarchy and both spaces coincide.
+
+The explicit skeleton must contain every bone a mesh names; a missing name is an error, not
+a dropped weight. The body/armour pair satisfies this, but bare `.MDM`s of other creatures
+address their own skeletons — 22 of the first 122 bare `.MDM`s exceed 34 nodes, up to 77 —
+and are only composable with a skeleton that covers them. None of the 21 `ARMOR_*.MDL` files
+carries a rigid attachment mesh, so the static path only ever sees single-hierarchy models;
+a composed source with one would need the same authored-to-merged mapping applied to its
+vertex positions, which is not implemented.
+
 ## Assembling a model to draw
 
 The draw contract of a stock `SkinnedEffect` is one bone transform per joint, where each is
@@ -156,7 +205,8 @@ part, so this is a per-part update rather than a change to the draw path.
 - Positions in the weight list are float and already in bone space; no unit conversion
   appears to be needed (a human actor is ~165 units tall, consistent with 1 unit ≈ 1 cm).
 - Whether a model can reference a skeleton in a *different* `.MDH` (shared skeleton) is not
-  observed here: every model resolves to a self-contained `.MDL` or to its own `.MDH`/`.MDM`
-  pair with matching stems.
+  recorded in any file: every model resolves to a self-contained `.MDL` or to its own
+  `.MDH`/`.MDM` pair with matching stems. A composed model is therefore built from an
+  explicit skeleton and meshes named by the caller, not discovered from the data.
 - Animation data is out of scope for this document; see
   [gothic-animation-format.md](gothic-animation-format.md).

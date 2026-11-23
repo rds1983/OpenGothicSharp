@@ -64,7 +64,9 @@ looked up in it to get a bone name, and the name is then matched against the tar
 model's bones. Channels whose name the model lacks are dropped; that is the intended
 behaviour, since an attach node the model has no geometry for has nothing to move.
 Verified with `SHEEP` → `HAMMEL_BODY` (31 of 31 channels map even though the model has 37
-nodes) and `ORC` → `ORC_BODY` (32 of 32).
+nodes) and `ORC` → `ORC_BODY` (32 of 32). How many drop is a property of the target's bone
+list, not the clip: a standalone `ARMOR_PRISONER` cannot pose 1,710 of `HUMANS`'s channels,
+while the same clips on a model composed with `HUMANS.MDH` map all of them.
 
 ### Why names and not indices
 

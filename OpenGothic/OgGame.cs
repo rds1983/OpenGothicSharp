@@ -93,19 +93,26 @@ public class OgGame : Game
 	private void SpawnRequestedModel()
 	{
 		var name = CommandLine.Instance?.SpawnModel;
-		if (string.IsNullOrEmpty(name) || _assets == null || _world == null)
+		var skeleton = CommandLine.Instance?.ComposedSkeleton;
+		var meshes = CommandLine.Instance?.ComposedMeshes;
+
+		if ((string.IsNullOrEmpty(name) && string.IsNullOrEmpty(skeleton)) || _assets == null || _world == null)
 		{
 			return;
 		}
 
+		var label = string.IsNullOrEmpty(skeleton) ? name : $"compose:{skeleton}:{string.Join(",", meshes)}";
+
 		DrModel model;
 		try
 		{
-			model = _assets.GetModel(GraphicsDevice, name);
+			model = string.IsNullOrEmpty(skeleton)
+				? _assets.GetModel(GraphicsDevice, name)
+				: _assets.GetComposedModel(GraphicsDevice, skeleton, meshes);
 		}
 		catch (Exception ex)
 		{
-			Log.Error($"Unable to load model '{name}': {ex.Message}");
+			Log.Error($"Unable to load model '{label}': {ex.Message}");
 			return;
 		}
 
@@ -113,11 +120,12 @@ public class OgGame : Game
 
 		var distance = CommandLine.Instance.SpawnDistance ?? 400f;
 		var offset = CommandLine.Instance.SpawnOffset ?? Vector3.Zero;
+		var yaw = CommandLine.Instance.SpawnYaw ?? 0f;
 		var position = Camera.Position
 			+ Camera.Right * offset.X
 			+ Camera.Up * offset.Y
 			+ Camera.Forward * (distance + offset.Z);
-		var transform = Matrix.CreateTranslation(position);
+		var transform = Matrix.CreateRotationY(MathHelper.ToRadians(yaw)) * Matrix.CreateTranslation(position);
 
 		// One node type serves props and actors alike; a model with no clips simply never plays.
 		var node = new ModelNode { Instance = instance };
@@ -140,11 +148,11 @@ public class OgGame : Game
 				if (animation.Play(clipName, blend: false))
 				{
 					used = true;
-					Log.Info($"Playing '{clipName}' on '{name}' ({animation.CurrentClip}); {DescribeClip(animation.CurrentInfo)}.");
+					Log.Info($"Playing '{clipName}' on '{label}' ({animation.CurrentClip}); {DescribeClip(animation.CurrentInfo)}.");
 				}
 				else
 				{
-					Log.Error($"Model '{name}' has no playable clip '{clipName}'.");
+					Log.Error($"Model '{label}' has no playable clip '{clipName}'.");
 				}
 			}
 
@@ -153,11 +161,11 @@ public class OgGame : Game
 				if (animation.PlayLayer(overlayName))
 				{
 					used = true;
-					Log.Info($"Overlay '{overlayName}' on '{name}'.");
+					Log.Info($"Overlay '{overlayName}' on '{label}'.");
 				}
 				else
 				{
-					Log.Error($"Model '{name}' has no playable overlay clip '{overlayName}'.");
+					Log.Error($"Model '{label}' has no playable overlay clip '{overlayName}'.");
 				}
 			}
 
@@ -168,14 +176,14 @@ public class OgGame : Game
 		}
 		else if (hasClips)
 		{
-			Log.Info($"Model '{name}' has clips but none was requested; add -play:<clip> to start one.");
+			Log.Info($"Model '{label}' has clips but none was requested; add -play:<clip> to start one.");
 		}
 
 		var bounds = (instance.BoundingBox ?? new BoundingBox(position, position)).Transform(ref transform);
 		var cell = _world.FindCellByBox(bounds);
 		if (cell == null)
 		{
-			Log.Warning($"Unable to place spawn model '{name}': no grid cell contains it.");
+			Log.Warning($"Unable to place spawn model '{label}': no grid cell contains it.");
 			return;
 		}
 
@@ -189,7 +197,7 @@ public class OgGame : Game
 			AttachVisual(node, attachPoint, attachVisual);
 		}
 
-		Log.Info($"Spawned model '{name}' at {position} ({distance} units ahead).");
+		Log.Info($"Spawned model '{label}' at {position} ({distance} units ahead).");
 	}
 
 	/// <summary>

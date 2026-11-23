@@ -58,9 +58,11 @@ default chosen elsewhere.
 | `-cam:<x,y,z>` | Override the camera position. |
 | `-lookat:<x,y,z>` | Point the camera at a world position (implies yaw and pitch). |
 | `-model:<name>` | Spawn a model directly in front of the camera, with or without an extension. Reaches models no world vob uses. |
-| `-modeldist:<n>` | How far ahead to place `-model` (default 400). |
-| `-modeloffset:<x,y,z>` | Move the `-model` spawn in camera space (right, up, forward), so a capture can put it at the edge of the view. |
-| `-attach:<point>:<model>` | Hang a model or `.MRM` mesh on a bone of the `-model` spawn, e.g. `-attach:BIP01 R HAND:ITMW_1H_MACHETE_01.MRM`. |
+| `-compose:<skeleton>:<mesh>[,<mesh>...]` | Build one model from a shared skeleton and meshes that may each carry their own, e.g. `-compose:HUMANS:HUM_BODY_NAKED0,ARMOR_PRISONER`. This is the form that carries the `ZS_*` attach points. |
+| `-modeldist:<n>` | How far ahead to place the spawn (default 400). |
+| `-modeloffset:<x,y,z>` | Move the spawn in camera space (right, up, forward), so a capture can put it at the edge of the view. |
+| `-modelrot:<degrees>` | Yaw the spawn. A model faces away from the default camera, so `180` shows its front. |
+| `-attach:<point>:<model>` | Hang a model or `.MRM` mesh on a bone of the spawn, e.g. `-attach:ZS_RIGHTHAND:ITMW_1H_MACHETE_01.MRM`. |
 | `-screenshot:<file.png>` | Write the rendered frame to a PNG once it is ready, then exit. |
 | `-screenshotframe:<n>` | Which frame to capture, counting from one (default 1). |
 
@@ -330,17 +332,45 @@ follows the skeleton without becoming a scene node and without touching the node
 cache. A multi-resolution mesh — the form weapons ship in — is wrapped into a one-bone model
 by `ModelBoneAttachment.WrapMesh`, so both forms take the same path. `-attach:<point>:<model>`
 exercises this from the command line. Gothic names attach points `ZS_RIGHTHAND`, `ZS_SWORD`
-and so on, but a bare armour model carries none of them — only the script skeleton does — so a
-name the model lacks is reported and the attachment is skipped. `attachment.Transform` is
-where an item's own grip offset belongs; the item definitions that carry it arrive with the
-item work, so today a weapon is placed at the bone origin with no offset.
+and so on, but an armour model carries none of them — only the script skeleton does. A
+composed model (below) uses that skeleton, so a weapon attached to `ZS_RIGHTHAND` is placed at
+the hand. `attachment.Transform` is where an item's own grip offset belongs; the item
+definitions that carry it arrive with the item work, so today a weapon is placed at the bone
+origin with no offset.
 
-The union lives on the part tag because it belongs to the model rather than to a node: it only
-ever widens, so every instance of a shared model sees a box valid for any clip any of them
-plays, and a cross-fade needs no special case. `DrModelTag.MeasuredClips` records which clips
-have already been merged, so each clip is measured once per model, not once per instance and
-certainly not per frame. It cannot go on `AnimationClipTag`: a clip is shared by every model
-with the same script and bone layout — the ~40 armour models share one set — while their
+#### Composed models
+
+An actor is not one file. The body (`HUM_BODY_NAKED0.MDM`) has no hierarchy of its own and
+indexes the human skeleton directly; the armour (`ARMOR_PRISONER.MDL`) carries its own
+25-node hierarchy; only `HUMANS.MDH` has the 34 nodes that include the nine `ZS_*` attach
+points. `Assets.GetComposedModel(skeleton, meshes...)` builds one `DrModel` from an explicit
+skeleton and any number of meshes: each source's nodes are mapped to the merged bones **by
+name**, exactly as clip channels are, and the sources' skinned meshes become `_MESH*` bones
+under the same `_ROOT`. `-compose:<skeleton>:<mesh>[,<mesh>...]` exposes it.
+
+The subtlety is that a mesh's skin keeps its **own authored bind**. The armour's rest
+rotations differ from `HUMANS.MDH` by up to ~34° at the shoulders, and its root translation is
+different too; using the merged transforms for the inverse bind would rotate and displace the
+armour by those amounts. Keeping the authored bind means `inverseBind * boneWorld` maps the
+mesh from its own rest into the skeleton's, which is the same transform an animation applies,
+so body and armour land in one pose. Because the baked vertices are therefore in the authored
+space, each composed part's cull box is computed separately in the merged rest — that is
+where the skeleton places it. A mesh that names a bone the explicit skeleton lacks is an
+error, not a silently dropped weight.
+
+For the `HUMANS` data this is a strict superset: the 21 `ARMOR_*.MDL` node names all exist in
+`HUMANS.MDH`, and the body's weights top out at node 32 of 34. Bare `.MDM` files of other
+creatures address other skeletons (up to 77 nodes), so they are only composable with a
+skeleton that covers their indices. Armour `.MDL`s whose weights address nodes absent from the
+chosen skeleton are rejected for the same reason. The format details are in
+[Specifications/gothic-model-format.md](Specifications/gothic-model-format.md#composed-models).
+
+The culling union lives on the part tag because it belongs to the model rather than to a node:
+it only ever widens, so every instance of a shared model sees a box valid for any clip any of
+them plays, and a cross-fade needs no special case. `DrModelTag.MeasuredClips` records which
+clips have already been merged, so each clip is measured once per model, not once per instance
+and certainly not per frame. It cannot go on `AnimationClipTag`: a clip is shared by every
+model with the same script and bone layout — the ~40 armour models share one set — while their
 meshes, and therefore their part boxes, differ.
 
 `Assets.GetModel(name, ...)` resolves a model name from the level (the authoring `.ASC` /

@@ -65,6 +65,16 @@ public class CommandLine
 	public string SpawnModel { get; private set; }
 
 	/// <summary>
+	/// Skeleton to build the spawn from when <see cref="ComposedMeshes"/> is set, or null.
+	/// A composed model is one skeleton plus meshes that may each carry their own, which is
+	/// how the <c>ZS_*</c> attach nodes become available.
+	/// </summary>
+	public string ComposedSkeleton { get; private set; }
+
+	/// <summary>Meshes merged into the composed model, or null when none was requested.</summary>
+	public string[] ComposedMeshes { get; private set; }
+
+	/// <summary>
 	/// Whether to attach animation clips to models. Null when the flag was not passed, so
 	/// <see cref="Apply"/> leaves <see cref="DebugSettings"/> alone.
 	/// </summary>
@@ -116,6 +126,12 @@ public class CommandLine
 	/// culling mistakes show.
 	/// </summary>
 	public Vector3? SpawnOffset { get; private set; }
+
+	/// <summary>
+	/// Yaw in degrees applied to the placed <see cref="SpawnModel"/> or composed model, or null
+	/// for none. A model faces away from the default camera, so 180 shows its front.
+	/// </summary>
+	public float? SpawnYaw { get; private set; }
 
 	/// <summary>
 	/// Bone of the model placed by <see cref="SpawnModel"/> to hang <see cref="AttachVisual"/>
@@ -308,6 +324,41 @@ public class CommandLine
 							result._invalid = true;
 						}
 					}
+					else if (arg.StartsWith("-compose:", StringComparison.OrdinalIgnoreCase))
+					{
+						var value = arg.Substring("-compose:".Length);
+						var separator = value.IndexOf(':');
+
+						if (separator <= 0 || separator >= value.Length - 1)
+						{
+							Log.Error("Option '-compose:' requires <skeleton>:<mesh>[,<mesh>...].");
+							result._invalid = true;
+						}
+						else
+						{
+							var meshes = value.Substring(separator + 1).Split(',');
+							var valid = true;
+							foreach (var mesh in meshes)
+							{
+								if (string.IsNullOrWhiteSpace(mesh))
+								{
+									valid = false;
+									break;
+								}
+							}
+
+							if (!valid)
+							{
+								Log.Error("Option '-compose:' requires a mesh name after each comma.");
+								result._invalid = true;
+							}
+							else
+							{
+								result.ComposedSkeleton = value.Substring(0, separator);
+								result.ComposedMeshes = meshes;
+							}
+						}
+					}
 					else if (arg.StartsWith("-modeldist:", StringComparison.OrdinalIgnoreCase))
 					{
 						var value = arg.Substring("-modeldist:".Length);
@@ -324,6 +375,19 @@ public class CommandLine
 					else if (arg.StartsWith("-modeloffset:", StringComparison.OrdinalIgnoreCase))
 					{
 						result.SpawnOffset = result.ParseVector(arg.Substring("-modeloffset:".Length), arg);
+					}
+					else if (arg.StartsWith("-modelrot:", StringComparison.OrdinalIgnoreCase))
+					{
+						var value = arg.Substring("-modelrot:".Length);
+						if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var yaw))
+						{
+							result.SpawnYaw = yaw;
+						}
+						else
+						{
+							Log.Error($"Option '-modelrot:' requires a yaw in degrees, got '{value}'.");
+							result._invalid = true;
+						}
 					}
 					else if (arg.StartsWith("-attach:", StringComparison.OrdinalIgnoreCase))
 					{
@@ -393,6 +457,12 @@ public class CommandLine
 			return false;
 		}
 
+		if (!string.IsNullOrEmpty(SpawnModel) && !string.IsNullOrEmpty(ComposedSkeleton))
+		{
+			Log.Error("Options '-model:' and '-compose:' both place a spawn model; use one.");
+			return false;
+		}
+
 		var dataFolder = Path.Combine(GothicPath, "Data");
 		if (!Directory.Exists(dataFolder))
 		{
@@ -406,7 +476,7 @@ public class CommandLine
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
 		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] " +
-		"[-model:<name>] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
+		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
 		"[-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 
 	private Vector3? ParseVector(string value, string option)

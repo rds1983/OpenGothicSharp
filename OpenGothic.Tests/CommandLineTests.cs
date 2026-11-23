@@ -394,6 +394,23 @@ public class CommandLineTests
 	}
 
 	[Fact]
+	public void Parse_SpawnYaw_ReadsDegrees()
+	{
+		var result = CommandLine.Parse(new[] { "-model:ARMOR_PRISONER", "-modelrot:180" });
+
+		Assert.Equal(180f, result.SpawnYaw);
+	}
+
+	[Fact]
+	public void Parse_InvalidSpawnYaw_IsRejected()
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-modelrot:sideways" });
+
+		Assert.Null(result.SpawnYaw);
+		Assert.False(result.Validate());
+	}
+
+	[Fact]
 	public void Parse_Attach_ReadsPointAndVisual()
 	{
 		var result = CommandLine.Parse(new[] { "-model:ARMOR_PRISONER", "-attach:ZS_RIGHTHAND:ITMW_1H_MACHETE_01.MRM" });
@@ -451,6 +468,51 @@ public class CommandLineTests
 
 		Assert.Null(result.SpawnDistance);
 		Assert.False(result.Validate());
+	}
+
+	[Fact]
+	public void Parse_Compose_ReadsSkeletonAndMeshes()
+	{
+		var result = CommandLine.Parse(new[] { "-compose:HUMANS:HUM_BODY_NAKED0,ARMOR_PRISONER" });
+
+		Assert.Equal("HUMANS", result.ComposedSkeleton);
+		Assert.Equal(new[] { "HUM_BODY_NAKED0", "ARMOR_PRISONER" }, result.ComposedMeshes);
+	}
+
+	[Theory]
+	[InlineData("-compose:HUMANS")]
+	[InlineData("-compose:HUMANS:")]
+	[InlineData("-compose::ARMOR_PRISONER")]
+	[InlineData("-compose:HUMANS:ARMOR_PRISONER,")]
+	public void Parse_InvalidCompose_IsRejected(string value)
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", value });
+
+		Assert.Null(result.ComposedSkeleton);
+		Assert.Null(result.ComposedMeshes);
+		Assert.False(result.Validate());
+	}
+
+	[Fact]
+	public void Validate_ModelAndComposeTogether_IsRejected()
+	{
+		var folder = CreateGothicFolder();
+
+		try
+		{
+			var result = CommandLine.Parse(new[]
+			{
+				"-g", folder,
+				"-model:ARMOR_PRISONER",
+				"-compose:HUMANS:HUM_BODY_NAKED0"
+			});
+
+			Assert.False(result.Validate());
+		}
+		finally
+		{
+			Directory.Delete(folder, true);
+		}
 	}
 
 	[Fact]
