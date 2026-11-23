@@ -5,12 +5,22 @@ touching code.
 
 ## What this project is
 
-A clean-room C# re-implementation of the Gothic 2: Night of the Raven client, targeting
-.NET 8 + MonoGame. It reads the user's own game installation and plays the game without
-the original executable.
+A C# port of [OpenGothic](https://github.com/Try/OpenGothic), the open-source C++ client for
+Gothic 2: Night of the Raven. This port targets .NET 8 + MonoGame, reads the user's own game
+installation and plays the game without the original executable.
 
-The C++ [OpenGothic](https://github.com/Try/OpenGothic) project is a **behavioral
-reference only**. It explains how the game behaves; it is not a source to translate.
+It is **not a strict line-by-line port**. Same game, different implementation: a different
+language, different libraries, and a different approach wherever the C++ design does not fit
+the new stack. For example, OpenGothic's skinned vertex stores four positions, one per bone
+weight; this project keeps a single position per vertex because that is what DigitalRiseModel
+and MonoGame's stock `SkinnedEffect` consume. A divergence like that is not a bug — but it must
+be a deliberate one, and the behavior on screen has to match.
+
+Consequence for research: **the first place to look when implementing or debugging a mechanic
+is how `Try/OpenGothic` does it.** Read its source for the behavior, the data handling, and the
+edge cases it already solved, then implement the equivalent in C# with the libraries available
+here. Only when OpenGothic has no answer does the task fall back to observation and original
+design. Porting the behavior is the job; copying the source is not — see the rules below.
 
 ## Local paths
 
@@ -19,7 +29,7 @@ reference checkout locations on this machine are recorded in `LOCAL_PATHS.md` at
 root. That file is **gitignored and never committed** — read it if it exists, and never
 copy its paths into code, docs, or committed files.
 
-## Legal and clean-room constraints (non-negotiable)
+## Legal and provenance rules (non-negotiable)
 
 These rules override every task, convenience, and deadline. If a task cannot be completed
 without breaking one, stop and ask the developer.
@@ -27,10 +37,15 @@ without breaking one, stop and ask the developer.
 1. **Never copy code, pseudocode, disassembly, or verbatim logic from the game's
    binaries.** This includes the original `.exe`, any `.dll`, and anything obtained by
    disassembling or decompiling them. Do not paste decompiler output into this repo,
-   into issues, or into chat.
+   into issues, or into chat. The C++ OpenGothic source is not an excuse: if a mechanic is
+   only explained there by something read out of the game's binaries, write the behavior
+   down as a spec instead.
 
-2. **Never copy source from the C++ OpenGothic project or its dependencies and translate it
-   line-by-line.** Use it to understand behavior, then design and write the C# yourself.
+2. **Port the behavior, do not transliterate the source.** Reading `Try/OpenGothic` is
+   expected — it is the primary reference — but what lands in this repo must be C# written
+   for this stack, not a mechanical line-by-line translation of the C++ file. If an
+   algorithm is deliberately carried over close to its original form, say so in the commit
+   or a doc note; both projects are MIT, so that is a provenance note, not a legal problem.
 
 3. **If inspecting binaries is genuinely necessary to understand a mechanic**, the only
    permitted output is a **high-level behavioral or file-format specification** written to
@@ -116,7 +131,8 @@ Follow this loop for every unit of work.
 
 2. **Do it.**
    Implement the task completely. Read the relevant code first; never edit a file you have
-   not read. Keep the change scoped to the task.
+   not read. Before inventing an approach, check how `Try/OpenGothic` solved the same
+   problem and port that behavior. Keep the change scoped to the task.
 
 3. **Test thoroughly.**
    Build the solution. Run the app and exercise the feature with the real game data where
@@ -126,7 +142,7 @@ Follow this loop for every unit of work.
 4. **Update docs.**
    Update `Documentation/` for anything architectural you added or learned. If behavior or a
    file format was discovered, record it in `Documentation/Specifications/` per the
-   clean-room rules. Keep `README.md` brief — long-form material belongs in
+   provenance rules. Keep `README.md` brief — long-form material belongs in
    `Documentation/`.
 
 5. **Ask the developer whether the task is finished.**
@@ -147,6 +163,6 @@ Follow this loop for every unit of work.
 
 ## Escalate to the developer when
 
-- A task cannot be done without violating the legal/clean-room rules.
+- A task cannot be done without violating the legal/provenance rules.
 - Game behavior is ambiguous and guessing would risk wrong architecture.
 - A change would affect shared state, CI, or published history.

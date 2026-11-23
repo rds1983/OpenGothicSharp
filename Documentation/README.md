@@ -3,10 +3,13 @@
 Long-form project documentation. `README.md` at the repo root stays brief; architecture,
 subsystem notes, and findings live here.
 
+OpenGothicSharp is a C# port of [OpenGothic](https://github.com/Try/OpenGothic). These notes
+assume the C++ project as the primary source of truth for behavior; where this port diverges
+from it, the divergence is called out with the reason.
+
 ## Layout
 
-- [Specifications/](Specifications/README.md) — clean-room behavioral and file-format
-  specifications.
+- [Specifications/](Specifications/README.md) — behavioral and file-format specifications.
 
 ## Subsystems
 
@@ -212,7 +215,7 @@ be found logs a warning and renders untextured rather than aborting the world lo
 
 **Vertex data is used verbatim.** `MeshBuilder` swaps triangle indices (because mirroring Z
 reverses winding) but never flips or mirrors U/V. An earlier U-mirror (`1 - u`) corrupted
-every texture; the reference implementation also copies `texture.x`/`texture.y` unchanged.
+every texture; OpenGothic also copies `texture.x`/`texture.y` unchanged.
 The swap is skipped for non-triangle primitives: `CreateMeshPart` takes a `PrimitiveType`
 and a line list has no winding to fix.
 
