@@ -192,7 +192,7 @@ and mirrors the walk for the whole clip. The offset belongs on the layer rather 
 
 ### How the player uses `AnimationController`
 
-The controller samples and blends; `AnimatedModelNode` keeps the state machine, which is the
+The controller samples and blends; `AnimationData` keeps the state machine, which is the
 part the script owns: `Next` chaining, per-alias direction and blend times, and the
 `ComboWindow` one-shot rule. Two conventions need bridging:
 

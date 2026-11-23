@@ -42,6 +42,7 @@ internal static class Program
 			Log.Info($"Camera: {commandLine.CameraPosition?.ToString() ?? "(default)"}, look at: {commandLine.LookAtTarget?.ToString() ?? "(default)"}");
 			Log.Info($"Wireframe: {commandLine.Wireframe?.ToString() ?? "(off)"}, bounds: {commandLine.Bounds?.ToString() ?? "(off)"}");
 			Log.Info($"Spawn model: {commandLine.SpawnModel ?? "(none)"}, distance: {commandLine.SpawnDistance?.ToString() ?? "(default)"}, offset: {commandLine.SpawnOffset?.ToString() ?? "(none)"}");
+		Log.Info($"Attach: {commandLine.AttachPoint ?? "(none)"} <- {commandLine.AttachVisual ?? "(none)"}");
 			Log.Info($"Animation dump: {commandLine.AnimationDump ?? "(off)"}, clip: {commandLine.AnimationClip ?? "(none)"}");
 			Log.Info($"Play: {commandLine.PlayAnimation ?? "(none)"}, freeze: {commandLine.FrozenTime?.ToString() ?? "(off)"}, time: {commandLine.PlayTime?.ToString() ?? "(live)"}");
 

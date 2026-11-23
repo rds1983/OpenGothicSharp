@@ -119,29 +119,29 @@ public class OgGame : Game
 			+ Camera.Forward * (distance + offset.Z);
 		var transform = Matrix.CreateTranslation(position);
 
-		// A model driven by a script gets the animating node; a prop keeps the plain one. The
-		// clips are already on the model, so no separate set lookup is needed.
-		var animated = model.Animations != null && model.Animations.Count > 0
-			? new AnimatedModelNode(instance)
-			: null;
-		var node = (ModelNode)animated ?? new ModelNode { Instance = instance };
+		// One node type serves props and actors alike; a model with no clips simply never plays.
+		var node = new ModelNode { Instance = instance };
 		node.Transform = transform;
+
+		var hasClips = model.Animations != null && model.Animations.Count > 0;
 
 		// A model placed this way has no vob, so it is also the only place a clip can be
 		// started from the command line.
 		var clipName = CommandLine.Instance.PlayAnimation;
-		if (animated != null && !string.IsNullOrEmpty(clipName))
+		if (hasClips && !string.IsNullOrEmpty(clipName))
 		{
-			if (animated.Play(clipName, blend: false))
+			var animation = new AnimationData(instance);
+			if (animation.Play(clipName, blend: false))
 			{
-				Log.Info($"Playing '{clipName}' on '{name}' ({animated.CurrentClip}); {DescribeClip(animated.CurrentInfo)}.");
+				node.AnimationData = animation;
+				Log.Info($"Playing '{clipName}' on '{name}' ({animation.CurrentClip}); {DescribeClip(animation.CurrentInfo)}.");
 			}
 			else
 			{
 				Log.Error($"Model '{name}' has no playable clip '{clipName}'.");
 			}
 		}
-		else if (animated != null)
+		else if (hasClips)
 		{
 			Log.Info($"Model '{name}' has clips but none was requested; add -play:<clip> to start one.");
 		}
@@ -157,7 +157,55 @@ public class OgGame : Game
 		cell.ObjectBounds.Add(bounds);
 		cell.Children.Add(node);
 
+		var attachPoint = CommandLine.Instance.AttachPoint;
+		var attachVisual = CommandLine.Instance.AttachVisual;
+		if (!string.IsNullOrEmpty(attachPoint) && !string.IsNullOrEmpty(attachVisual))
+		{
+			AttachVisual(node, attachPoint, attachVisual);
+		}
+
 		Log.Info($"Spawned model '{name}' at {position} ({distance} units ahead).");
+	}
+
+	/// <summary>
+	/// Hangs a model on one of the spawned model's bones, which is how an actor wears armour or
+	/// holds a weapon. The attachment is drawn with the parent and placed by the bone's current
+	/// transform, so it follows the pose without becoming a scene node of its own.
+	/// </summary>
+	private void AttachVisual(ModelNode parent, string attachPoint, string visual)
+	{
+		var bone = parent.Instance.Model.FindBoneByName(attachPoint);
+		if (bone == null)
+		{
+			Log.Error($"Model '{parent.Instance.Model}' has no attach point '{attachPoint}'.");
+			return;
+		}
+
+		DrModel model = null;
+		try
+		{
+			model = _assets.GetModel(GraphicsDevice, visual);
+		}
+		catch (Exception)
+		{
+			// Not a model; it may be a multi-resolution mesh, which wraps into one below.
+		}
+
+		if (model == null)
+		{
+			try
+			{
+				model = ModelBoneAttachment.WrapMesh(_assets.GetMultiMesh(GraphicsDevice, visual));
+			}
+			catch (Exception ex)
+			{
+				Log.Error($"Unable to load attach visual '{visual}': {ex.Message}");
+				return;
+			}
+		}
+
+		parent.BonesAttachments.Add(new ModelBoneAttachment(model) { Bone = bone });
+		Log.Info($"Attached '{visual}' to '{attachPoint}'.");
 	}
 
 	/// <summary>One-line description of a clip's playback parameters, for the log.</summary>
@@ -281,18 +329,18 @@ public class OgGame : Game
 		{
 			foreach (var node in cell.Children)
 			{
-				if (node is not AnimatedModelNode animated)
+				if (node is not ModelNode model)
 				{
 					continue;
 				}
 
 				if (frozen)
 				{
-					animated.Seek(poseTime);
+					model.AnimationData?.Seek(poseTime);
 				}
 				else
 				{
-					animated.Update(elapsed);
+					model.AnimationData?.Update(elapsed);
 				}
 			}
 		}

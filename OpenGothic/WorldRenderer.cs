@@ -107,17 +107,36 @@ public class WorldRenderer : IDisposable
 	}
 
 	/// <summary>
-	/// Draws a placed model. A static part is positioned by its own bone, exactly as a
-	/// hand-authored prop model expects; a skinned part is deformed by the skeleton and
-	/// placed by the node transform alone, because its vertices are already in model space.
-	/// <see cref="Renderer.DrawMeshPart"/> picks the path from whether the part carries a
-	/// skin, so one call covers both.
+	/// Draws a placed model and everything attached to its bones. A static part is positioned by
+	/// its own bone, exactly as a hand-authored prop model expects; a skinned part is deformed by
+	/// the skeleton and placed by the node transform alone, because its vertices are already in
+	/// model space. <see cref="Renderer.DrawMeshPart"/> picks the path from whether the part
+	/// carries a skin, so one routine covers both.
 	/// </summary>
 	private static void DrawModel(Renderer renderer, ModelNode node, DebugDraw debug)
 	{
 		var instance = node.Instance;
-		var model = instance.Model;
 		var world = node.WorldTransform;
+
+		DrawInstance(renderer, instance, world, debug);
+
+		// An attachment is placed by the bone it follows, so it needs no scene node of its own.
+		foreach (var attachment in node.BonesAttachments)
+		{
+			var bone = attachment.Bone;
+			if (bone == null)
+			{
+				continue;
+			}
+
+			var attachmentWorld = attachment.Transform * instance.GetBoneGlobalTransform(bone.Index) * world;
+			DrawInstance(renderer, attachment.Instance, attachmentWorld, debug);
+		}
+	}
+
+	private static void DrawInstance(Renderer renderer, DrModelInstance instance, Matrix world, DebugDraw debug)
+	{
+		var model = instance.Model;
 
 		foreach (var mesh in model.Meshes)
 		{

@@ -7,10 +7,9 @@ using System;
 namespace OpenGothic.Scene;
 
 /// <summary>
-/// A placed model whose skeleton is driven by its script's clips. The node owns the
-/// <see cref="AnimationController"/> that samples and blends the pose, and the only state the
-/// controller cannot hold: which clip the script asked for, and whether a one-shot has already
-/// handed over.
+/// Clip playback for one model instance: the controller that samples and blends the skeleton,
+/// and the only state the controller cannot hold — which clip the script asked for, and whether
+/// a one-shot has already handed over. A model without this object stays in its bind pose.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -28,26 +27,27 @@ namespace OpenGothic.Scene;
 /// <c>HasFinished</c> and the cross-fade progress are measured against.
 /// </para>
 /// </remarks>
-public sealed class AnimatedModelNode : ModelNode
+public sealed class AnimationData
 {
 	/// <summary>Longest cross-fade a script can ask for; the shipped data tops out at 0.3 s.</summary>
 	private const float MaxBlendSeconds = 2f;
 
+	private readonly DrModelInstance _instance;
 	private AnimationClip _clip;
 
 	/// <summary>
-	/// Set once a one-shot's end has been acted on. `AnimationController.HasFinished` stays
+	/// Set once a one-shot's end has been acted on. <c>AnimationController.HasFinished</c> stays
 	/// true afterwards, so it cannot say whether the hand-over already happened.
 	/// </summary>
 	private bool _endHandled;
 
-	public AnimatedModelNode(DrModelInstance instance)
+	public AnimationData(DrModelInstance instance)
 	{
-		Instance = instance ?? throw new ArgumentNullException(nameof(instance));
+		_instance = instance ?? throw new ArgumentNullException(nameof(instance));
 		Controller = new AnimationController(instance);
 	}
 
-	/// <summary>Drives the skeleton; one per node, because playback state is per instance.</summary>
+	/// <summary>Samples and blends the skeleton.</summary>
 	public AnimationController Controller { get; }
 
 	/// <summary>Name of the clip being played, or null when idle.</summary>
@@ -64,11 +64,12 @@ public sealed class AnimatedModelNode : ModelNode
 
 	/// <summary>
 	/// Starts a clip or an alias. Starting the clip that is already playing restarts it.
-	/// Returns false when the set has no such name or the clip stores no channels.
+	/// Returns false when the model has no animations, no such name, or the clip stores no
+	/// channels.
 	/// </summary>
 	public bool Play(string name, bool blend = true)
 	{
-		var clips = Instance.Model?.Animations;
+		var clips = _instance.Model?.Animations;
 		if (string.IsNullOrEmpty(name) ||
 		    clips == null ||
 		    !clips.TryGetValue(name, out var clip) ||
@@ -107,7 +108,7 @@ public sealed class AnimatedModelNode : ModelNode
 		_endHandled = false;
 
 		// Merge this clip's poses into the parts' cull bounds before the first frame drawn with
-		// it. Each clip is measured once per model; other nodes of the same model reuse it.
+		// it. Each clip is measured once per model; other models sharing it reuse the result.
 		MeasureClip(clip);
 
 		return true;
@@ -208,7 +209,7 @@ public sealed class AnimatedModelNode : ModelNode
 		}
 
 		var info = clipTag.info;
-		var model = Instance.Model;
+		var model = _instance.Model;
 		if (info == null || model == null || info.Fps <= 0f || info.FrameCount <= 0)
 		{
 			return;

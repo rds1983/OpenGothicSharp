@@ -55,8 +55,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - Debug views: F2 toggles wireframe, F3 toggles bounding boxes; independent of F1 and off by
   default. Both can be started on from the command line with `-wireframe`/`-bounds`.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
-  **C1–C5 complete** (model rendering, clips, playback, animated culling boxes, vob hierarchy).
-  Current milestone: **C — Models and animation**, next task **C6**.
+  **C1–C6 complete** (model rendering, clips, playback, animated culling boxes, vob hierarchy,
+  attach points). Current milestone: **C — Models and animation**, next task **C7**.
 
 ---
 
@@ -210,7 +210,7 @@ rules for honouring them were resolved from the shipped data and are recorded in
 - **`speed` is ignored**: all 3,949 shipped clips store zero.
 
 **Done when:** a model plays an idle/animation clip at the right speed and loops without a
-pop. — `-play:<clip>` on a `-model:` plays it through `AnimatedModelNode` and
+pop. — `-play:<clip>` on a `-model:` plays it through `AnimationData` and
 `AnimationController`; a looping clip wraps pixel-exactly at its duration and reverse clips
 mirror the forward walk.
 
@@ -245,17 +245,35 @@ parent and a moved grandparent, and the world's placement is unchanged. A mover 
 vob's transform also has to re-register the affected subtrees with their grid cells and bounds,
 which is why this lands before movers rather than with them.
 
-### C6. Attach points
-`IModelMesh.Attachments` names attach points on a model (93 in the shipped `newworld.zen`
-data), and an actor's armour and weapon meshes are meant to follow those named nodes, which
-`ModelNode` cannot express yet.
+### C6. Attach points — DONE
+An actor's armour and weapons are models drawn on named bones of the actor's skeleton. The
+scene graph is not the right vehicle for that: an attachment is not independently placed, it
+is placed by the pose.
 
-Add an `AttachNode` that resolves an attach-point name to a model bone, is added to the model
-node's `Children`, and sets its local transform from that bone (once, or per frame if the pose
-moves). This is also where the clips' nine `ZS_*` channels that a bare armour model cannot pose
-become relevant: those nodes exist for attaching, not for deforming.
+`ModelNode.BonesAttachments` holds `ModelBoneAttachment` entries — a nested `DrModelInstance`,
+the `DrModelBone` it follows, and a local `Transform` — the same shape Nursia's
+`NursiaModelNode` uses. `WorldRenderer.DrawModel` draws each one as
+`attachment.Transform * boneGlobal * node.WorldTransform`, so it follows the pose without a
+scene node of its own. A multi-resolution mesh, the form weapons ship in, is wrapped into a
+one-bone `DrModel` by `ModelBoneAttachment.WrapMesh` and takes the same path.
 **Done when:** a model parented to another model's attach point follows that bone without a
-manual offset.
+manual offset. — `-attach:<point>:<model>` attaches a model or `.MRM` to a bone of the
+`-model:` spawn; a bench on `BIP01 HEAD` rides the head and moves 11,677 px between two frozen
+poses, and `ITMW_1H_MACHETE_01.MRM` attaches and draws.
+
+Two gaps remain, both data rather than design:
+- **`ZS_*` points are not loadable yet.** No shipped model carries them: armour `.MDL`s omit
+  the nine nodes, `HUMANS.MDH` has them without a matching `.MDL`/`.MDM`, and
+  `HUM_BODY_NAKED0.MDM` has no `.MDH`. Attaching to `ZS_RIGHTHAND` needs the avatar
+  composition — one model built from a hierarchy and meshes with different stems, sharing the
+  skeleton.
+- **An item's grip offset is unset.** `ModelBoneAttachment.Transform` is the slot; Gothic item
+  definitions carry the scale/offset and name the attach node, and arrive with the item work.
+
+Sharp edges: `DrModel.FindBoneByName` is case-sensitive; `WrapMesh` shares the cached `DrMesh`
+and reassigns its `ParentBone` (safe only because the wrapper's single bone is identity, and
+the wrapper must not be disposed); attachments are not registered in `cell.ObjectBounds`, so
+the `-bounds` view omits them.
 
 ### C7. Animation layers
 The script gives every clip a `Layer`, and the reference blends layers so an upper-body
@@ -266,6 +284,18 @@ Blend the active clips by layer, using `AnimationBlendLayer.BoneFilter` to mask 
 the bones it drives. The lower layer stays authoritative for unclaimed bones.
 **Done when:** a walk and an attack can play simultaneously on one model without the attack
 resetting the legs.
+
+### C8. Composed model
+An actor is not one file: the body (`HUM_BODY_NAKED0.MDM`) and its armour (`ARMOR_*.MDL`) share
+one skeleton, and the `ZS_*` attach nodes live only in that skeleton. `LoadModel` requires a
+matching stem for a `.MDH`/`.MDM` pair, which is why no loadable model carries those nodes and
+C6 could only attach to ordinary bones.
+
+Build a model from an explicit hierarchy plus one or more meshes whose stems differ, merging
+bones by name — the same name mapping `Assets.Animation` already performs for channels. This
+is the prerequisite for real attach points and for dressing an NPC.
+**Done when:** a body and an armour render on one skeleton, and a weapon attached to
+`ZS_RIGHTHAND` lands in the hand.
 
 ---
 
@@ -312,7 +342,7 @@ Render and pick up world items; inventory add/remove core.
 
 ### F1. Npc entity
 Npc runtime: attributes, guild, animation state machine basics, name/messages hooks.
-`Scene/AnimatedModelNode` already plays a named clip and follows the script's `Next` chains;
+`Scene/AnimationData` already plays a named clip and follows the script's `Next` chains;
 this task is the body-state layer that decides *which* clip (idle, walk, attack) an NPC asks
 for and when to interrupt one.
 **Done when:** an Npc spawns from a ZEN instance, idles, and can be damaged.

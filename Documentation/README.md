@@ -59,6 +59,7 @@ default chosen elsewhere.
 | `-model:<name>` | Spawn a model directly in front of the camera, with or without an extension. Reaches models no world vob uses. |
 | `-modeldist:<n>` | How far ahead to place `-model` (default 400). |
 | `-modeloffset:<x,y,z>` | Move the `-model` spawn in camera space (right, up, forward), so a capture can put it at the edge of the view. |
+| `-attach:<point>:<model>` | Hang a model or `.MRM` mesh on a bone of the `-model` spawn, e.g. `-attach:BIP01 R HAND:ITMW_1H_MACHETE_01.MRM`. |
 | `-screenshot:<file.png>` | Write the rendered frame to a PNG once it is ready, then exit. |
 | `-screenshotframe:<n>` | Which frame to capture, counting from one (default 1). |
 
@@ -300,10 +301,11 @@ included.
 ### Models
 
 A model is a `DrModel` (skeleton plus meshes) placed in the world by a `ModelNode`
-(`OpenGothic/Scene/ModelNode.cs`), which holds a `DrModelInstance` and a world transform in
-`Transform`. A model driven by a script is an `AnimatedModelNode`, the same node plus an
-`AnimationController` and the script's playback state. `WorldRenderer.DrawModel` walks
-`instance.Model.Meshes` and dispatches per part:
+(`OpenGothic/Scene/ModelNode.cs`), which holds a `DrModelInstance`, the models attached to its
+bones, and a world transform in `Transform`. A model driven by a script gets an
+`AnimationData` alongside its instance, which owns the `AnimationController` and the script's
+playback state; a prop leaves it null. `WorldRenderer.DrawModel` walks `instance.Model.Meshes`
+and dispatches per part:
 
 - **Static part** — drawn with the owning bone's global transform times the node
   transform, exactly as a hand-authored prop expects.
@@ -320,6 +322,17 @@ a clip moves vertices outside that box, so the playing node widens
 `DrModelInstance`, and each part's box is unioned with the part box transformed by every one
 of its skin joints. A blended vertex lies inside the hull of its joints' rigid copies, so the
 union is conservative, and `Renderer.DrawMeshPart` culls with it.
+
+`ModelNode.BonesAttachments` holds models drawn on the node's own bones. Each is placed as
+`attachment.Transform * boneGlobal * node.WorldTransform` when the model is drawn, so it
+follows the skeleton without becoming a scene node and without touching the node transform
+cache. A multi-resolution mesh — the form weapons ship in — is wrapped into a one-bone model
+by `ModelBoneAttachment.WrapMesh`, so both forms take the same path. `-attach:<point>:<model>`
+exercises this from the command line. Gothic names attach points `ZS_RIGHTHAND`, `ZS_SWORD`
+and so on, but a bare armour model carries none of them — only the script skeleton does — so a
+name the model lacks is reported and the attachment is skipped. `attachment.Transform` is
+where an item's own grip offset belongs; the item definitions that carry it arrive with the
+item work, so today a weapon is placed at the bone origin with no offset.
 
 The union lives on the part tag because it belongs to the model rather than to a node: it only
 ever widens, so every instance of a shared model sees a box valid for any clip any of them
@@ -376,12 +389,12 @@ and is not consulted at playback.
 
 #### Animation playback
 
-`Scene/AnimatedModelNode.cs` plays a set's clips on a `DrModelInstance` through
-DigitalRiseModel's `AnimationController`: the node owns the script's state machine and hands
-the controller a node to sample, so a pose reaches the GPU through the same
-`GetSkinTransforms` path a bind-pose model already used. The controller itself is the node's
-`Controller` property, and `OgGame.UpdateAnimations` advances every `AnimatedModelNode` in
-the grid, which keeps playback out of the draw path.
+`Scene/AnimationData.cs` plays a set's clips on a `DrModelInstance` through
+DigitalRiseModel's `AnimationController`: it owns the script's state machine and hands the
+controller a node to sample, so a pose reaches the GPU through the same `GetSkinTransforms`
+path a bind-pose model already used. `ModelNode.AnimationData` holds it only for a model that
+plays something, and `OgGame.UpdateAnimations` advances every node that has one, which keeps
+playback out of the draw path.
 
 A clip's script-side parameters travel on `AnimationClip.Tag` as an `AnimationClipTag`; an
 alias is a clip of its own that shares the target's channels and carries its own tag. The

@@ -111,6 +111,15 @@ public class CommandLine
 	/// </summary>
 	public Vector3? SpawnOffset { get; private set; }
 
+	/// <summary>
+	/// Bone of the model placed by <see cref="SpawnModel"/> to hang <see cref="AttachVisual"/>
+	/// on, or null.
+	/// </summary>
+	public string AttachPoint { get; private set; }
+
+	/// <summary>Model or multi-resolution mesh placed on <see cref="AttachPoint"/>.</summary>
+	public string AttachVisual { get; private set; }
+
 	private bool _invalid;
 
 	public static CommandLine Parse(string[] args)
@@ -297,6 +306,22 @@ public class CommandLine
 					{
 						result.SpawnOffset = result.ParseVector(arg.Substring("-modeloffset:".Length), arg);
 					}
+					else if (arg.StartsWith("-attach:", StringComparison.OrdinalIgnoreCase))
+					{
+						var value = arg.Substring("-attach:".Length);
+						var separator = value.IndexOf(':');
+
+						if (separator <= 0 || separator >= value.Length - 1)
+						{
+							Log.Error("Option '-attach:' requires <point>:<model>.");
+							result._invalid = true;
+						}
+						else
+						{
+							result.AttachPoint = value.Substring(0, separator);
+							result.AttachVisual = value.Substring(separator + 1);
+						}
+					}
 					else
 					{
 						Log.Warning($"Ignoring unknown command line argument '{arg}'.");
@@ -362,7 +387,7 @@ public class CommandLine
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
 		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] " +
-		"[-model:<name>] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
+		"[-model:<name>] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
 		"[-play:<clip>] [-freeze] [-animtime:<seconds>]";
 
 	private Vector3? ParseVector(string value, string option)

@@ -394,6 +394,28 @@ public class CommandLineTests
 	}
 
 	[Fact]
+	public void Parse_Attach_ReadsPointAndVisual()
+	{
+		var result = CommandLine.Parse(new[] { "-model:ARMOR_PRISONER", "-attach:ZS_RIGHTHAND:ITMW_1H_MACHETE_01.MRM" });
+
+		Assert.Equal("ZS_RIGHTHAND", result.AttachPoint);
+		Assert.Equal("ITMW_1H_MACHETE_01.MRM", result.AttachVisual);
+	}
+
+	[Theory]
+	[InlineData("-attach:ZS_RIGHTHAND")]
+	[InlineData("-attach::ITMW_1H_MACHETE_01.MRM")]
+	[InlineData("-attach:ZS_RIGHTHAND:")]
+	public void Parse_InvalidAttach_IsRejected(string value)
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", value });
+
+		Assert.Null(result.AttachPoint);
+		Assert.Null(result.AttachVisual);
+		Assert.False(result.Validate());
+	}
+
+	[Fact]
 	public void Parse_SpawnModelWithoutName_IsRejected()
 	{
 		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-model:" });
