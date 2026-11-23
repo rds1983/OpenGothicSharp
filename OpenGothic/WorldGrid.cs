@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
+using OpenGothic.Physics;
 using OpenGothic.Scene;
 using System.Collections.Generic;
 
@@ -25,6 +26,12 @@ public class WorldGridCell
 public class WorldGrid
 {
 	public WorldGridCell[,] Cells { get; } = new WorldGridCell[Constants.GridSize, Constants.GridSize];
+
+	/// <summary>
+	/// Solid triangles of the level mesh itself, in world space, built while the level is
+	/// read. Vob geometry is added from the scene graph when the physics world is built.
+	/// </summary>
+	public CollisionSurfaceSet StaticCollision { get; } = new();
 
 	public WorldGrid()
 	{

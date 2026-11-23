@@ -54,7 +54,11 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   their own: `-compose:HUMANS:HUM_BODY_NAKED0,ARMOR_PRISONER`. This is what carries the
   `ZS_*` attach nodes, which no armour file has. `-modelrot:<degrees>` turns the spawn so a
   capture can show its front.
-- No input, physics, audio, or scripting yet.
+- Static collision exists: BepuPhysics2 triangle meshes for the level and for static vobs,
+  grouped by material friction with water as a contact-free sensor. `-physics` builds it and
+  runs a capsule drop/wall-push self-check; it is opt-in because the whole level costs ~20 s
+  and a few hundred MB to build.
+- No input, physics movement, audio, or scripting yet.
 - UI exists: Myra `Desktop` rooted at a `Hud` panel with two independently anchored blocks
   — an always-visible `Controls` list (bottom-right) and a toggleable `DebugOverlay`
   (top-left, F1) showing FPS, camera position, draw-call and triangle counts and the active
@@ -65,7 +69,7 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
   **Milestone C (Models and animation) complete** — C1–C8: model rendering, clips, playback,
   animated culling boxes, vob hierarchy, attach points, animation layers, composed models.
-  Current milestone: **D — Physics and movement**, next task **D1**.
+  Current milestone: **D — Physics and movement**, D1 complete, next task **D2**.
 
 ---
 
@@ -345,14 +349,43 @@ it arrives with the item definitions.
 
 ## Milestone D — Physics and movement
 
-### D1. Static collision
-Build a BepuPhysics2 static collider set from the ZEN world mesh (terrain + static
-vobs).
-**Done when:** a test capsule rests on the terrain and cannot pass through walls.
+### D1. Static collision — DONE
+Static collision is BepuPhysics2 triangle meshes (`OpenGothic/Physics/PhysicsWorld.cs`). The
+render path was not usable as a source: it skips texture-less materials and keeps only what
+fits a cell, so the level mesh is triangulated separately in `Assets.World.cs` from the raw
+ZEN mesh — every polygon except `material.disableCollision`, including invisible walls and
+ghost occluders. Static vobs contribute the geometry the reference collides with: a full
+`.MRM`, and only the rigid attachment meshes of a model; a skinned mesh has no static shape
+and gets no collider. Transforms are the renderer's (`MeshNode.WorldTransform`, the instance
+transform, or `boneGlobal * ModelNode.WorldTransform`).
+
+Two findings shaped the implementation. Bepu's meshes are **one-sided**, while Gothic's
+winding is inconsistent (`newworld.zen`: 130,515 polygons face up, 202,939 down, 127,829
+steep), so each triangle is added in both directions; with a single winding the capsule fell
+through roughly half the terrain. Friction comes from the material group (the reference's
+table) and is stored per collidable, because Bepu has no per-shape material; water is a
+sensor that refuses contacts. The game's unit is the centimetre, so gravity is `-981`.
+
+The CPU triangles cost ~15–25 s and a few hundred MB for `newworld.zen` (367,394 terrain +
+1,465,637 vob source triangles, doubled for the two-sided mesh), so they are built only when
+`DebugSettings.CollisionEnabled` is set by `-physics`.
+**Done when:** a test capsule rests on the terrain and cannot pass through walls. —
+`-physics` drops a capsule onto the plaza and drives it into the nearest wall: it rests on
+Terrain (center 29.2 above the surface, speed 0.78) and the wall push ends with the center 35
+units from the wall for a radius of 30, i.e. blocked. Both lines are in `log.txt`. Rendering
+captures are pixel-identical with collision off.
+
+Known limits: the build is opt-in and whole-level; there is no streaming, no dynamic-vob or
+skinned collision, and `-nomodels` removes vob colliders. The doubled CPU soup is retained
+after the meshes are built. Details in
+[Specifications/gothic-collision-format.md](Documentation/Specifications/gothic-collision-format.md).
 
 ### D2. Character controller
 Capsule character with gravity, slope handling, step-up, and slide-along-wall
-response.
+response. The collision set from D1 is currently opt-in because the whole level costs ~20 s
+and hundreds of MB; the controller needs it on for normal play, so this task also has to make
+that acceptable (drop the source soup after building, and stream or split colliders if the
+cost still shows).
 **Done when:** the capsule walks the terrain without jitter or falling through.
 
 ### D3. Player input & camera modes

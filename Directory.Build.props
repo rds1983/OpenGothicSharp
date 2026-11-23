@@ -8,6 +8,7 @@
     <RootNamespace>OpenGothic</RootNamespace>
     <MonoGameTargetFramework>net8.0</MonoGameTargetFramework>
     <Version>0.1.0</Version>
+    <BepuPhysicsVersion>2.4.0</BepuPhysicsVersion>
     <MonoGameVersion>3.8.6.1</MonoGameVersion>
     <DigitalRiseModelVersion>0.7.8</DigitalRiseModelVersion>
     <MyraVersion>1.6.8</MyraVersion>

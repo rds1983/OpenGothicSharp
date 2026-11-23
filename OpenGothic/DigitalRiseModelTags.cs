@@ -9,6 +9,22 @@ namespace OpenGothic
 	public record DrMeshPartTag(Material material)
 	{
 		/// <summary>
+		/// Friction of this surface, or zero when the part takes no part in collision (a
+		/// skinned part, or a material flagged non-colliding). Static so the physics world
+		/// can group triangles without knowing about the render material.
+		/// </summary>
+		public float Friction { get; init; }
+
+		/// <summary>
+		/// Triangles of a static part in the part's own space, or null. A skinned part has
+		/// none: its deformation is not represented by a static collider.
+		/// </summary>
+		public CollisionMesh Collision { get; init; }
+
+		/// <summary>Whether the static triangles are a sensor, such as a water surface.</summary>
+		public bool Sensor { get; init; }
+
+		/// <summary>
 		/// Union of the poses a played clip has put this part in, in model space, or null
 		/// until a clip has been measured. It belongs to the model rather than to a node: the
 		/// tag is shared by every instance, so the value only ever widens and no instance can

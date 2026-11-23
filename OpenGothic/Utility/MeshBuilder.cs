@@ -15,6 +15,7 @@ internal interface IMeshBuilder
 	void AddIndicesRange(IEnumerable<int> indices);
 	int GetIndex(int index);
 	int[] CreateIndicesArray();
+	Vector3[] CreateCollisionTriangles();
 	void ClearIndices();
 	DrMeshPart CreateMeshPart(GraphicsDevice graphicsDevice, bool toLeftHanded, PrimitiveType primitiveType = PrimitiveType.TriangleList);
 }
@@ -51,6 +52,23 @@ internal abstract class MeshBuilder<T> : IMeshBuilder where T : IVertexType
 	public int GetIndex(int index) => _indices[index];
 	public int[] CreateIndicesArray() => _indices.ToArray();
 
+	/// <summary>
+	/// Triangle corners in the builder's own space, three per triangle. Static collision uses
+	/// this, so callers only ask for it on triangle lists.
+	/// </summary>
+	public Vector3[] CreateCollisionTriangles()
+	{
+		var result = new Vector3[_indices.Count];
+		for (var i = 0; i < _indices.Count; ++i)
+		{
+			result[i] = GetPosition(Vertices[_indices[i]]);
+		}
+
+		return result;
+	}
+
+	protected abstract Vector3 GetPosition(T vertex);
+
 	public void ClearIndices()
 	{
 		_indices.Clear();
@@ -58,8 +76,7 @@ internal abstract class MeshBuilder<T> : IMeshBuilder where T : IVertexType
 	}
 
 	public DrMeshPart CreateMeshPart(GraphicsDevice graphicsDevice, bool toLeftHanded, PrimitiveType primitiveType = PrimitiveType.TriangleList)
-	{
-		if (toLeftHanded)
+	{		if (toLeftHanded)
 		{
 			// Mirroring Z while loading reverses triangle winding; swap it back so the
 			// front face stays front-facing in right-handed space.
@@ -127,6 +144,8 @@ internal abstract class MeshBuilder<T> : IMeshBuilder where T : IVertexType
 
 internal class MeshBuilderPNT : MeshBuilder<VertexPositionNormalTexture>
 {
+	protected override Vector3 GetPosition(VertexPositionNormalTexture vertex) => vertex.Position;
+
 	protected override VertexBuffer CreateVertexBuffer(GraphicsDevice device, VertexPositionNormalTexture[] vertices) => vertices.CreateVertexBuffer(device);
 
 	protected override BoundingBox CreateBoundingBox(IEnumerable<VertexPositionNormalTexture> vertices) => BoundingBox.CreateFromPoints(vertices.GetPositions());
@@ -140,6 +159,8 @@ internal class MeshBuilderS : MeshBuilder<VertexSkinned>
 	/// positions are not where it stands in the skeleton; culling needs the latter.
 	/// </summary>
 	public BoundingBox? RestBounds;
+
+	protected override Vector3 GetPosition(VertexSkinned vertex) => vertex.Position;
 
 	protected override VertexBuffer CreateVertexBuffer(GraphicsDevice device, VertexSkinned[] vertices) => vertices.CreateVertexBuffer(device);
 

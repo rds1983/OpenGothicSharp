@@ -55,6 +55,7 @@ default chosen elsewhere.
 | `-freeze` | Pin playback to `-animtime:` instead of advancing it, so a capture does not depend on how long the process has been running. |
 | `-animtime:<seconds>` | Playback position used with `-freeze`. A looping clip wraps it; a one-shot clamps. |
 | `-wireframe` / `-bounds` | Start with the F2 / F3 debug views already on. |
+| `-physics` | Build the static collision world and run the capsule self-check at startup; its result is logged. Off by default because the collision set costs time and memory to build. |
 | `-cam:<x,y,z>` | Override the camera position. |
 | `-lookat:<x,y,z>` | Point the camera at a world position (implies yaw and pitch). |
 | `-model:<name>` | Spawn a model directly in front of the camera, with or without an extension. Reaches models no world vob uses. |
@@ -494,6 +495,35 @@ bridge the two conventions:
 - **Zero-length fades.** 917 of the 1,253 declared transitions ask for no ramp at all, so the
   node calls `StartClip` for those instead of `CrossfadeToClip`, whose progress would be
   `0/0` at the first evaluation.
+
+### Physics
+
+Static collision is a [BepuPhysics2](https://github.com/bepu/bepuphysics2) set of triangle
+meshes (`OpenGothic/Physics/PhysicsWorld.cs`). Two sources feed it:
+
+- **The level mesh**, triangulated in `Assets.World.cs` while the world is read. Unlike the
+  render path, every polygon is kept — a texture-less material is still a wall — and only
+  `material.disableCollision` is skipped. Ghost occluders collide.
+- **Static vobs**, collected from the scene graph when the physics world is built. A
+  multi-resolution mesh collides with its full geometry; a model collides with its rigid
+  attachment meshes only, because a skinned mesh has no single static shape. The transform is
+  the same one the renderer uses: the node's world transform for a mesh, the bone's global
+  times the node's world transform for a model part.
+
+Two conventions are worth knowing. Bepu's meshes are **one-sided**, while Gothic's geometry
+has no consistent winding (the renderer does not cull back faces; over `newworld.zen` 131k
+polygons face up, 203k down and 128k are steep), so each triangle is added in both
+directions. Gothic units are centimetres, so gravity is `-981`. Friction comes from the
+material group (`PhysicsMaterials`) and is stored per collidable in a Bepu
+`CollidableProperty`; contacts use the geometric mean of the two surfaces' coefficients.
+Water material is added as a sensor: it is present for queries but refuses contacts.
+
+`-physics` enables the CPU triangle data and builds the world. It costs about 20 seconds and
+a few hundred megabytes for `newworld.zen` (367k terrain + 1.47M vob source triangles, doubled
+for the two-sided meshes), which is why it is opt-in while there is no gameplay that needs it.
+The startup self-check drops a capsule on the plaza and drives it into the nearest wall,
+logging the rest height and the final wall separation. The format details and measurements
+are in [Specifications/gothic-collision-format.md](Specifications/gothic-collision-format.md).
 
 ### Sky, fog and lighting
 

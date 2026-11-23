@@ -74,7 +74,24 @@ partial class Assets
 			result.BoundingBox = rest;
 		}
 
-		result.Tag = new DrMeshPartTag(material);
+		// Static geometry is what collides. A skinned part deforms with its skeleton and has
+		// no single static shape, which matches the reference: only rigid attachments are
+		// added to the physics world.
+		var friction = 0f;
+		var sensor = false;
+		if (DebugSettings.CollisionEnabled && zkSkinnedMesh == null && (zkSubMesh.Material == null || !zkSubMesh.Material.DisableCollision))
+		{
+			var group = zkSubMesh.Material?.Group ?? ZenKit.MaterialGroup.Undefined;
+			friction = Physics.PhysicsMaterials.GetFriction(group);
+			sensor = group == ZenKit.MaterialGroup.Water;
+		}
+
+		result.Tag = new DrMeshPartTag(material)
+		{
+			Friction = friction,
+			Sensor = sensor,
+			Collision = friction > 0f ? new CollisionMesh(meshBuilder.CreateCollisionTriangles()) : null
+		};
 
 		return result;
 	}

@@ -37,10 +37,10 @@ internal static class Program
 			commandLine.Apply();
 
 			Log.Info($"NoMenu: {commandLine.NoMenu}, DevMode: {commandLine.DevMode}");
-			Log.Info($"Cull: {DebugSettings.CullEnabled}, Models: {DebugSettings.ModelsEnabled}, Animations: {DebugSettings.AnimationsEnabled}");
+			Log.Info($"Cull: {DebugSettings.CullEnabled}, Models: {DebugSettings.ModelsEnabled}, Animations: {DebugSettings.AnimationsEnabled}, Collision: {DebugSettings.CollisionEnabled}");
 			Log.Info($"Screenshot: {commandLine.ScreenshotPath ?? "(off)"}, frame: {commandLine.ScreenshotFrame?.ToString() ?? "(first)"}");
 			Log.Info($"Camera: {commandLine.CameraPosition?.ToString() ?? "(default)"}, look at: {commandLine.LookAtTarget?.ToString() ?? "(default)"}");
-			Log.Info($"Wireframe: {commandLine.Wireframe?.ToString() ?? "(off)"}, bounds: {commandLine.Bounds?.ToString() ?? "(off)"}");
+			Log.Info($"Wireframe: {commandLine.Wireframe?.ToString() ?? "(off)"}, bounds: {commandLine.Bounds?.ToString() ?? "(off)"}, physics: {commandLine.Physics}");
 			Log.Info($"Spawn model: {commandLine.SpawnModel ?? "(none)"}, distance: {commandLine.SpawnDistance?.ToString() ?? "(default)"}, offset: {commandLine.SpawnOffset?.ToString() ?? "(none)"}, yaw: {commandLine.SpawnYaw?.ToString() ?? "(none)"}");
 			Log.Info($"Compose: {commandLine.ComposedSkeleton ?? "(none)"} <- {(commandLine.ComposedMeshes == null ? "(none)" : string.Join(",", commandLine.ComposedMeshes))}");
 			Log.Info($"Attach: {commandLine.AttachPoint ?? "(none)"} <- {commandLine.AttachVisual ?? "(none)"}");

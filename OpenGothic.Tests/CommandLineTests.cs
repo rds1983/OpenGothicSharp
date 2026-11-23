@@ -332,6 +332,32 @@ public class CommandLineTests
 
 		Assert.Null(result.Wireframe);
 		Assert.Null(result.Bounds);
+		Assert.False(result.Physics);
+	}
+
+	[Fact]
+	public void Parse_Physics_IsABareFlag()
+	{
+		var result = CommandLine.Parse(new[] { "-physics" });
+
+		Assert.True(result.Physics);
+	}
+
+	[Fact]
+	public void Apply_PhysicsEnablesCollision()
+	{
+		DebugSettings.CollisionEnabled = false;
+
+		try
+		{
+			CommandLine.Parse(new[] { "-physics" }).Apply();
+
+			Assert.True(DebugSettings.CollisionEnabled);
+		}
+		finally
+		{
+			DebugSettings.CollisionEnabled = false;
+		}
 	}
 
 	[Fact]

@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework.Input;
 using Myra;
 using Myra.Graphics2D.UI;
 using OpenGothic.Scene;
+using OpenGothic.Physics;
 using OpenGothic.Utility;
 using OpenGothic.UI;
 using System;
@@ -19,6 +20,7 @@ public class OgGame : Game
 	private WorldRenderer _worldRenderer;
 	private Assets _assets;
 	private WorldGrid _world;
+	private PhysicsWorld _physics;
 	private Desktop _desktop;
 	private Hud _hud;
 	private KeyboardState _previousKeyboard;
@@ -308,6 +310,23 @@ public class OgGame : Game
 		{
 			Log.Error($"Unable to load world '{worldName}': {ex.Message}");
 		}
+
+		if (_world != null && CommandLine.Instance.Physics)
+		{
+			try
+			{
+				_physics = new PhysicsWorld();
+				_physics.Build(_world);
+
+				// The default camera sits over the harbour basin; the model spawn point ahead
+				// is on the plaza, which is a stable place to drop the test capsule.
+				_physics.RunCapsuleTest(Camera.Position + Camera.Forward * 260f);
+			}
+			catch (Exception ex)
+			{
+				Log.Error($"Unable to build the physics world: {ex.Message}");
+			}
+		}
 	}
 
 	protected override void Update(GameTime gameTime)
@@ -456,6 +475,9 @@ public class OgGame : Game
 
 	protected override void UnloadContent()
 	{
+		_physics?.Dispose();
+		_physics = null;
+
 		_renderer?.Dispose();
 		_renderer = null;
 

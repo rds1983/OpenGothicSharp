@@ -30,6 +30,12 @@ public class CommandLine
 	public bool? Models { get; private set; }
 
 	/// <summary>
+	/// Whether to build the static collision world and run the capsule self-check at startup,
+	/// or null when the flag was not passed.
+	/// </summary>
+	public bool Physics { get; private set; }
+
+	/// <summary>
 	/// Where to write a PNG of the rendered frame, or null to not capture one. The image is
 	/// read straight from the backbuffer, so it works where an OS screenshot of the window
 	/// yields black for hardware-accelerated content.
@@ -192,6 +198,10 @@ public class CommandLine
 
 				case "-bounds":
 					result.Bounds = true;
+					break;
+
+				case "-physics":
+					result.Physics = true;
 					break;
 
 				default:
@@ -434,6 +444,11 @@ public class CommandLine
 		{
 			DebugSettings.AnimationsEnabled = Animations.Value;
 		}
+
+		if (Physics)
+		{
+			DebugSettings.CollisionEnabled = true;
+		}
 	}
 
 	public bool Validate()
@@ -475,7 +490,7 @@ public class CommandLine
 
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
-		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] " +
+		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] " +
 		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
 		"[-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 

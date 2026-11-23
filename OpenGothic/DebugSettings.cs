@@ -27,4 +27,11 @@ public static class DebugSettings
 	/// from a model or world one. Defaults to true.
 	/// </summary>
 	public static bool AnimationsEnabled { get; set; } = true;
+
+	/// <summary>
+	/// Whether static geometry keeps the CPU triangles the physics world collides with.
+	/// Building them costs time and memory at load, so they are off unless the physics
+	/// self-check is requested. Defaults to false.
+	/// </summary>
+	public static bool CollisionEnabled { get; set; }
 }

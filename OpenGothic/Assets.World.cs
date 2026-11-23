@@ -1,6 +1,7 @@
 ﻿using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using OpenGothic.Physics;
 using OpenGothic.Scene;
 using OpenGothic.Utility;
 using System;
@@ -477,8 +478,55 @@ namespace OpenGothic
 				}
 			}
 
+			// The level mesh collides as it is stored, not as it is drawn: invisible geometry
+			// with no texture still blocks a body, and ghost occluders are the same kind of
+			// geometry. Only a material that disables collision is left out.
+			if (DebugSettings.CollisionEnabled)
+			{
+				BuildTerrainCollision(zkWorld.Mesh, result.StaticCollision);
+				Log.Info(
+					$"World collision: {result.StaticCollision.TriangleCount:N0} triangles in " +
+					$"{result.StaticCollision.Surfaces.Count} material groups.");
+			}
 
 			return result;
+		}
+
+		/// <summary>
+		/// Triangulates the level mesh for physics, grouped by the friction of each material.
+		/// The polygons are fan-triangulated exactly like the render path, but every material
+		/// is kept regardless of whether it has a texture.
+		/// </summary>
+		private static void BuildTerrainCollision(IMesh mesh, CollisionSurfaceSet collision)
+		{
+			var positions = mesh.Positions;
+			var materials = mesh.Materials;
+
+			foreach (var polygon in mesh.Polygons)
+			{
+				var material = materials[polygon.MaterialIndex];
+				if (material.DisableCollision)
+				{
+					continue;
+				}
+
+				var indices = polygon.PositionIndices;
+				if (indices.Count < 3)
+				{
+					continue;
+				}
+
+				var sensor = material.Group == MaterialGroup.Water;
+				var friction = PhysicsMaterials.GetFriction(material.Group);
+				var first = positions[indices[0]].ToXna();
+
+				for (var i = 2; i < indices.Count; ++i)
+				{
+					var second = positions[indices[i - 1]].ToXna();
+					var third = positions[indices[i]].ToXna();
+					collision.AddTriangle(friction, sensor, first, second, third);
+				}
+			}
 		}
 
 		public WorldGrid GetWorld(GraphicsDevice device, string name) => Get(device, name, LoadWorld);
