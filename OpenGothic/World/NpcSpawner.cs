@@ -60,7 +60,8 @@ internal static class NpcSpawner
 			var scale = visual.Scale == Vector3.Zero ? Vector3.One : visual.Scale;
 			var human = IsHumanBody(visual, Stem(visual.Body));
 
-			var actor = new NpcActor(vob, visual, position, yaw, scale, human);
+			var actor = new NpcActor(vob, binding.Instance, binding.SymbolIndex, visual, position,
+				yaw, scale, human);
 			vob.World = Matrix.CreateScale(scale) *
 			            Matrix.CreateRotationY(-yaw) *
 			            Matrix.CreateTranslation(position);

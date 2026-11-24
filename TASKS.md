@@ -131,8 +131,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   collision/focus path, and completes the dialog camera/voice hook. F1.6 builds the 50
   non-human bodies lazily from their model scripts. F2 drives daily routines from a game
   clock, walks NPCs between grounded routine points, and is complete. Cut-out foliage
-  materials render with `AlphaTestEffect`. F3 is split into F3.1–F3.5; F3.1 (state container
-  and routine actions) is next.
+  materials render with `AlphaTestEffect`. F3.1 (script AI states, chaining and routine
+  actions) is complete; F3.2 (AI queue) is next.
 
 ---
 
@@ -727,7 +727,7 @@ Daedalus functions (`ZS_*`), the engine stores each state's ini/loop/end trio an
 with `SELF`/`OTHER`/`VICTIM`, and scripts drive movement through an AI queue. The routine's
 stored `action` (`ZS_STAND_WP`, `ZS_GOTOBED`, `ZS_SIT_BENCH`, …) is the first state to run.
 
-#### F3.1 State container, `AI_StartState`/`AI_EndState`, routine actions
+#### F3.1 State container, `AI_StartState`/`NPC_IsInState`, routine actions — DONE
 - `ScriptRuntime.InvokeState(npc, other, victim, symbol)` sets the three globals, calls the
   function and returns its int, like the reference's `invokeState`.
 - `NpcAiState` per actor: `funcIni`/`funcLoop`/`funcEnd`, start time, next loop time,
@@ -738,6 +738,19 @@ stored `action` (`ZS_STAND_WP`, `ZS_GOTOBED`, `ZS_SIT_BENCH`, …) is the first 
 **Done when:** Matteo plays `ZS_GOTOBED` at 22:00 with ini/loop/end visible in the log, and
 the state ends when his routine changes again.
 
+**Implemented:** `ScriptRuntime.TryGetStateFunctions` resolves the entry plus `<name>_Loop`
+and `<name>_End` by name (the reference's `AiState`); `InvokeState` sets
+`SELF`/`OTHER`/`VICTIM` and returns the loop result. `NpcAiSystem` runs the entry once, the
+loop every 0.5 s of real time and the end on replacement, and only for actors within 3000 units
+of the player. `AI_StartState`/`NPC_IsInState` are wired; starts are queued because they arrive
+from inside another state and the VM must not be re-entered. `AI_EndState` is not a shipped
+symbol and is not registered. The routine action starts after arrival (F3.2 will let the state
+walk) and ends on a routine change. Verified: Matteo runs `ZS_STAND_ARMSCROSSED`, chains
+`ZS_GOTOBED` -> `ZS_SLEEP` at the bed, and returns to `ZS_STAND_ARMSCROSSED` at 08:00.
+
+Done at the container scope: states run, chain and end on schedule. Their bodies still only
+stand because the actions they call (`AI_GotoWP`, `AI_UseMob`, `Mdl_PlayAni`, ...) are F3.2.
+
 #### F3.2 AI queue: movement and idle actions
 Port the queue actions the shipped scripts actually call: `AI_GotoWP`, `AI_GotoNpc`,
 `AI_GotoPos`, `AI_Wait`, `AI_Standup`, `AI_TurnToNpc`, `AI_TurnToSound`, `AI_PlayAni`,
@@ -747,6 +760,15 @@ Walking reuses the F2 walker (direct targets until N1 exposes waynet edges).
 **Depends on F3.1.**
 **Done when:** a `ZS_*` state walks to a waypoint, waits there and returns control without
 unimplemented-external errors.
+
+**Carry-over from F3.1:**
+- A state that ends on its own (e.g. `ZS_SLEEP_LOOP` returning `LOOP_END` at 06:00) leaves
+  the NPC stateless until the next routine change. The reference restarts the routine callback
+  whenever no state is active (`Npc::tickRoutine`); do the same once the queue can drive the
+  walk.
+- Add a script-call trace switch (e.g. `-aitrace`) so the exact external calls of `ZS_SIT_*`,
+  `ZS_GOTOBED`, `ZS_SLEEP` and friends can be recorded from the shipped scripts; the action
+  set above is a guess until then.
 
 #### F3.3 Perception
 - `senses_range` from the instance, view cone, head/eye ray with occlusion against the

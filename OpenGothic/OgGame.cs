@@ -42,6 +42,7 @@ public class OgGame : Game
 	private List<NpcActor> _npcActors;
 	private GameClock _clock;
 	private NpcRoutineSystem _routines;
+	private NpcAiSystem _ai;
 	private VoicePlayer _voice;
 	private int _voiceLineCursor;
 	private bool _dialogCamera;
@@ -334,7 +335,10 @@ public class OgGame : Game
 				{
 					_npcActors = NpcSpawner.Spawn(_scripts, _assets, GraphicsDevice, _world,
 						_physics, _clock.Hour);
-					_routines = new NpcRoutineSystem(_world, _physics, _clock, _npcActors);
+					_ai = new NpcAiSystem(_scripts, _npcActors);
+					_scripts.AiStartState = _ai.RequestStart;
+					_scripts.AiIsInState = _ai.IsInState;
+					_routines = new NpcRoutineSystem(_world, _physics, _clock, _npcActors, _ai);
 				}
 				catch (Exception ex)
 				{
@@ -841,8 +845,10 @@ public class OgGame : Game
 		_clock?.Advance(gameTime.ElapsedGameTime);
 		if (_dialog == null)
 		{
-			_routines?.Update((float)gameTime.ElapsedGameTime.TotalSeconds,
-				_controller?.FeetPosition ?? Camera.Position);
+			var center = _controller?.FeetPosition ?? Camera.Position;
+			var dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
+			_routines?.Update(dt, center);
+			_ai?.Update(dt, center);
 		}
 
 		_previousKeyboard = keyboard;

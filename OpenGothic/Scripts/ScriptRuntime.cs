@@ -70,6 +70,15 @@ public sealed class ScriptRuntime
 	/// </summary>
 	public NpcVob RequestedDialogNpc { get; private set; }
 
+	/// <summary>
+	/// Handles <c>AI_StartState</c>; the AI system sets this once the actors exist. The call is
+	/// queued there because the VM must not be re-entered from inside a state function.
+	/// </summary>
+	internal Action<NpcInstance, int, string> AiStartState { get; set; }
+
+	/// <summary>Handles <c>NPC_IsInState</c>; set together with <see cref="AiStartState"/>.</summary>
+	internal Func<NpcInstance, int, bool> AiIsInState { get; set; }
+
 	public void LoadAndBoot(string gothicFolder, string worldName)
 	{
 		if (string.IsNullOrEmpty(gothicFolder))
@@ -172,6 +181,13 @@ public sealed class ScriptRuntime
 			npc != null && Hero != null && npc.Index == Hero.Index ? 1 : 0);
 		Vm.RegisterExternal("npc_refusetalk", (NpcInstance npc) => 0);
 		Vm.RegisterExternal("npc_setrefusetalk", (NpcInstance npc, int seconds) => { });
+		Vm.RegisterExternal("ai_startstate",
+			(NpcInstance self, int function, int state, string waypoint) =>
+			{
+				AiStartState?.Invoke(self, function, waypoint);
+			});
+		Vm.RegisterExternal("npc_isinstate", (NpcInstance npc, int stateFunction) =>
+			AiIsInState != null && AiIsInState(npc, stateFunction) ? 1 : 0);
 
 		// Visual parameters are collected while the C_NPC constructor runs, before the
 		// binding exists; the spawner builds the model after boot.
@@ -397,6 +413,93 @@ public sealed class ScriptRuntime
 		{
 			Vm.GlobalSelf = self;
 			Vm.GlobalOther = other;
+		}
+	}
+
+	/// <summary>
+	/// Resolves an AI state function and its optional siblings, exactly like the reference's
+	/// <c>AiState</c> (<c>game/aistate.cpp</c>): <c>_Loop</c> and <c>_End</c> are looked up by
+	/// name, and a missing sibling stays -1. The shipped data spells them upper case, and the
+	/// VM's symbol lookup is case-insensitive.
+	/// </summary>
+	internal bool TryGetStateFunctions(int function, out string name, out int loop, out int end)
+	{
+		name = string.Empty;
+		loop = -1;
+		end = -1;
+
+		if (Vm == null || function <= 0)
+		{
+			return false;
+		}
+
+		var symbol = Vm.GetSymbolByIndex(function);
+		if (symbol == null)
+		{
+			return false;
+		}
+
+		name = symbol.Name;
+		var loopSymbol = Vm.GetSymbolByName(name + "_Loop");
+		if (loopSymbol != null)
+		{
+			loop = loopSymbol.Index;
+		}
+
+		var endSymbol = Vm.GetSymbolByName(name + "_End");
+		if (endSymbol != null)
+		{
+			end = endSymbol.Index;
+		}
+
+		return true;
+	}
+
+	/// <summary>
+	/// Calls a script AI state with SELF/OTHER/VICTIM set and returns its int result, like the
+	/// reference's <c>GameScript::invokeState</c>. Invalid functions and script errors are
+	/// logged and treated as "no result" so one broken state cannot stop the frame.
+	/// </summary>
+	internal int InvokeState(NpcInstance self, NpcInstance other, NpcInstance victim, int function)
+	{
+		if (Vm == null || function <= 0)
+		{
+			return 0;
+		}
+
+		var symbol = Vm.GetSymbolByIndex(function);
+		if (symbol == null)
+		{
+			return 0;
+		}
+
+		var previousSelf = Vm.GlobalSelf;
+		var previousOther = Vm.GlobalOther;
+		var previousVictim = Vm.GlobalVictim;
+		try
+		{
+			Vm.GlobalSelf = self;
+			Vm.GlobalOther = other;
+			Vm.GlobalVictim = victim;
+
+			if (symbol.HasReturn)
+			{
+				return Vm.Call<int>(function);
+			}
+
+			Vm.Call(function);
+			return 0;
+		}
+		catch (Exception ex)
+		{
+			Log.Warning($"Daedalus state '{symbol.Name}' failed: {ex.Message}");
+			return 0;
+		}
+		finally
+		{
+			Vm.GlobalSelf = previousSelf;
+			Vm.GlobalOther = previousOther;
+			Vm.GlobalVictim = previousVictim;
 		}
 	}
 

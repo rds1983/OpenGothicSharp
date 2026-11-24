@@ -3,6 +3,7 @@ using OpenGothic.Graphics;
 using OpenGothic.Utility;
 using OpenGothic.Vobs;
 using System.Collections.Generic;
+using ZenKit.Daedalus;
 
 namespace OpenGothic;
 
@@ -14,10 +15,12 @@ namespace OpenGothic;
 /// </summary>
 public sealed class NpcActor
 {
-	public NpcActor(NpcVob vob, NpcVisual visual, Vector3 position, float yaw, Vector3 scale,
-		bool human)
+	public NpcActor(NpcVob vob, NpcInstance instance, int symbolIndex, NpcVisual visual,
+		Vector3 position, float yaw, Vector3 scale, bool human)
 	{
 		Vob = vob;
+		Instance = instance;
+		SymbolIndex = symbolIndex;
 		Visual = visual;
 		Position = position;
 		Yaw = yaw;
@@ -28,6 +31,18 @@ public sealed class NpcActor
 	}
 
 	public NpcVob Vob { get; }
+
+	/// <summary>Script instance, used as <c>SELF</c> when a state function runs.</summary>
+	public NpcInstance Instance { get; }
+
+	/// <summary>Symbol index of <see cref="Instance"/>, the key the script side uses.</summary>
+	public int SymbolIndex { get; }
+
+	/// <summary>Running script AI state, or null.</summary>
+	public NpcAiState State { get; set; }
+
+	/// <summary>Whether the current routine's action has been started.</summary>
+	public bool RoutineStateStarted { get; set; }
 
 	public NpcVisual Visual { get; }
 

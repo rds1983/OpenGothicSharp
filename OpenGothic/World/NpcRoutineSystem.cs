@@ -22,17 +22,19 @@ internal sealed class NpcRoutineSystem
 	private readonly PhysicsWorld _physics;
 	private readonly GameClock _clock;
 	private readonly List<NpcActor> _actors;
+	private readonly NpcAiSystem _ai;
 	private readonly Func<string, bool> _hasWaypoint;
 	private int _assignLogs;
 	private int _arriveLogs;
 
 	public NpcRoutineSystem(WorldGrid world, PhysicsWorld physics, GameClock clock,
-		List<NpcActor> actors)
+		List<NpcActor> actors, NpcAiSystem ai = null)
 	{
 		_world = world;
 		_physics = physics;
 		_clock = clock;
 		_actors = actors;
+		_ai = ai;
 		_hasWaypoint = world != null
 			? new Func<string, bool>(world.Waypoints.ContainsKey)
 			: _ => false;
@@ -81,8 +83,15 @@ internal sealed class NpcRoutineSystem
 		var changed = actor.Routine != null;
 		actor.Routine = routine;
 		actor.RoutineChanged = changed;
+		actor.RoutineStateStarted = false;
 		actor.Path.Clear();
 		actor.PathIndex = 0;
+
+		if (changed)
+		{
+			// The previous routine's script state belongs to the old schedule.
+			_ai?.End(actor);
+		}
 
 		if (!_world.WaypointIndices.TryGetValue(routine.Waypoint, out var goal))
 		{
@@ -148,7 +157,32 @@ internal sealed class NpcRoutineSystem
 					$"arrived at '{actor.Routine?.Waypoint}' " +
 					$"(y {actor.Position.Y:0.#}).");
 			}
+
+			StartRoutineState(actor);
 		}
+	}
+
+	/// <summary>
+	/// Starts the routine's <c>action</c> script state once, after the NPC has reached its
+	/// point. The reference starts it immediately and lets the state walk (<c>AI_GotoWP</c>
+	/// arrives with F3.2); until then the F2 walker moves the body and the state runs on
+	/// arrival.
+	/// </summary>
+	private void StartRoutineState(NpcActor actor)
+	{
+		if (actor.RoutineStateStarted)
+		{
+			return;
+		}
+
+		var routine = actor.Routine;
+		if (routine == null || routine.Action <= 0)
+		{
+			return;
+		}
+
+		actor.RoutineStateStarted = true;
+		_ai?.StartRoutine(actor, routine.Action, routine.Waypoint);
 	}
 
 	private void UpdateWorld(NpcActor actor)

@@ -725,8 +725,10 @@ chunks and drops the NPC onto the surface (like the reference's `fixNpcPosition`
 startup builds **356 human bodies** immediately; **50 non-human bodies** build lazily from
 their model scripts when the player is near. `daily_routine`/`TA_MIN` drive the daily
 schedule: NPCs spawn at the active routine point, follow a `GameClock` (`-time:`,
-`-timescale:`) and walk to the next point when the routine changes. The installed ZenKitCS
-native edge export is missing, so routine walking currently uses direct targets;
+`-timescale:`) and walk to the next point when the routine changes. The routine's `action`
+now runs as a script AI state (`ZS_*`) with its `_Loop`/`_End` siblings; `AI_StartState` and
+`NPC_IsInState` are wired, so Matteo chains `ZS_GOTOBED` into `ZS_SLEEP`. The installed
+ZenKitCS native edge export is missing, so routine walking currently uses direct targets;
 `WorldGrid.FindWaypointPath` is ready for the managed port. Routines' action callbacks and AI
 remain F3. Details in [Specifications/npcs.md](Specifications/npcs.md).
 

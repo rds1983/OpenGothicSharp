@@ -95,6 +95,34 @@ overlap until F2 routines move them.
 - Verified: Matteo changes from `NW_CITY_MATTEO` to `NW_CITY_BED_MATTEO` at 22:00 and logs
   the arrival; Citizen/Rupert routines change on the same clock.
 
+## AI states (F3.1)
+
+- A state is a Daedalus `ZS_*` function. `ScriptRuntime.TryGetStateFunctions` resolves the
+  entry plus its `<name>_Loop` and `<name>_End` siblings by name, exactly like the reference's
+  `AiState` (`game/aistate.cpp`). The shipped data spells them upper case and the VM lookup is
+  case-insensitive, so `ZS_STAND_ARMSCROSSED` gets `ZS_STAND_ARMSCROSSED_LOOP`.
+- `ScriptRuntime.InvokeState` sets `SELF`, `OTHER` and `VICTIM`, calls the function and returns
+  its int result - the loop's `LOOP_CONTINUE` (0) or `LOOP_END` (1). A script error is logged
+  and treated as 0 so one broken state cannot stop the frame.
+- `NpcAiSystem` runs them: the entry once, `_Loop` every 0.5 s of real time, `_End` when the
+  state is replaced or the loop returns anything but `LOOP_CONTINUE`. A state with no `_Loop`
+  never ticks, like the reference's ini-only states.
+- `AI_StartState` and `NPC_IsInState` are implemented. `AI_StartState` is queued and drained at
+  the next AI update: the call happens inside another state's function and re-entering the VM
+  there would nest calls. Draining also lets an entry function start its successor, so
+  `ZS_GOTOBED` (ini only) ends and `ZS_SLEEP` starts in the same tick. `AI_EndState` is not a
+  symbol in the shipped data, so it is not registered.
+- `self.wp` (the instance's `Wp` field) is set to the routine waypoint before the entry call,
+  as `Npc::startState` does; `ZS_*` states read it instead of taking an argument.
+- The routine's `action` starts after the NPC arrives at its routine point. The reference
+  starts it immediately and lets the state walk with `AI_GotoWP` (F3.2); until then the F2
+  walker moves the body. A routine change ends the state before the walk starts.
+- Only NPCs within 3000 units of the player run loops: 356 states polling every half second
+  would spend the frame in the VM. F3.4 replaces this with the reference's process policies.
+- Verified at `-time:21 -timescale:60`: Matteo runs `ZS_STAND_ARMSCROSSED`, chains
+  `ZS_GOTOBED` -> `ZS_SLEEP` after reaching `NW_CITY_BED_MATTEO`, and returns to
+  `ZS_STAND_ARMSCROSSED` when the 08:00 routine starts.
+
 ## Deferred
 
 AI, routines' action callbacks, movement collision avoidance, combat and armour attachments
