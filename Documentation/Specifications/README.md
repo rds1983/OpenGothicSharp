@@ -11,15 +11,18 @@ They are the shared, written form of that knowledge; the engine code is written 
 Read [AGENTS.md](../../AGENTS.md) first. Anything in this folder must obey the project's
 legal and provenance rules:
 
-- **No decompiled code, no disassembly, no pseudocode lifted from game binaries.**
+- **No binary analysis, decompiled code, disassembly, or pseudocode lifted from game
+  binaries.** This is absolute; there is no exception for a mechanic that OpenGothic does
+  not explain.
 - **No internal symbol names, offsets, or raw constant dumps** that reproduce an
   implementation.
 - **No copied game assets.**
 
 A specification here describes *behavior* and *data layout* at a high level, so that engine
 code can be written cleanly from it. Specifications are written from observation (runtime
-behavior, file bytes, published docs) and from the behavior described by the OpenGothic
-source — never from reverse engineering the game's own code.
+behavior, file bytes read through the documented formats, published docs) and from the
+behavior described by the OpenGothic source — never from reverse engineering the game's own
+code.
 
 ## Format
 

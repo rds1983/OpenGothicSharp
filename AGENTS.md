@@ -34,12 +34,12 @@ copy its paths into code, docs, or committed files.
 These rules override every task, convenience, and deadline. If a task cannot be completed
 without breaking one, stop and ask the developer.
 
-1. **Never copy code, pseudocode, disassembly, or verbatim logic from the game's
-   binaries.** This includes the original `.exe`, any `.dll`, and anything obtained by
-   disassembling or decompiling them. Do not paste decompiler output into this repo,
-   into issues, or into chat. The C++ OpenGothic source is not an excuse: if a mechanic is
-   only explained there by something read out of the game's binaries, write the behavior
-   down as a spec instead.
+1. **Never analyze the game's binaries.** Do not disassemble, decompile, inspect, dump,
+   read symbols from, or otherwise reverse engineer the original `.exe`, any `.dll`, or any
+   code derived from them. Do not paste such output into this repo, into issues, or into
+   chat. This is absolute; there is no "only way" exception. Reading the shipped *data*
+   files (`VDF`, `ZEN`, `MDL`, …) through ZenKit is asset parsing, not binary analysis, and
+   remains expected.
 
 2. **Port the behavior, do not transliterate the source.** Reading `Try/OpenGothic` is
    expected — it is the primary reference — but what lands in this repo must be C# written
@@ -47,18 +47,17 @@ without breaking one, stop and ask the developer.
    algorithm is deliberately carried over close to its original form, say so in the commit
    or a doc note; both projects are MIT, so that is a provenance note, not a legal problem.
 
-3. **If inspecting binaries is genuinely necessary to understand a mechanic**, the only
-   permitted output is a **high-level behavioral or file-format specification** written to
-   `Documentation/Specifications/`. A spec must not contain decompiled snippets, raw
-   disassembly, internal symbol names, or magic-constant dumps that reproduce the
-   implementation. All engine code is then written cleanly from those specs.
+3. **The C++ OpenGothic source is the only code reference.** If it does not explain a
+   mechanic, use runtime observation, the documented data formats, or ask the developer.
+   "Inspecting a binary is the only way to find out" is not a reason to do it; the task
+   stops instead.
 
 4. **Never copy original game assets into the repository.** No models, textures, audio,
    scripts, localization files, archives, or extracted content. The repo contains code and
    docs only; assets are loaded at runtime from the user's installation.
 
-5. When in doubt about provenance, prefer documenting behavior observed at runtime over
-   anything read out of a binary, and ask the developer.
+5. When in doubt about provenance, prefer documenting behavior observed at runtime. Never
+   fall back to binary inspection; ask the developer.
 
 ## Technology and conventions
 
