@@ -61,6 +61,7 @@ default chosen elsewhere.
 | `-thirdperson` | Start walking in the chase camera instead of first person. |
 | `-walkmode` | Start with walk mode on, the diagnostic equivalent of the in-game Shift toggle. |
 | `-interact[:<count>]` | Resolve the focus target `count` times (default 1), two seconds apart, as if E had been pressed. |
+| `-noscripts` | Skip loading and booting the Daedalus scripts. |
 | `-player:<x,y,z>` | Start the walking capsule at a world position instead of the placeholder plaza; the player drops to the ground below the point. |
 | `-yaw:<degrees>` | Set the walking player's facing yaw. Needed to aim a diagnostic walk reliably, because `-lookat:` measures from the camera's own position. Mouse look is disabled while `-yaw` or `-walktest` is active so the direction stays fixed. |
 | `-walktest:<seconds>` | Hold forward for a diagnostic run and log the final feet position; a negative value holds backward. Useful for reproducing a stuck spot. |
@@ -694,6 +695,18 @@ shows `Npc '<name>' hp <hp>/<maxHp>` once a script-spawned NPC exists.
 There is deliberately **no placeholder NPC spawner or body**. Body, armour, head, animation,
 AI, movement and collision belong with the script-created NPC in F2/G2. Details in
 [Specifications/npcs.md](Specifications/npcs.md).
+
+### Daedalus scripts
+
+`ScriptRuntime` loads `_work/Data/Scripts/_compiled/GOTHIC.DAT` (74,649 symbols in the tested
+install) and `Ou.dat` (20,826 cutscene blocks), then calls `startup_global`,
+`startup_<world>`, `init_global` and `init_<world>`. Unimplemented engine externals go through
+one default handler that logs each name once and returns the VM default, so startup completes
+without unimplemented-call crashes. The VM and cutscene library stay alive for G2/G3.
+
+The external stubs mean no NPCs/items are inserted yet; G2 supplies the real world bindings.
+`-noscripts` skips the load for diagnostics. Details in
+[Specifications/daedalus.md](Specifications/daedalus.md).
 
 ### Sky, fog and lighting
 

@@ -91,6 +91,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   to the bottom-left inventory panel. `Inventory.Remove` is the removal core.
 - NPC runtime data lives on `NpcVob` (instance, guild, level, HP, damage and message hooks).
   The shipped ZEN has no NPCs; scripts spawn them in G2, so no placeholder NPC or body exists.
+- The Daedalus VM boots `GOTHIC.DAT` (74,649 symbols) and loads `Ou.dat` (20,826 cutscene
+  blocks) through the four startup/init entry points. Unimplemented externals log once and use
+  the VM default; the VM and cutscene library stay alive for G2/G3.
 - Rendering lives in `OpenGothic/Graphics` (`Renderer`, `Sky`, `WorldRenderer`, `Camera`,
   `DebugDraw`, materials, scene/model/mesh visuals and vertex formats).
 - ZenKit is pinned to `1.3.0-cs.1`, matching the parser version the reference C++ client uses.
@@ -111,8 +114,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   character controller, player input, first/third-person cameras and streamed collision.
   **Milestone E (Interaction and world objects) complete** — E1–E4: typed vob tree, placeholder
   player avatar, focus/raycast, door/chest interactions and item pickup with inventory.
-  F1's NPC runtime data is complete; F2/F3 need G2 script-spawned NPCs, so the next actionable
-  task is **G1 — Daedalus VM**.
+  F1's NPC runtime data and G1's Daedalus VM boot are complete. F2/F3 still need G2-spawned
+  NPCs, so the next actionable task is **G2 — script classes & events**.
 
 ---
 
@@ -652,10 +655,27 @@ Idle/guard/follow/attack states, perception events (see/hear/damage), and AI que
 
 ## Milestone G — Daedalus scripting (game logic)
 
-### G1. Daedalus VM
+### G1. Daedalus VM — DONE
 Integrate ZenKit `DaedalusScript`/`DaedalusVm`; load `Gothic.dat`/`OU`, register
 core external functions needed to boot.
 **Done when:** startup scripts run without unimplemented-call crashes.
+
+`ScriptRuntime` loads `_work/Data/Scripts/_compiled/GOTHIC.DAT` (74,649 symbols in the tested
+install) and `_work/Data/Scripts/CONTENT/CUTSCENE/Ou.dat` (20,826 cutscene blocks). It boots
+in the reference's order — `startup_global`, `startup_<world>`, `init_global`, `init_<world>` —
+and keeps the VM and cutscene library alive for G2/G3. An unimplemented external is logged
+once per name and receives the VM default, so startup cannot abort on an unbound call.
+`-noscripts` skips the whole load for diagnostics.
+
+The newworld boot completes in ~0.013 s; 5,228 calls reach the default handler across ten
+routines (`GAME_INITGERMAN`, `WLD_INSERTITEM`, `WLD_INSERTNPC`, `HLP_GETNPC`, `NPC_ISDEAD`,
+`HLP_ISVALIDNPC`, `PLAYVIDEO`, `WLD_SETGUILDATTITUDE`, `WLD_SETMOBROUTINE`,
+`WLD_ASSIGNROOMTOGUILD`). Those stubs mean no NPCs/items are inserted and no video/attitude/
+routine data is applied yet; G2 supplies the real bindings.
+
+**Done when:** startup scripts run without unimplemented-call crashes. — Done; all four entry
+points return, the VM remains usable, build/tests pass (191 tests). Details in
+[Specifications/daedalus.md](Documentation/Specifications/daedalus.md).
 
 ### G2. Script classes & events
 Expose NPC/item/world script objects and the event pipeline the scripts expect.

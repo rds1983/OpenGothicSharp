@@ -64,6 +64,9 @@ public class CommandLine
 	/// </summary>
 	public int Interact { get; private set; }
 
+	/// <summary>Whether to skip loading and booting the Daedalus scripts.</summary>
+	public bool NoScripts { get; private set; }
+
 	/// <summary>
 	/// Whether the game should start with the playable capsule. Explicit <see cref="Walk"/> or
 	/// <see cref="ThirdPerson"/> wins; otherwise a plain launch walks, while a diagnostic launch
@@ -295,6 +298,9 @@ public class CommandLine
 					break;
 				case "-interact":
 					result.Interact = 1;
+					break;
+				case "-noscripts":
+					result.NoScripts = true;
 					break;
 
 				default:
@@ -647,7 +653,7 @@ public class CommandLine
 
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
-		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] [-interact[:<count>]] " +
+		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] [-interact[:<count>]] [-noscripts] " +
 		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
 		"[-player:<x,y,z>] [-yaw:<degrees>] [-walktest:<seconds>] [-vobstats] [-vobfind:<x,y,z>] [-vobradius:<n>] [-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 

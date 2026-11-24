@@ -9,6 +9,7 @@ using OpenGothic.Physics;
 using OpenGothic.Focus;
 using OpenGothic.Interactions;
 using OpenGothic.Items;
+using OpenGothic.Scripts;
 using OpenGothic.Utility;
 using OpenGothic.UI;
 using OpenGothic.Vobs;
@@ -35,6 +36,7 @@ public class OgGame : Game
 	private readonly InteractionSystem _interactions = new InteractionSystem();
 	private readonly ItemPickupSystem _itemPickup = new ItemPickupSystem();
 	private readonly Inventory _inventory = new Inventory();
+	private ScriptRuntime _scripts;
 	private float _mouseYaw;
 	private float _mousePitch;
 	private bool _thirdPerson;
@@ -82,6 +84,7 @@ public class OgGame : Game
 		Camera.SetViewport(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
 
 		LoadWorld();
+		LoadScripts();
 		SpawnRequestedModel();
 		DumpRequestedAnimations();
 	}
@@ -284,6 +287,30 @@ public class OgGame : Game
 		}
 
 		return $"{traits}, {info.FrameCount} frames at {info.Fps:0.##} fps, {info.Duration.TotalSeconds:0.###}s";
+	}
+
+	/// <summary>
+	/// Loads the compiled Daedalus game script and runs its startup entry points. The VM keeps
+	/// running for later milestones; for now it proves the script boots with default returns
+	/// for engine functions that are not implemented yet.
+	/// </summary>
+	private void LoadScripts()
+	{
+		if (CommandLine.Instance.NoScripts || string.IsNullOrEmpty(CommandLine.Instance.GothicPath))
+		{
+			return;
+		}
+
+		try
+		{
+			_scripts = new ScriptRuntime();
+			_scripts.LoadAndBoot(CommandLine.Instance.GothicPath,
+				CommandLine.Instance.World ?? "newworld.zen");
+		}
+		catch (Exception ex)
+		{
+			Log.Error($"Unable to boot Daedalus scripts: {ex.Message}");
+		}
 	}
 
 	private void LoadWorld()
