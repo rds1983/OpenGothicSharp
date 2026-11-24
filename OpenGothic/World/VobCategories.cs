@@ -43,7 +43,7 @@ public sealed class NpcVob : VobNode
 
 	public bool IsDead => Hp <= 0;
 
-	/// <summary>Last line passed to <see cref="Say"/>; the script voice/bubble hooks arrive with G3.</summary>
+	/// <summary>Last line passed to <see cref="Say"/>; scripted dialog lines use the dialog session.</summary>
 	public string LastMessage { get; private set; }
 
 	public void TakeDamage(int amount)

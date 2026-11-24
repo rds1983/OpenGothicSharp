@@ -11,5 +11,6 @@
     <Label Id="_labelToggleOverlay" Text="F1 - Toggle debug overlay" TextColor="#E8E8E8" />
     <Label Id="_labelWireframe" Text="F2 - Toggle wireframe" TextColor="#E8E8E8" />
     <Label Id="_labelBounds" Text="F3 - Toggle bounding boxes" TextColor="#E8E8E8" />
+    <Label Id="_labelDialog" Text="F4 - Talk to script NPC" TextColor="#E8E8E8" />
   </VerticalStackPanel>
 </Project>

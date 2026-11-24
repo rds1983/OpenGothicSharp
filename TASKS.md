@@ -93,16 +93,19 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   The shipped ZEN has no NPCs; scripts spawn them in G2, so no placeholder NPC or body exists.
 - The Daedalus VM boots `GOTHIC.DAT` (74,649 symbols) and loads `Ou.dat` (20,826 cutscene
   blocks) through the four startup/init entry points. Unimplemented externals log once and use
-  the VM default; the VM and cutscene library stay alive for G3.
+  the VM default; the VM and cutscene library stay alive for the dialog and quest layers.
 - G2 binds script objects/events: 406 NPC and 55 item instances from `WLD_INSERTNPC`/`ITEM`,
   `HLP_GETNPC`, `PC_HERO`, and `LOG_ADDENTRY`. Each NPC binding owns a detached `NpcVob`.
-  `-talk` runs `B_ASSESSTALK` + `B_LOGENTRY` and logs the journal side effect.
+- G3 completes the dialog engine: 4,139 `C_INFO` instances, condition/choice filtering,
+  `AI_Output` text from `Ou.dat`, `Info_AddChoice`/`Ai_StopProcessInfos`, and a Myra choice
+  panel. `-talk` and `-talkui` run conversations; the dialog camera and voice playback are
+  part of F1.5/J1.
 - Rendering lives in `OpenGothic/Graphics` (`Renderer`, `Sky`, `WorldRenderer`, `Camera`,
   `DebugDraw`, materials, scene/model/mesh visuals and vertex formats).
 - ZenKit is pinned to `1.3.0-cs.1`, matching the parser version the reference C++ client uses.
 - Models skip submeshes whose material has no texture; the shipped data uses those as hidden
   placeholder faces (`REPAIR_PLANK`'s `ZM_REP_HIDDEN` was a white triangle on screen).
-- No audio or scripting yet.
+- No audio yet; scripting is live in G1–G3.
 - UI exists: Myra `Desktop` rooted at a `Hud` panel with four independently anchored blocks
   — an always-visible `Controls` list (bottom-right), an `InventoryPanel` (bottom-left), and a
   toggleable `DebugOverlay` (top-left, F1) showing FPS, camera position, draw-call and triangle
@@ -117,8 +120,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   character controller, player input, first/third-person cameras and streamed collision.
   **Milestone E (Interaction and world objects) complete** — E1–E4: typed vob tree, placeholder
   player avatar, focus/raycast, door/chest interactions and item pickup with inventory.
-  F1's NPC runtime data, G1's Daedalus VM boot and G2's script-object/event bridge are complete.
-  F2/F3 still need world-bound script NPCs; the roadmap's next task is **G3 — Dialogs**.
+  F1's NPC runtime data, G1's Daedalus VM boot, G2's script-object/event bridge and G3's
+  dialog engine/UI are complete. The dialog camera/voice and every NPC movement now depend on
+  **F1.5 — World-bound script NPCs**, the next task.
 
 ---
 
@@ -641,17 +645,37 @@ script-created NPC: `NpcVob` exposes the instance name, guild, level, `Hp`/`MaxH
 name and health.
 
 **Done when:** an Npc spawns from a ZEN instance, idles, and can be damaged. — Done at the
-runtime-data scope by developer decision. Actual spawning, body composition, idle animation
-and damage in-game depend on G2's script-created NPCs; no placeholder spawner remains.
+runtime-data scope by developer decision. G2 supplies the script instances and F1.5 places
+them in the world; no placeholder spawner remains.
+
+### F1.5. World-bound script NPCs
+Turn the G2 script instances into visible, interactable actors — the prerequisite for
+routines, AI, and the G3 dialog camera.
+
+- Apply `MDL_SetVisualBody` (body/armour/head/skin colour) to each inserted NPC and build its
+  composed `DrModel`; skip the body only when the script explicitly hides it.
+- Create one scene node per NPC at its spawn waypoint (fall back to the reference's dead
+  point when the waypoint is missing), using the waypoint direction as facing.
+- Give the NPC its dynamic collision capsule, register it with focus/interaction, and make E
+  start the G3 dialog.
+- Add the dialog camera: with both actor positions available, use the reference's two-shot
+  (midpoint, actor distance, speaker-side spin) and restore the exploration camera on close.
+- Play `DialogLine.Voice` (`<output-unit>.wav`) through the audio layer. If J1 has not landed
+  yet, add the minimal `SoundEffect` playback here and let J1 generalize it.
+
+**Depends on:** G2 (script instances) and G3 (dialog engine/UI).
+**Done when:** a script-inserted NPC is visible at its waypoint, can be focused and talked to,
+a conversation ends with the camera returning to the player, and the spoken line's voice file
+plays (or is explicitly deferred to J1).
 
 ### F2. Way matrix & routines
 Parse waypoints/waymatrix; daily routines (`TA`, `RTN`) move NPCs between points.
-**Depends on G2:** no NPCs exist until the scripts spawn them.
+**Depends on F1.5:** routines need placed, visible NPCs.
 **Done when:** an NPC follows a simple authored routine.
 
 ### F3. AI states & perception
 Idle/guard/follow/attack states, perception events (see/hear/damage), and AI queue.
-**Depends on G2:** no NPCs exist until the scripts spawn them.
+**Depends on F2:** routines run on placed NPCs.
 **Done when:** an NPC notices the player and transitions state plausibly.
 
 ---
@@ -705,9 +729,19 @@ also still open. Build/tests pass (192 tests). Details in
 **Done when:** a scripted NPC interaction fires its Daedalus side effects. — Done at the
 script-object/event scope via `-talk`; the journal entry is the observable script side effect.
 
-### G3. Dialogs
+### G3. Dialogs — DONE
 Dialog choice tree, NPC/player lines, voice hooks, and dialog camera.
 **Done when:** a full conversation with a named NPC can be completed.
+
+The data/UI layer is implemented: `C_INFO` grouping, choice/condition filtering,
+`AI_Output` text from `Ou.dat`, `Info_AddChoice`/`Ai_StopProcessInfos`, and the Myra choice
+panel driven by `-talk`/`-talkui`. A full conversation completes. The dialog camera and
+voice playback are tracked in **F1.5**, which supplies the world-bound second actor and the
+audio hook.
+
+**Done when:** a full conversation with a named NPC can be completed. — Done at the
+data/UI scope: City Guard, Pablo and Vatras conversations complete through the script
+engine; `-talk` and `-talkui` exercise it. Camera/voice are F1.5/J1.
 
 ### G4. Quests & journal
 Quest log, chapter state, and the document/mission log the scripts drive.
@@ -746,7 +780,7 @@ Grid inventory with equip/use, and trader UI.
 ## Milestone J — Audio
 
 ### J1. Sound effects
-Sound-definition driven SFX: footsteps, hits, ambience, dialog voices.
+Sound-definition driven SFX: footsteps, hits, ambience, dialog voices (`DialogLine.Voice`).
 **Done when:** footsteps and one ambient loop play positionally.
 
 ### J2. Music

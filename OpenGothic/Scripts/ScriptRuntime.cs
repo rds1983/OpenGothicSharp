@@ -11,22 +11,25 @@ using ZenKit.Vobs;
 namespace OpenGothic.Scripts;
 
 /// <summary>
-/// Loads the compiled Daedalus game script and runs its startup entry points. G1 registers a
-/// default external handler, so a script routine the engine does not implement yet logs once
-/// and receives the VM's default return instead of aborting the startup.
+/// Loads the compiled Daedalus game script and runs its startup entry points. Unimplemented
+/// externals log once and receive the VM's default return instead of aborting the startup.
+/// The same runtime owns the script object store and the dialog engine.
 /// </summary>
 public sealed class ScriptRuntime
 {
-	private sealed class NpcBinding
-	{
-		public NpcInstance Instance;
-		public NpcVob Vob;
-		public string SpawnPoint;
-	}
-
 	private readonly HashSet<string> _unbound = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 	private readonly Dictionary<int, NpcBinding> _npcs = new Dictionary<int, NpcBinding>();
 	private readonly Dictionary<int, ItemInstance> _items = new Dictionary<int, ItemInstance>();
+
+	private Dictionary<int, List<InfoInstance>> _infosByNpc;
+	private Dictionary<int, InfoInstance> _infosBySymbol;
+	private Dictionary<string, string> _dialogText;
+	private readonly Dictionary<int, List<DialogChoice>> _storedChoices = new Dictionary<int, List<DialogChoice>>();
+	private readonly HashSet<(int Npc, int Info)> _knownInfos = new HashSet<(int Npc, int Info)>();
+	private readonly HashSet<int> _conditionFailures = new HashSet<int>();
+
+	private DialogSession _session;
+	private bool _endRequested;
 
 	public DaedalusVm Vm { get; private set; }
 
@@ -47,8 +50,20 @@ public sealed class ScriptRuntime
 	/// <summary>Items inserted by <c>WLD_INSERTITEM</c> during boot.</summary>
 	public int InsertedItemCount => _items.Count;
 
+	/// <summary>Number of C_INFO instances prepared for dialogs.</summary>
+	public int DialogInfoCount => _infosBySymbol?.Count ?? 0;
+
 	/// <summary>Last journal line added through the script's <c>LOG_ADDENTRY</c> external.</summary>
 	public string LastLogEntry { get; private set; }
+
+	/// <summary>Whether any script NPC can be talked to.</summary>
+	public bool HasScriptNpcs => _npcs.Count > 0;
+
+	/// <summary>
+	/// NPC named by an <c>AI_ProcessInfos</c> call made outside a conversation. The game UI
+	/// consumes this to open the dialog, mirroring the reference's AI queue request.
+	/// </summary>
+	public NpcVob RequestedDialogNpc { get; private set; }
 
 	public void LoadAndBoot(string gothicFolder, string worldName)
 	{
@@ -82,6 +97,18 @@ public sealed class ScriptRuntime
 		Log.Info($"Daedalus script loaded: {Vm.SymbolCount:N0} symbols, {Vm.Symbols.Count:N0} listed.");
 
 		Boot(worldName);
+
+		if (Booted)
+		{
+			try
+			{
+				LoadDialogInfos();
+			}
+			catch (Exception ex)
+			{
+				Log.Warning($"Unable to prepare dialog data: {ex.Message}");
+			}
+		}
 	}
 
 	private void RegisterScriptObjects()
@@ -100,6 +127,46 @@ public sealed class ScriptRuntime
 			LastLogEntry = text;
 			Log.Info($"Daedalus journal: {text}");
 		});
+
+		// Dialog data and output. AI_Output lines are the spoken text; the output unit also
+		// names the voice file in the reference.
+		Vm.RegisterExternal("ai_output", (NpcInstance self, NpcInstance target, string unit) =>
+		{
+			OnAiOutput(self, target, unit);
+		});
+		Vm.RegisterExternal("ai_outputsvm", (NpcInstance self, NpcInstance target, string unit) =>
+		{
+			OnAiOutput(self, target, unit);
+		});
+		Vm.RegisterExternal("ai_outputsvm_overlay", (NpcInstance self, NpcInstance target, string unit) =>
+		{
+			OnAiOutput(self, target, unit);
+		});
+		Vm.RegisterExternal("info_addchoice", (int info, string text, int function) =>
+		{
+			AddStoredChoice(info, text, function);
+		});
+		Vm.RegisterExternal("info_clearchoices", (int info) => ClearStoredChoices(info));
+		Vm.RegisterExternal("infomanager_hasfinished", () => _session == null ? 1 : 0);
+		Vm.RegisterExternal("ai_processinfos", (NpcInstance npc) => RequestDialog(npc));
+		Vm.RegisterExternal("ai_stopprocessinfos", (NpcInstance npc) =>
+		{
+			if (_session != null)
+			{
+				_endRequested = true;
+			}
+		});
+		Vm.RegisterExternal("npc_knowsinfo", (NpcInstance npc, int info) => Knows(npc, info) ? 1 : 0);
+		Vm.RegisterExternal("npc_giveinfo", (NpcInstance npc, int info) =>
+		{
+			MarkKnown(npc, info);
+			return 1;
+		});
+		Vm.RegisterExternal("npc_checkinfo", (NpcInstance npc, int important) => CheckInfo(npc, important));
+		Vm.RegisterExternal("npc_isplayer", (NpcInstance npc) =>
+			npc != null && Hero != null && npc.Index == Hero.Index ? 1 : 0);
+		Vm.RegisterExternal("npc_refusetalk", (NpcInstance npc) => 0);
+		Vm.RegisterExternal("npc_setrefusetalk", (NpcInstance npc, int seconds) => { });
 
 		var heroSymbol = Vm.GetSymbolByName("PC_HERO");
 		if (heroSymbol != null)
@@ -134,6 +201,7 @@ public sealed class ScriptRuntime
 
 			var binding = new NpcBinding
 			{
+				SymbolIndex = symbolIndex,
 				Instance = instance,
 				SpawnPoint = spawnPoint,
 				Vob = CreateNpcVob(instance, symbol.Name)
@@ -181,7 +249,8 @@ public sealed class ScriptRuntime
 		return (NpcVob)VobFactory.Create(source, null, Matrix.Identity, Matrix.Identity);
 	}
 
-	private void InsertItem(int symbolIndex, string spawnPoint)	{
+	private void InsertItem(int symbolIndex, string spawnPoint)
+	{
 		var symbol = Vm.GetSymbolByIndex(symbolIndex);
 		if (symbol == null)
 		{
@@ -208,47 +277,430 @@ public sealed class ScriptRuntime
 	}
 
 	/// <summary>
-	/// Diagnostic interaction for the script object bridge: call the real NPC routine
-	/// <c>B_ASSESSTALK</c> with the first inserted NPC, then let the script add a journal
-	/// entry. The journal external proves the Daedalus side effect reached the engine.
+	/// Runs a complete diagnostic conversation with the named script NPC (or the first
+	/// inserted one when <paramref name="npcInstance"/> is null), choosing the first available
+	/// entry until the script ends the dialog. Every line is logged as it is spoken.
 	/// </summary>
-	public string TalkToFirstNpc()
+	public string RunDialogToCompletion(string npcInstance)
 	{
-		if (Vm == null || _npcs.Count == 0)
+		if (Vm == null)
 		{
-			return "no scripted NPCs";
+			return "no Daedalus VM";
 		}
 
-		NpcBinding target = null;
+		var session = StartDialog(npcInstance);
+		if (session == null)
+		{
+			return string.IsNullOrEmpty(npcInstance)
+				? "no scripted NPCs"
+				: $"no scripted NPC named '{npcInstance}'";
+		}
+
+		var result = session.RunToCompletion();
+		CloseDialog();
+		return result;
+	}
+
+	public DialogSession StartDialog(string npcInstance)
+	{
+		if (string.IsNullOrEmpty(npcInstance))
+		{
+			return StartDialogWithFirstNpc();
+		}
+
 		foreach (var binding in _npcs.Values)
 		{
-			target = binding;
-			break;
+			if (string.Equals(binding.Vob.NpcInstance, npcInstance, StringComparison.OrdinalIgnoreCase))
+			{
+				return StartDialog(binding);
+			}
 		}
 
-		LastLogEntry = null;
-		try
+		foreach (var binding in _npcs.Values)
 		{
-			var assess = Vm.GetSymbolByName("B_ASSESSTALK");
-			if (assess != null && Hero != null)
+			if (string.Equals(binding.Vob.Name, npcInstance, StringComparison.OrdinalIgnoreCase))
 			{
-				Vm.Call(assess.Index, target.Instance, Hero);
+				return StartDialog(binding);
+			}
+		}
+
+		return null;
+	}
+
+	public DialogSession StartDialogWithFirstNpc()
+	{
+		foreach (var binding in _npcs.Values)
+		{
+			return StartDialog(binding);
+		}
+
+		return null;
+	}
+
+	public DialogSession StartDialog(NpcVob vob)
+	{
+		if (vob == null)
+		{
+			return null;
+		}
+
+		foreach (var binding in _npcs.Values)
+		{
+			if (ReferenceEquals(binding.Vob, vob))
+			{
+				return StartDialog(binding);
+			}
+		}
+
+		return null;
+	}
+
+	private DialogSession StartDialog(NpcBinding npc)
+	{
+		if (Vm == null || Hero == null || _infosByNpc == null)
+		{
+			return null;
+		}
+
+		CloseDialog();
+		var session = new DialogSession(this, npc);
+		_session = session;
+		session.Begin();
+		return session;
+	}
+
+	public void CloseDialog()
+	{
+		_session = null;
+		_endRequested = false;
+		_storedChoices.Clear();
+	}
+
+	/// <summary>Returns and clears an <c>AI_ProcessInfos</c> request, or null.</summary>
+	public NpcVob ConsumeDialogRequest()
+	{
+		var vob = RequestedDialogNpc;
+		RequestedDialogNpc = null;
+		return vob;
+	}
+
+	internal List<DialogChoice> BuildChoices(DialogSession session, bool includeImportant)
+	{
+		var result = new List<DialogChoice>();
+		if (_infosByNpc == null || !_infosByNpc.TryGetValue(session.Binding.SymbolIndex, out var infos))
+		{
+			return result;
+		}
+
+		for (var important = includeImportant ? 1 : 0; important >= 0; --important)
+		{
+			foreach (var info in infos)
+			{
+				if (info.Important != important)
+				{
+					continue;
+				}
+
+				// A non-permanent info is spent once the player has heard it.
+				if (Knows(Hero, info.Index) && info.Permanent == 0)
+				{
+					continue;
+				}
+
+				// Important permanent entries are not repeated in the same conversation.
+				if (info.Important != 0 && info.Permanent != 0 && session.Except.Contains(info.Information))
+				{
+					continue;
+				}
+
+				if (!CheckCondition(session.Binding, info))
+				{
+					continue;
+				}
+
+				result.Add(new DialogChoice
+				{
+					Text = info.Description ?? string.Empty,
+					Function = info.Information,
+					Sort = info.Nr,
+					IsTrade = info.Trade != 0,
+					Info = info
+				});
 			}
 
-			var log = Vm.GetSymbolByName("B_LOGENTRY");
-			if (log != null)
+			if (result.Count > 0)
 			{
-				Vm.Call(log.Index, $"You speak with {target.Vob.Name}.");
+				result.Sort(CompareChoices);
+				return result;
 			}
+		}
+
+		return result;
+	}
+
+	internal List<DialogChoice> TakeStoredChoices(InfoInstance info)
+	{
+		if (info == null || !_storedChoices.TryGetValue(info.Index, out var stored) || stored.Count == 0)
+		{
+			return new List<DialogChoice>();
+		}
+
+		var result = new List<DialogChoice>(stored);
+		result.Sort(CompareChoices);
+		return result;
+	}
+
+	internal bool ExecuteInfo(NpcBinding npc, DialogChoice choice)
+	{
+		_endRequested = false;
+		var info = choice.Info;
+		if (info == null || choice.Function <= 0)
+		{
+			Log.Warning($"Dialog choice '{choice.Text}' has no information function.");
+			return false;
+		}
+
+		if (info.Information == choice.Function)
+		{
+			MarkKnown(Hero, info.Index);
+		}
+		else
+		{
+			RemoveStoredChoice(info.Index, choice.Function);
+		}
+
+		try
+		{
+			Vm.GlobalSelf = npc.Instance;
+			Vm.GlobalOther = Hero;
+			Vm.Call(choice.Function);
 		}
 		catch (Exception ex)
 		{
-			return $"interaction failed: {ex.Message}";
+			Log.Warning($"Dialog function '{choice.Function}' failed: {ex.Message}");
 		}
 
-		return string.IsNullOrEmpty(LastLogEntry)
-			? $"talked to '{target.Vob.Name}'; no journal side effect"
-			: $"talked to '{target.Vob.Name}'; journal '{LastLogEntry}'";
+		return _endRequested;
+	}
+
+	private void OnAiOutput(NpcInstance self, NpcInstance target, string unit)
+	{
+		var text = ResolveDialogText(unit);
+		var isPlayer = self != null && Hero != null && self.Index == Hero.Index;
+
+		string speaker;
+		if (isPlayer)
+		{
+			speaker = "Hero";
+		}
+		else if (self != null && _npcs.TryGetValue(self.Index, out var binding))
+		{
+			speaker = binding.Vob.Name;
+		}
+		else
+		{
+			speaker = self == null ? "?" : $"NPC {self.Index}";
+		}
+
+		if (_session == null)
+		{
+			// Ambient and AI output outside a conversation has no menu to display it.
+			Log.Info($"Daedalus output {speaker}: {(string.IsNullOrEmpty(text) ? $"<{unit}>" : text)}");
+			return;
+		}
+
+		_session.AddLine(new DialogLine
+		{
+			Speaker = speaker,
+			Text = text,
+			Unit = unit,
+			IsPlayer = isPlayer
+		});
+	}
+
+	private string ResolveDialogText(string unit)
+	{
+		if (_dialogText != null && !string.IsNullOrEmpty(unit) && _dialogText.TryGetValue(unit, out var text))
+		{
+			return text ?? string.Empty;
+		}
+
+		return string.Empty;
+	}
+
+	private void AddStoredChoice(int infoId, string text, int function)
+	{
+		if (_infosBySymbol == null || !_infosBySymbol.TryGetValue(infoId, out var info))
+		{
+			return;
+		}
+
+		if (!_storedChoices.TryGetValue(infoId, out var list))
+		{
+			list = new List<DialogChoice>();
+			_storedChoices[infoId] = list;
+		}
+
+		list.Add(new DialogChoice
+		{
+			Text = text ?? string.Empty,
+			Function = function,
+			Sort = list.Count,
+			Info = info
+		});
+	}
+
+	private void ClearStoredChoices(int infoId)
+	{
+		if (_storedChoices.TryGetValue(infoId, out var list))
+		{
+			list.Clear();
+		}
+	}
+
+	private void RemoveStoredChoice(int infoId, int function)
+	{
+		if (!_storedChoices.TryGetValue(infoId, out var list))
+		{
+			return;
+		}
+
+		for (var i = 0; i < list.Count; ++i)
+		{
+			if (list[i].Function == function)
+			{
+				list.RemoveAt(i);
+				return;
+			}
+		}
+	}
+
+	private bool CheckCondition(NpcBinding npc, InfoInstance info)
+	{
+		if (info.Condition == 0)
+		{
+			return true;
+		}
+
+		var symbol = Vm.GetSymbolByIndex(info.Condition);
+		if (symbol == null)
+		{
+			return false;
+		}
+
+		try
+		{
+			Vm.GlobalSelf = npc.Instance;
+			Vm.GlobalOther = Hero;
+			return Vm.Call<int>(symbol.Index) != 0;
+		}
+		catch (Exception ex)
+		{
+			if (_conditionFailures.Add(info.Index))
+			{
+				Log.Warning($"Dialog condition '{info.Description}' failed: {ex.Message}");
+			}
+
+			return false;
+		}
+	}
+
+	private int CheckInfo(NpcInstance npcRef, int important)
+	{
+		if (npcRef == null || !_npcs.TryGetValue(npcRef.Index, out var npc) ||
+			_infosByNpc == null || !_infosByNpc.TryGetValue(npc.SymbolIndex, out var infos))
+		{
+			return 0;
+		}
+
+		foreach (var info in infos)
+		{
+			if (info.Important != important)
+			{
+				continue;
+			}
+
+			if (Knows(Hero, info.Index) && info.Permanent == 0)
+			{
+				continue;
+			}
+
+			if (CheckCondition(npc, info))
+			{
+				return 1;
+			}
+		}
+
+		return 0;
+	}
+
+	private void MarkKnown(NpcInstance npc, int info)
+	{
+		if (npc != null)
+		{
+			_knownInfos.Add((npc.Index, info));
+		}
+	}
+
+	private bool Knows(NpcInstance npc, int info)
+	{
+		return npc != null && _knownInfos.Contains((npc.Index, info));
+	}
+
+	private void RequestDialog(NpcInstance npc)
+	{
+		if (_session != null || npc == null)
+		{
+			return;
+		}
+
+		if (_npcs.TryGetValue(npc.Index, out var binding))
+		{
+			RequestedDialogNpc = binding.Vob;
+		}
+	}
+
+	private static int CompareChoices(DialogChoice left, DialogChoice right)
+	{
+		var bySort = left.Sort.CompareTo(right.Sort);
+		return bySort != 0 ? bySort : left.Function.CompareTo(right.Function);
+	}
+
+	private void LoadDialogInfos()
+	{
+		var started = DateTime.UtcNow;
+		_infosByNpc = new Dictionary<int, List<InfoInstance>>();
+		_infosBySymbol = new Dictionary<int, InfoInstance>();
+
+		foreach (var symbol in Vm.GetInstanceSymbols("C_INFO"))
+		{
+			try
+			{
+				var info = Vm.InitInstance<InfoInstance>(symbol);
+				if (info == null)
+				{
+					continue;
+				}
+
+				_infosBySymbol[info.Index] = info;
+				if (!_infosByNpc.TryGetValue(info.Npc, out var list))
+				{
+					list = new List<InfoInstance>();
+					_infosByNpc[info.Npc] = list;
+				}
+
+				list.Add(info);
+			}
+			catch (Exception ex)
+			{
+				Log.Warning($"Unable to initialize dialog info '{symbol.Name}': {ex.Message}");
+			}
+		}
+
+		var elapsed = DateTime.UtcNow - started;
+		Log.Info(
+			$"Daedalus dialogs: {_infosBySymbol.Count:N0} C_INFO instances for " +
+			$"{_infosByNpc.Count:N0} NPC symbols in {elapsed.TotalSeconds:0.###}s.");
 	}
 
 	private void LoadCutscenes(string path)
@@ -262,6 +714,15 @@ public sealed class ScriptRuntime
 		try
 		{
 			Cutscenes = new CutsceneLibrary(path);
+			_dialogText = new Dictionary<string, string>(Cutscenes.Blocks.Count, StringComparer.OrdinalIgnoreCase);
+			foreach (var block in Cutscenes.Blocks)
+			{
+				if (!string.IsNullOrEmpty(block.Name))
+				{
+					_dialogText[block.Name] = block.Message?.Text ?? string.Empty;
+				}
+			}
+
 			Log.Info($"Cutscene library loaded: {Cutscenes.Blocks.Count:N0} blocks.");
 		}
 		catch (Exception ex)

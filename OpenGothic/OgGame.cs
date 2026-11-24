@@ -37,6 +37,8 @@ public class OgGame : Game
 	private readonly ItemPickupSystem _itemPickup = new ItemPickupSystem();
 	private readonly Inventory _inventory = new Inventory();
 	private ScriptRuntime _scripts;
+	private DialogSession _dialog;
+	private int _dialogChoiceIndex;
 	private float _mouseYaw;
 	private float _mousePitch;
 	private bool _thirdPerson;
@@ -309,13 +311,147 @@ public class OgGame : Game
 
 			if (CommandLine.Instance.Talk && _scripts.Vm != null)
 			{
-				Log.Info($"Script NPC interaction: {_scripts.TalkToFirstNpc()}.");
+				Log.Info($"Script dialog: {_scripts.RunDialogToCompletion(CommandLine.Instance.DialogNpc)}.");
+			}
+			else if (CommandLine.Instance.TalkUi)
+			{
+				OpenConfiguredDialog();
 			}
 		}
 		catch (Exception ex)
 		{
 			Log.Error($"Unable to boot Daedalus scripts: {ex.Message}");
 		}
+	}
+
+	/// <summary>
+	/// Opens the dialog panel for the configured script NPC (or the first inserted one).
+	/// Until script NPCs are world-bound (F2/F3) this is the way to exercise the conversation
+	/// UI: F4, or <c>-talkui</c>.
+	/// </summary>
+	private void OpenConfiguredDialog()
+	{
+		if (_scripts == null || !_scripts.HasScriptNpcs)
+		{
+			Log.Warning("Dialog: no scripted NPC is available.");
+			return;
+		}
+
+		var session = _scripts.StartDialog(CommandLine.Instance.DialogNpc);
+		if (session == null)
+		{
+			Log.Warning($"Dialog: no scripted NPC matches '{CommandLine.Instance.DialogNpc ?? "(first)"}'.");
+			return;
+		}
+
+		OpenDialog(session);
+	}
+
+	private void OpenDialog(DialogSession session)
+	{
+		if (_dialog != null || session == null)
+		{
+			return;
+		}
+
+		_dialog = session;
+		_dialogChoiceIndex = 0;
+		_hud.SetDialogMode(true);
+		_hud.Dialog.SelectedIndex = 0;
+		_hud.Dialog.Show(session, SelectDialogChoice, CloseDialog);
+		Log.Info($"Dialog opened with '{session.NpcName}': {session.Choices.Count} choice(s).");
+	}
+
+	private void SelectDialogChoice(int index)
+	{
+		if (_dialog == null)
+		{
+			return;
+		}
+
+		_dialog.Select(index);
+
+		// DialogMenu resets dlgSel after a choice, so the next menu starts at the top.
+		_dialogChoiceIndex = 0;
+		_hud.Dialog.SelectedIndex = 0;
+		_hud.Dialog.Refresh();
+
+		if (_dialog.Finished)
+		{
+			Log.Info($"Dialog finished after {_dialog.Lines.Count} line(s).");
+		}
+	}
+
+	private void CloseDialog()
+	{
+		if (_dialog == null)
+		{
+			return;
+		}
+
+		_scripts.CloseDialog();
+		_dialog = null;
+		_dialogChoiceIndex = 0;
+		_hud.Dialog.Hide();
+		_hud.SetDialogMode(false);
+	}
+
+	/// <summary>
+	/// Dialog keys mirror the reference's menu: digits pick an entry, Up/W and Down/S move
+	/// the selection, Enter confirms, Escape closes the conversation.
+	/// </summary>
+	private void UpdateDialogInput(KeyboardState keyboard)
+	{
+		if (_dialog == null)
+		{
+			return;
+		}
+
+		var up = keyboard.IsKeyDown(Keys.Up) || keyboard.IsKeyDown(Keys.W);
+		var down = keyboard.IsKeyDown(Keys.Down) || keyboard.IsKeyDown(Keys.S);
+		var previousUp = _previousKeyboard.IsKeyDown(Keys.Up) || _previousKeyboard.IsKeyDown(Keys.W);
+		var previousDown = _previousKeyboard.IsKeyDown(Keys.Down) || _previousKeyboard.IsKeyDown(Keys.S);
+
+		if (up && !previousUp)
+		{
+			MoveDialogSelection(-1);
+			return;
+		}
+
+		if (down && !previousDown)
+		{
+			MoveDialogSelection(1);
+			return;
+		}
+
+		if (keyboard.IsKeyDown(Keys.Enter) && _previousKeyboard.IsKeyUp(Keys.Enter))
+		{
+			SelectDialogChoice(_dialogChoiceIndex);
+			return;
+		}
+
+		for (var i = 0; i < 9; ++i)
+		{
+			var key = Keys.D1 + i;
+			if (keyboard.IsKeyDown(key) && _previousKeyboard.IsKeyUp(key))
+			{
+				SelectDialogChoice(i);
+				return;
+			}
+		}
+	}
+
+	private void MoveDialogSelection(int delta)
+	{
+		var count = _dialog.Choices.Count;
+		if (count == 0)
+		{
+			return;
+		}
+
+		_dialogChoiceIndex = ((_dialogChoiceIndex + delta) % count + count) % count;
+		_hud.Dialog.SelectedIndex = _dialogChoiceIndex;
+		_hud.Dialog.Refresh();
 	}
 
 	private void LoadWorld()
@@ -523,10 +659,24 @@ public class OgGame : Game
 	{
 		var keyboard = Keyboard.GetState();
 
-		if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed ||
-			keyboard.IsKeyDown(Keys.Escape))
+		// Edge-detected so closing a dialog does not also exit the game while Escape is held.
+		var escapePressed = keyboard.IsKeyDown(Keys.Escape) && _previousKeyboard.IsKeyUp(Keys.Escape);
+
+		if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed)
 		{
 			Exit();
+		}
+
+		if (escapePressed)
+		{
+			if (_dialog != null)
+			{
+				CloseDialog();
+			}
+			else
+			{
+				Exit();
+			}
 		}
 
 		// Edge-detect so holding the key toggles once rather than every frame.
@@ -545,7 +695,19 @@ public class OgGame : Game
 			DebugDraw.Bounds = !DebugDraw.Bounds;
 		}
 
-		if (_controller != null)
+		if (keyboard.IsKeyDown(Keys.F4) && _previousKeyboard.IsKeyUp(Keys.F4) && _dialog == null)
+		{
+			OpenConfiguredDialog();
+		}
+
+		if (_dialog != null)
+		{
+			UpdateDialogInput(keyboard);
+
+			// The reference holds the player in place while the dialog menu is open.
+			_focus.Target.Clear();
+		}
+		else if (_controller != null)
 		{
 			UpdatePlayer(gameTime, keyboard);
 			UpdateFocus(gameTime, keyboard);
@@ -553,6 +715,20 @@ public class OgGame : Game
 		else
 		{
 			_focus.Target.Clear();
+		}
+
+		// A script may start a conversation with Ai_ProcessInfos, e.g. from a perception.
+		if (_dialog == null && _scripts != null)
+		{
+			var requested = _scripts.ConsumeDialogRequest();
+			if (requested != null)
+			{
+				var session = _scripts.StartDialog(requested);
+				if (session != null)
+				{
+					OpenDialog(session);
+				}
+			}
 		}
 
 		_previousKeyboard = keyboard;

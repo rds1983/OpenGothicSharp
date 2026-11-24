@@ -41,24 +41,24 @@ and comment-only lines; inline comments count as code.
 
 | Area | C# files | Size | Physical lines | Code | Comments | Blank |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| All source | 67 | 360.9 KiB | 12,639 | 9,210 | 1,371 | 2,058 |
-| `OpenGothic/` | 56 | 316.0 KiB | 10,739 | 7,695 | 1,361 | 1,683 |
-| `OpenGothic.Tests/` | 11 | 44.9 KiB | 1,900 | 1,515 | 10 | 375 |
+| All source | 70 | 385.7 KiB | 13,681 | 10,031 | 1,442 | 2,208 |
+| `OpenGothic/` | 59 | 340.2 KiB | 11,753 | 8,494 | 1,432 | 1,827 |
+| `OpenGothic.Tests/` | 11 | 45.5 KiB | 1,928 | 1,537 | 10 | 381 |
 
 Main project by folder:
 
 | Folder | Files | Physical lines | Code | Size |
 | --- | ---: | ---: | ---: | ---: |
-| `(root)` | 17 | 4,920 | 3,554 | 147.6 KiB |
+| `(root)` | 17 | 5,124 | 3,711 | 152.6 KiB |
 | `Graphics` | 15 | 2,030 | 1,307 | 60.6 KiB |
 | `Physics` | 4 | 1,581 | 1,161 | 45.7 KiB |
-| `Scripts` | 1 | 323 | 264 | 8.3 KiB |
+| `Scripts` | 3 | 984 | 788 | 23.8 KiB |
 | `World` | 8 | 993 | 726 | 28.8 KiB |
 | `Utility` | 3 | 410 | 287 | 13.1 KiB |
-| `UI` | 8 | 482 | 396 | 12.0 KiB |
+| `UI` | 9 | 631 | 514 | 15.7 KiB |
 
-The totals include four Myra-generated `*.Generated.cs` UI files: 286 physical lines,
-239 code lines, 7.7 KiB.
+The totals include four Myra-generated `*.Generated.cs` UI files: 293 physical lines,
+245 code lines, 8.0 KiB.
 
 ## Docs
 

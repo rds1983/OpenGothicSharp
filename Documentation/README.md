@@ -62,7 +62,9 @@ default chosen elsewhere.
 | `-walkmode` | Start with walk mode on, the diagnostic equivalent of the in-game Shift toggle. |
 | `-interact[:<count>]` | Resolve the focus target `count` times (default 1), two seconds apart, as if E had been pressed. |
 | `-noscripts` | Skip loading and booting the Daedalus scripts. |
-| `-talk` | After boot, run one diagnostic NPC interaction: `B_ASSESSTALK` for the first script NPC, then `B_LOGENTRY`. |
+| `-talk` | Run a diagnostic conversation with the first script NPC to completion, logging every line and choice. |
+| `-talkui` | Open the interactive dialog panel at boot with the first script NPC. |
+| `-npc:<instance>` | Script instance to use for `-talk`/`-talkui` (e.g. `VLK_425_REGIS`); defaults to the first inserted NPC. |
 | `-player:<x,y,z>` | Start the walking capsule at a world position instead of the placeholder plaza; the player drops to the ground below the point. |
 | `-yaw:<degrees>` | Set the walking player's facing yaw. Needed to aim a diagnostic walk reliably, because `-lookat:` measures from the camera's own position. Mouse look is disabled while `-yaw` or `-walktest` is active so the direction stays fixed. |
 | `-walktest:<seconds>` | Hold forward for a diagnostic run and log the final feet position; a negative value holds backward. Useful for reproducing a stuck spot. |
@@ -703,7 +705,8 @@ AI, movement and collision belong with the script-created NPC in F2/G2. Details 
 install) and `Ou.dat` (20,826 cutscene blocks), then calls `startup_global`,
 `startup_<world>`, `init_global` and `init_<world>`. Unimplemented engine externals go through
 one default handler that logs each name once and returns the VM default, so startup completes
-without unimplemented-call crashes. The VM and cutscene library stay alive for G2/G3.
+without unimplemented-call crashes. The VM and cutscene library stay alive for the dialog and
+quest layers.
 
 The G1 external stubs for visual/AI/inventory routines are still in place; G2 adds the
 script-object layer described below. `-noscripts` skips the load for diagnostics. Details in
@@ -713,10 +716,15 @@ G2 binds the script object layer: `WLD_INSERTNPC` and `WLD_INSERTITEM` initializ
 objects (406 NPCs and 55 items in the tested NotR startup), `HLP_GETNPC` returns them, and
 `PC_HERO` is bound as the script hero. Each binding owns a detached `NpcVob` for the runtime
 name/guild/level/HP, so those values are not duplicated in the binding. `LOG_ADDENTRY` stores
-journal lines. `-talk` calls the real `B_ASSESSTALK` routine for the first inserted NPC and
-then `B_LOGENTRY`; the resulting journal line proves the Daedalus side effect reached the
-engine. These are data-only script objects — no world nodes or bodies yet; visible script NPCs
-and the AI/visual setup remain.
+journal lines. These are data-only script objects — no world nodes or bodies yet; visible
+script NPCs and the AI/visual setup remain.
+
+G3 adds the dialog engine. All 4,139 `C_INFO` instances are grouped by NPC, conditions run
+with the NPC as `SELF` and the hero as `OTHER`, and `AI_Output` units resolve through
+`Ou.dat`. Executing an information function collects `Info_AddChoice` entries and
+`Ai_StopProcessInfos` ends the conversation. `-talk` runs a complete diagnostic dialog,
+`-talkui`/F4 opens the Myra choice panel, and `-npc:` selects the partner. The dialog camera
+waits for F1.5's world-bound NPCs; voice playback waits for the audio layer (J1).
 
 ### Sky, fog and lighting
 

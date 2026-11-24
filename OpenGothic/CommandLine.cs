@@ -68,10 +68,22 @@ public class CommandLine
 	public bool NoScripts { get; private set; }
 
 	/// <summary>
-	/// Run one diagnostic Daedalus NPC interaction after boot: call B_ASSESSTALK for the first
-	/// script-inserted NPC and let the script add a journal entry.
+	/// Run a complete diagnostic conversation with the first script NPC after boot, choosing
+	/// the first available entry until the script ends the dialog. Every line is logged.
 	/// </summary>
 	public bool Talk { get; private set; }
+
+	/// <summary>
+	/// Open the interactive dialog panel with the first script NPC after boot, so the choice
+	/// UI can be exercised without a world-bound NPC.
+	/// </summary>
+	public bool TalkUi { get; private set; }
+
+	/// <summary>
+	/// Script instance name (e.g. <c>VLK_425_REGIS</c>) to use for <see cref="Talk"/> or
+	/// <see cref="TalkUi"/>, or null for the first inserted NPC.
+	/// </summary>
+	public string DialogNpc { get; private set; }
 
 	/// <summary>
 	/// Whether the game should start with the playable capsule. Explicit <see cref="Walk"/> or
@@ -311,6 +323,9 @@ public class CommandLine
 				case "-talk":
 					result.Talk = true;
 					break;
+				case "-talkui":
+					result.TalkUi = true;
+					break;
 
 				default:
 					if (arg.StartsWith("-game:", StringComparison.OrdinalIgnoreCase))
@@ -545,6 +560,19 @@ public class CommandLine
 							result._invalid = true;
 						}
 					}
+					else if (arg.StartsWith("-npc:", StringComparison.OrdinalIgnoreCase))
+					{
+						var value = arg.Substring("-npc:".Length);
+						if (string.IsNullOrEmpty(value))
+						{
+							Log.Error("Option '-npc:' requires a script instance name.");
+							result._invalid = true;
+						}
+						else
+						{
+							result.DialogNpc = value;
+						}
+					}
 					else if (arg.StartsWith("-walktest:", StringComparison.OrdinalIgnoreCase))
 					{
 						var value = arg.Substring("-walktest:".Length);
@@ -662,7 +690,7 @@ public class CommandLine
 
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
-		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] [-interact[:<count>]] [-noscripts] [-talk] " +
+		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] [-interact[:<count>]] [-noscripts] [-talk] [-talkui] [-npc:<instance>] " +
 		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
 		"[-player:<x,y,z>] [-yaw:<degrees>] [-walktest:<seconds>] [-vobstats] [-vobfind:<x,y,z>] [-vobradius:<n>] [-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 

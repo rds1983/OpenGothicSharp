@@ -48,6 +48,8 @@ public class CommandLineTests
 		Assert.Equal(0, result.Interact);
 		Assert.False(result.NoScripts);
 		Assert.False(result.Talk);
+		Assert.False(result.TalkUi);
+		Assert.Null(result.DialogNpc);
 	}
 
 	[Fact]
@@ -88,6 +90,32 @@ public class CommandLineTests
 		var result = CommandLine.Parse(new[] { "-talk" });
 
 		Assert.True(result.Talk);
+	}
+
+	[Fact]
+	public void Parse_ReadsTalkUi()
+	{
+		var result = CommandLine.Parse(new[] { "-talkui" });
+
+		Assert.True(result.TalkUi);
+		Assert.False(result.Talk);
+	}
+
+	[Fact]
+	public void Parse_ReadsDialogNpc()
+	{
+		var result = CommandLine.Parse(new[] { "-talk", "-npc:VLK_425_REGIS" });
+
+		Assert.Equal("VLK_425_REGIS", result.DialogNpc);
+	}
+
+	[Fact]
+	public void Parse_DialogNpcWithoutName_IsRejected()
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-npc:" });
+
+		Assert.Null(result.DialogNpc);
+		Assert.False(result.Validate());
 	}
 
 	[Fact]

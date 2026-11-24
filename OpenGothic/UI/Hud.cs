@@ -10,6 +10,7 @@ namespace OpenGothic.UI
 		private readonly DebugOverlay _debugOverlay;
 		private readonly Controls _controls;
 		private readonly InventoryPanel _inventory;
+		private readonly DialogPanel _dialog;
 
 		public Hud()
 		{
@@ -44,9 +45,12 @@ namespace OpenGothic.UI
 				Top = -ScreenEdge
 			};
 
+			_dialog = new DialogPanel();
+
 			Widgets.Add(_debugOverlay);
 			Widgets.Add(_controls);
 			Widgets.Add(_inventory);
+			Widgets.Add(_dialog);
 		}
 
 		/// <summary>The toggleable stats block. The controls block stays visible.</summary>
@@ -54,6 +58,16 @@ namespace OpenGothic.UI
 
 		/// <summary>The minimal pickup list in the bottom-left corner.</summary>
 		public InventoryPanel Inventory => _inventory;
+
+		/// <summary>The dialog subtitle and choice panel.</summary>
+		public DialogPanel Dialog => _dialog;
+
+		/// <summary>Hides the gameplay panels that would sit under the dialog box.</summary>
+		public void SetDialogMode(bool active)
+		{
+			_controls.Visible = !active;
+			_inventory.Visible = !active;
+		}
 
 		public void ToggleDebugOverlay()
 		{

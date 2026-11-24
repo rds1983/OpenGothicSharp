@@ -77,6 +77,11 @@ namespace OpenGothic.UI
 			_labelBounds.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
 			_labelBounds.Id = "_labelBounds";
 
+			_labelDialog = new Label();
+			_labelDialog.Text = "F4 - Talk to script NPC";
+			_labelDialog.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
+			_labelDialog.Id = "_labelDialog";
+
 			
 			Spacing = 2;
 			Padding = new Thickness(10, 6);
@@ -92,6 +97,7 @@ namespace OpenGothic.UI
 			Widgets.Add(_labelToggleOverlay);
 			Widgets.Add(_labelWireframe);
 			Widgets.Add(_labelBounds);
+			Widgets.Add(_labelDialog);
 		}
 
 		
@@ -105,5 +111,6 @@ namespace OpenGothic.UI
 		private Label _labelToggleOverlay;
 		private Label _labelWireframe;
 		private Label _labelBounds;
+		private Label _labelDialog;
 	}
 }
