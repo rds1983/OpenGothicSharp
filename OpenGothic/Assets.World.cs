@@ -318,7 +318,7 @@ namespace OpenGothic
 				result.Vobs.Add(vobNode);
 
 				var asModel = vob.Visual as VisualModel;
-				if (asModel != null && vob.ShowVisual && DebugSettings.ModelsEnabled)
+				if (asModel != null && (vob.ShowVisual || vob is IItem) && DebugSettings.ModelsEnabled)
 				{
 					// A vob's model name comes from the original authoring format, so only
 					// the stem is meaningful; GetModel resolves the actual file. A model that
@@ -385,56 +385,29 @@ namespace OpenGothic
 				}
 
 				var asMesh = vob.Visual as VisualMultiResolutionMesh;
-				if (asMesh != null && vob.ShowVisual)
+				if (asMesh != null && (vob.ShowVisual || vob is IItem))
 				{
 					// Instanced transforms stay in world space, so a multi-mesh does not take
 					// part in the node hierarchy; no mover uses one as a child today.
 					var n = Path.ChangeExtension(asMesh.Name, "MRM");
-					var mesh = GetMultiMesh(device, n);
-
-					var bb = mesh.BoundingBox.Transform(ref world);
-					vobNode.Bounds = bb;
-
-					var cell = result.FindCellByBox(bb);
-					if (cell != null)
+					AddMultiMeshVisual(result, vobNode, vob, world, GetMultiMesh(device, n), n);
+				}
+				else if (asModel == null && vob is IItem item && DebugSettings.ModelsEnabled)
+				{
+					// World items commonly carry only their script instance name, not a visual,
+					// and their `show_visual` flag is false in the ZEN: items are drawn from the
+					// item definition instead. The shipped meshes are named after the instance
+					// (ITFO_HONEY.MRM), so use that as the fallback until scripts supply visuals.
+					var itemMesh = item.Instance + ".MRM";
+					if (HasRecord(itemMesh))
 					{
-						cell.ObjectBounds.Add(bb);
-
-						Dictionary<string, List<InstancedMeshNode>> groupedMultiMeshes;
-						if (cell.Tag == null)
+						try
 						{
-							groupedMultiMeshes = new Dictionary<string, List<InstancedMeshNode>>();
-							cell.Tag = groupedMultiMeshes;
+							AddMultiMeshVisual(result, vobNode, vob, world, GetMultiMesh(device, itemMesh), itemMesh);
 						}
-						else
+						catch (Exception ex)
 						{
-							groupedMultiMeshes = (Dictionary<string, List<InstancedMeshNode>>)cell.Tag;
-						}
-
-						List<InstancedMeshNode> multiMeshes;
-						if (groupedMultiMeshes.TryGetValue(n, out multiMeshes))
-						{
-							// Add instance
-							foreach (var mm in multiMeshes)
-							{
-								mm.AddInstance(world, vob.CdDynamic, vobNode);
-							}
-						}
-						else
-						{
-							multiMeshes = new List<InstancedMeshNode>();
-
-							foreach (var part in mesh.MeshParts)
-							{
-								var mm = new InstancedMeshNode
-								{
-									Mesh = part
-								};
-
-								multiMeshes.Add(mm);
-							}
-
-							groupedMultiMeshes[n] = multiMeshes;
+							Log.Warning($"Unable to load item mesh '{itemMesh}': {ex.Message}");
 						}
 					}
 				}
@@ -556,6 +529,55 @@ namespace OpenGothic
 		/// chunk seams free of duplicate colliders; the streaming radius is wide enough that a
 		/// loaded neighbourhood always contains the player's adjacent chunks.
 		/// </summary>
+		/// <summary>
+		/// Adds one instance of a multi-resolution mesh to the cell's batch, or creates the
+		/// per-part instance nodes when this is the first user of the mesh in that cell.
+		/// </summary>
+		private static void AddMultiMeshVisual(WorldGrid result, VobNode vobNode, IVirtualObject vob,
+			Matrix world, DrMesh mesh, string name)
+		{
+			var bb = mesh.BoundingBox.Transform(ref world);
+			vobNode.Bounds = bb;
+
+			var cell = result.FindCellByBox(bb);
+			if (cell == null)
+			{
+				return;
+			}
+
+			cell.ObjectBounds.Add(bb);
+
+			Dictionary<string, List<InstancedMeshNode>> groupedMultiMeshes;
+			if (cell.Tag == null)
+			{
+				groupedMultiMeshes = new Dictionary<string, List<InstancedMeshNode>>();
+				cell.Tag = groupedMultiMeshes;
+			}
+			else
+			{
+				groupedMultiMeshes = (Dictionary<string, List<InstancedMeshNode>>)cell.Tag;
+			}
+
+			if (groupedMultiMeshes.TryGetValue(name, out var multiMeshes))
+			{
+				foreach (var mm in multiMeshes)
+				{
+					mm.AddInstance(world, vob.CdDynamic, vobNode);
+				}
+
+				return;
+			}
+
+			multiMeshes = new List<InstancedMeshNode>();
+			foreach (var part in mesh.MeshParts)
+			{
+				var mm = new InstancedMeshNode { Mesh = part };
+				multiMeshes.Add(mm);
+			}
+
+			groupedMultiMeshes[name] = multiMeshes;
+		}
+
 		private static void AddToChunks(WorldGrid result, Vector3 origin, float size, BoundingBox meshBounds,
 			Vector3 a, Vector3 b, Vector3 c, float friction, bool sensor)
 		{

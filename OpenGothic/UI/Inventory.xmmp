@@ -1,0 +1,7 @@
+<Project>
+  <Project.ExportOptions Namespace="OpenGothic.UI" Class="InventoryPanel" FieldsVisibility="Private" />
+  <VerticalStackPanel Id="_panelRoot" Spacing="2" Background="#000000A6" Padding="10,6">
+    <Label Id="_labelHeader" Text="Inventory" TextColor="#FFCC66" />
+    <Label Id="_labelItems" Text="(empty)" TextColor="#E8E8E8" />
+  </VerticalStackPanel>
+</Project>

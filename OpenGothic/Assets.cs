@@ -139,6 +139,12 @@ public partial class Assets
 		return result;
 	}
 
+	/// <summary>Whether the installed data contains a record with this exact name.</summary>
+	public bool HasRecord(string name)
+	{
+		return !string.IsNullOrEmpty(name) && _allRecords.ContainsKey(name.ToUpperInvariant());
+	}
+
 	private RecordInfo GetLastRecord(string name)
 	{
 		var records = _allRecords[name.ToUpper()];

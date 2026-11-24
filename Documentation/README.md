@@ -671,6 +671,19 @@ not follow the open state. Script targets, state-change functions and sounds are
 pending hooks until G2/J1. Beds and generic `Interactive` mobs are not implemented. See
 [Specifications/interactions.md](Specifications/interactions.md).
 
+### Items and inventory
+
+World item vobs usually carry no visual; they name an item instance such as `ITFO_SAUSAGE`.
+The loader renders the mesh named after that instance (`ITFO_SAUSAGE.MRM`) and joins the
+existing per-cell batch, ignoring the vob's false `show_visual` flag. Focusing an item and
+pressing **E** adds it to the stack-based `Inventory`, marks the vob taken so focus skips it,
+and removes its geometry — a direct node or one batch instance. The bottom-left
+`InventoryPanel` lists the stacks and refreshes on pickup.
+
+`Inventory` also supports removing stacks, but drop/use/equipment, item definitions and the
+full inventory UI belong to I3. Items without an instance mesh remain invisible. Details in
+[Specifications/items.md](Specifications/items.md).
+
 ### Sky, fog and lighting
 
 `Sky` draws a gradient dome (8 rings × 16 segments) built from a 1×64 colour ramp between
@@ -725,11 +738,14 @@ outside 0..1 — smear into long streaks.
 
 ### HUD
 
-The HUD is three layouts in `OpenGothic/UI/`:
+The HUD is four layouts in `OpenGothic/UI/`:
 
 - **`Hud`** — the `Desktop` root. A stretched `Panel`, so each block anchors to its own
-  corner: `DebugOverlay` top-left, `Controls` bottom-right, both inset 8px.
+  corner: `DebugOverlay` top-left, `Inventory` bottom-left, `Controls` bottom-right, all
+  inset 8px.
 - **`Controls`** — always visible, bottom-right. Lists the current key bindings.
+- **`InventoryPanel`** — always visible, bottom-left. Lists the picked-up item stacks and is
+  refreshed only when the inventory changes.
 - **`DebugOverlay`** — toggleable, top-left. FPS, camera position, draw calls, triangles,
   active debug views, and the vob under the crosshair.
 

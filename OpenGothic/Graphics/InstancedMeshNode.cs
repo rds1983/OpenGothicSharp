@@ -19,6 +19,25 @@ public class InstancedMeshNode: SceneNode
 		InstancesVobs.Add(vob);
 	}
 
+	/// <summary>Removes one vob's instance from this batch; the remaining instances stay batched.</summary>
+	public bool RemoveInstance(VobNode vob)
+	{
+		for (var i = 0; i < InstancesVobs.Count; ++i)
+		{
+			if (!ReferenceEquals(InstancesVobs[i], vob))
+			{
+				continue;
+			}
+
+			InstancesTransforms.RemoveAt(i);
+			InstancesCollision.RemoveAt(i);
+			InstancesVobs.RemoveAt(i);
+			return true;
+		}
+
+		return false;
+	}
+
 	public override bool RayTest(Ray ray, out float distance)
 	{
 		distance = float.MaxValue;

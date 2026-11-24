@@ -8,6 +8,7 @@ using OpenGothic.Graphics;
 using OpenGothic.Physics;
 using OpenGothic.Focus;
 using OpenGothic.Interactions;
+using OpenGothic.Items;
 using OpenGothic.Utility;
 using OpenGothic.UI;
 using OpenGothic.Vobs;
@@ -32,6 +33,8 @@ public class OgGame : Game
 	private float _interactDelay;
 	private readonly FocusSystem _focus = new FocusSystem();
 	private readonly InteractionSystem _interactions = new InteractionSystem();
+	private readonly ItemPickupSystem _itemPickup = new ItemPickupSystem();
+	private readonly Inventory _inventory = new Inventory();
 	private float _mouseYaw;
 	private float _mousePitch;
 	private bool _thirdPerson;
@@ -73,6 +76,7 @@ public class OgGame : Game
 		_desktop = new Desktop();
 		_hud = new Hud();
 		_desktop.Root = _hud;
+		_hud.Inventory.Refresh(_inventory);
 
 		Camera.FieldOfView = OG.Settings?.CameraFov ?? Camera.FieldOfView;
 		Camera.SetViewport(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
@@ -695,7 +699,17 @@ public class OgGame : Game
 
 		var position = target.Vob.Position;
 		var description = target.Describe();
-		var outcome = _interactions.Interact(target.Vob);
+		string outcome;
+		if (target.Vob is ItemVob item)
+		{
+			outcome = _itemPickup.PickUp(item, _world, _inventory);
+			_hud.Inventory.Refresh(_inventory);
+		}
+		else
+		{
+			outcome = _interactions.Interact(target.Vob);
+		}
+
 		Log.Info(
 			$"Interact: {description} at ({position.X:0.#}, {position.Y:0.#}, {position.Z:0.#}) => {outcome}.");
 	}

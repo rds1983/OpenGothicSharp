@@ -19,7 +19,21 @@ public sealed class NpcVob : VobNode
 public sealed class ItemVob : VobNode
 {
 	internal ItemVob(IVirtualObject source, VobNode parent, Matrix world, Matrix local, VobKind kind,
-		BoundingBox bounds) : base(source, parent, world, local, kind, bounds) { }
+		BoundingBox bounds) : base(source, parent, world, local, kind, bounds)
+	{
+		var item = source as IItem;
+		ItemInstance = !string.IsNullOrEmpty(item?.Instance) ? item.Instance : Tag;
+		Amount = Math.Max(1, item?.Amount ?? 1);
+	}
+
+	/// <summary>The item's script instance, e.g. <c>ItFo_Apple</c>.</summary>
+	public string ItemInstance { get; }
+
+	/// <summary>Stack size authored on the vob; at least one.</summary>
+	public int Amount { get; }
+
+	/// <summary>Set when the player has picked the item up; the vob stays queryable but is no longer focusable.</summary>
+	public bool IsTaken { get; internal set; }
 }
 
 /// <summary>

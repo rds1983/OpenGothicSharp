@@ -86,17 +86,20 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   plays `S_S0`/`T_S0_2_S1`/`S_S1`, rejects locks and item requirements, and raises the future
   audio/script hook. The focus overlay shows the live state and `-interact[:<count>]` replays
   the action.
+- World items render from their instance-named `.MRM`; E picks one up into the stack-based
+  `Inventory`, removes its geometry (including one batch instance), marks it taken, and adds it
+  to the bottom-left inventory panel. `Inventory.Remove` is the removal core.
 - Rendering lives in `OpenGothic/Graphics` (`Renderer`, `Sky`, `WorldRenderer`, `Camera`,
   `DebugDraw`, materials, scene/model/mesh visuals and vertex formats).
 - ZenKit is pinned to `1.3.0-cs.1`, matching the parser version the reference C++ client uses.
 - Models skip submeshes whose material has no texture; the shipped data uses those as hidden
   placeholder faces (`REPAIR_PLANK`'s `ZM_REP_HIDDEN` was a white triangle on screen).
 - No audio or scripting yet.
-- UI exists: Myra `Desktop` rooted at a `Hud` panel with two independently anchored blocks
-  — an always-visible `Controls` list (bottom-right) and a toggleable `DebugOverlay`
-  (top-left, F1) showing FPS, camera position, draw-call and triangle counts, the active
-  debug views and the focused vob. Layouts are `.xmmp` exported with `myra-export`; all UI
-  lives in `OpenGothic/UI/`.
+- UI exists: Myra `Desktop` rooted at a `Hud` panel with four independently anchored blocks
+  — an always-visible `Controls` list (bottom-right), an `InventoryPanel` (bottom-left), and a
+  toggleable `DebugOverlay` (top-left, F1) showing FPS, camera position, draw-call and triangle
+  counts, the active debug views and the focused vob. Layouts are `.xmmp` exported with
+  `myra-export`; all UI lives in `OpenGothic/UI/`.
 - Debug views: F2 toggles wireframe, F3 toggles bounding boxes; independent of F1 and off by
   default. Both can be started on from the command line with `-wireframe`/`-bounds`.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
@@ -104,9 +107,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   animated culling boxes, vob hierarchy, attach points, animation layers, composed models.
   **Milestone D (Physics and movement) complete** — D1–D3: static collision, kinematic
   character controller, player input, first/third-person cameras and streamed collision.
-  Current milestone: **E — Interaction and world objects**; E1 (typed vob tree), E1.5
-  (placeholder player avatar), E2 (focus & raycast) and E3 (interactions) are complete, next
-  task **E4**.
+  **Milestone E (Interaction and world objects) complete** — E1–E4: typed vob tree, placeholder
+  player avatar, focus/raycast, door/chest interactions and item pickup with inventory.
+  Current milestone: **F — NPCs and AI**, next task **F1**.
 
 ---
 
@@ -587,9 +590,30 @@ callbacks and sounds are later milestones; door/chest collision stays at the clo
 the physics source can follow the animation. Details in
 [Specifications/interactions.md](Documentation/Specifications/interactions.md).
 
-### E4. Items in world
+### E4. Items in world — DONE
 Render and pick up world items; inventory add/remove core.
 **Done when:** an item can be picked up and appears in a minimal inventory list.
+
+World item vobs normally have `show_visual = false` and no visual name; they carry an item
+instance such as `ITFO_SAUSAGE`. The loader renders the instance-named multi-resolution mesh
+(`ITFO_SAUSAGE.MRM`) and joins the normal per-cell batch. If there is no instance mesh, the
+item remains focusable/pickable but invisible.
+
+E adds the item to a stack-based `Inventory`, marks the vob taken so focus skips it, and
+removes its geometry — a direct node or one instance of a shared batch. The typed vob stays in
+the query tree for future save/load. A bottom-left `InventoryPanel` lists the stacks and is
+refreshed only when the inventory changes. `Inventory` also has the remove core.
+
+**Done when:** an item can be picked up and appears in a minimal inventory list. — Done; two
+pickups (`ITFO_SAUSAGE`, `ITFO_BACON`) disappear from the table and appear in the panel, and
+both focus and the batch removal leave the remaining item visible. Build/tests pass (190
+tests).
+
+Known limits: names are script instances until the Daedalus definitions supply localized
+names/icons; ZEN amounts are zero so each pickup adds one; 110 of 160 item instances have an
+instance `.MRM`, while weapons/armour/torches whose visual lives only in the item script stay
+invisible; drop/use/equip belong to I3. Details in
+[Specifications/items.md](Documentation/Specifications/items.md).
 
 ---
 

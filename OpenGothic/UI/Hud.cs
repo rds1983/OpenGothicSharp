@@ -9,6 +9,7 @@ namespace OpenGothic.UI
 
 		private readonly DebugOverlay _debugOverlay;
 		private readonly Controls _controls;
+		private readonly InventoryPanel _inventory;
 
 		public Hud()
 		{
@@ -35,12 +36,24 @@ namespace OpenGothic.UI
 				Top = -ScreenEdge
 			};
 
+			_inventory = new InventoryPanel
+			{
+				HorizontalAlignment = HorizontalAlignment.Left,
+				VerticalAlignment = VerticalAlignment.Bottom,
+				Left = ScreenEdge,
+				Top = -ScreenEdge
+			};
+
 			Widgets.Add(_debugOverlay);
 			Widgets.Add(_controls);
+			Widgets.Add(_inventory);
 		}
 
 		/// <summary>The toggleable stats block. The controls block stays visible.</summary>
 		public DebugOverlay DebugOverlay => _debugOverlay;
+
+		/// <summary>The minimal pickup list in the bottom-left corner.</summary>
+		public InventoryPanel Inventory => _inventory;
 
 		public void ToggleDebugOverlay()
 		{

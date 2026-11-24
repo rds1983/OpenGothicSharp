@@ -86,4 +86,75 @@ public class WorldGrid
 
 		return null;
 	}
+
+	/// <summary>
+	/// Removes a vob's rendered geometry from its cell. A single-instance visual is a node of
+	/// its own; a multi-resolution batch keeps the other instances and drops only this one.
+	/// The vob stays in the typed tree and is skipped by focus once its owner marks it taken.
+	/// </summary>
+	public bool RemoveVobVisual(VobNode vob)
+	{
+		if (vob == null)
+		{
+			return false;
+		}
+
+		var visual = vob.SceneNode;
+		if (visual != null)
+		{
+			for (var i = 0; i < Constants.GridSize; ++i)
+			{
+				for (var j = 0; j < Constants.GridSize; ++j)
+				{
+					var cell = Cells[i, j];
+					if (!cell.Children.Remove(visual))
+					{
+						continue;
+					}
+
+					RemoveObjectBounds(cell, vob.Bounds);
+					return true;
+				}
+			}
+		}
+
+		// Batched multi-resolution meshes have no per-vob SceneNode; find the batch they
+		// were registered in and remove one instance.
+		for (var i = 0; i < Constants.GridSize; ++i)
+		{
+			for (var j = 0; j < Constants.GridSize; ++j)
+			{
+				var cell = Cells[i, j];
+				for (var k = 0; k < cell.Children.Count; ++k)
+				{
+					if (cell.Children[k] is not InstancedMeshNode batch || !batch.RemoveInstance(vob))
+					{
+						continue;
+					}
+
+					if (batch.InstancesVobs.Count == 0)
+					{
+						cell.Children.RemoveAt(k);
+					}
+
+					RemoveObjectBounds(cell, vob.Bounds);
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private static void RemoveObjectBounds(WorldGridCell cell, BoundingBox bounds)
+	{
+		for (var i = cell.ObjectBounds.Count - 1; i >= 0; --i)
+		{
+			if (cell.ObjectBounds[i] == bounds)
+			{
+				cell.ObjectBounds.RemoveAt(i);
+				return;
+			}
+		}
+	}
 }

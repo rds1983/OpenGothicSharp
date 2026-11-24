@@ -27,6 +27,11 @@ public sealed class FocusTarget
 				return string.Empty;
 			}
 
+			if (Vob is ItemVob item && !string.IsNullOrEmpty(item.ItemInstance))
+			{
+				return item.ItemInstance;
+			}
+
 			return string.IsNullOrEmpty(Vob.Tag) ? Vob.Name : Vob.Tag;
 		}
 	}
@@ -97,7 +102,7 @@ public sealed class FocusSystem
 		for (var i = 0; i < vobs.Count; ++i)
 		{
 			var vob = vobs[i];
-			if (!IsFocusable(vob.Kind))
+			if (!IsFocusable(vob.Kind) || (vob is ItemVob item && item.IsTaken))
 			{
 				continue;
 			}
