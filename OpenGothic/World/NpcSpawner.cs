@@ -55,7 +55,7 @@ internal static class NpcSpawner
 			}
 
 			var waypoint = placer.Resolve(placementName, out var waypointName);
-			var position = Ground(world, waypoint.Position);
+			var position = Ground(world, physics, waypoint.Position);
 			var yaw = YawFromDirection(waypoint.Direction);
 			var scale = visual.Scale == Vector3.Zero ? Vector3.One : visual.Scale;
 			var human = IsHumanBody(visual, Stem(visual.Body));
@@ -345,11 +345,19 @@ internal static class NpcSpawner
 
 	/// <summary>
 	/// Stands a spawn point on the floor: waynet points are authored above the ground, which
-	/// is what the reference's <c>fixNpcPosition</c> ray-cast solves. A short spiral catches
-	/// points that hang over a ledge or sit inside geometry.
+	/// is what the reference's <c>fixNpcPosition</c> ray-cast solves. The physics ray sees vob
+	/// floors (beds, stairs) near the streamed player, the terrain triangles are the fallback,
+	/// and a short spiral catches points that hang over a ledge or sit inside geometry.
 	/// </summary>
-	private static Vector3 Ground(WorldGrid world, Vector3 position)
+	private static Vector3 Ground(WorldGrid world, PhysicsWorld physics, Vector3 position)
 	{
+		if (physics != null &&
+		    physics.RayCast(position + Vector3.UnitY * 100f, -Vector3.UnitY, 1100f, false,
+			    out var hit))
+		{
+			return new Vector3(position.X, hit.Position.Y, position.Z);
+		}
+
 		if (world.TryGetGround(position, WorldGrid.GroundSnap, out var ground))
 		{
 			return ground;

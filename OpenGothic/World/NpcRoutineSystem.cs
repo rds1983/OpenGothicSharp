@@ -124,27 +124,25 @@ internal sealed class NpcRoutineSystem
 		var remaining = MoveSpeed * dt;
 		while (remaining > 0f && actor.PathIndex < actor.Path.Count)
 		{
-			var target = _world.WaypointList[actor.Path[actor.PathIndex]];
-			var targetPosition = new Vector3(target.Position.X,
-				_world.WaypointGroundY(actor.Path[actor.PathIndex]), target.Position.Z);
-			var delta = targetPosition - actor.Position;
-			var distance = delta.Length();
+			var index = actor.Path[actor.PathIndex];
+			var target = new Vector3(_world.WaypointList[index].Position.X,
+				_world.WaypointGroundY(index), _world.WaypointList[index].Position.Z);
 
-			if (distance <= ArriveDistance)
+			var moved = _walker.MoveTowards(actor, target, remaining, out var arrived);
+			remaining -= moved;
+
+			if (arrived)
 			{
 				++actor.PathIndex;
 				continue;
 			}
 
-			var step = MathF.Min(remaining, distance);
-			var direction = delta / distance;
-			var next = actor.Position + direction * step;
-			next.Y = actor.Position.Y + (targetPosition.Y - actor.Position.Y) * (step / distance);
-
-			var yaw = MathF.Atan2(direction.X, -direction.Z);
-			actor.SetPosition(next, yaw);
-			UpdateWorld(actor);
-			remaining -= step;
+			if (moved <= 0.0001f)
+			{
+				// Blocked by geometry or another body: keep the point and retry next frame.
+				actor.SetMovingClip(false);
+				return;
+			}
 		}
 
 		if (actor.PathIndex >= actor.Path.Count)
@@ -184,10 +182,5 @@ internal sealed class NpcRoutineSystem
 
 		actor.RoutineStateStarted = true;
 		_ai?.StartRoutine(actor, routine.Action, routine.Waypoint);
-	}
-
-	private void UpdateWorld(NpcActor actor)
-	{
-		_walker.Apply(actor);
 	}
 }

@@ -200,6 +200,22 @@ shipped scripts with it instead of guessed.
 - Thresholds are covered by hermetic tests; the routine chain and sleeping still run with the
   policies active.
 
+## Movement parity (F3.5, partial)
+
+- NPC movement now sweeps the shared capsule through the physics world before applying a step
+  (`PhysicsWorld.SweepNpcCapsule`), ignoring the actor's own capsule. A blocked step stops the
+  body instead of walking through a wall or another NPC, matching the reference's
+  `tryTranslate` behaviour (no surface sliding at the movement layer).
+- Every step then snaps the feet to the floor: a physics ray from `feet + 60` downward sees
+  vob floors, stairs and beds near the streamed player; `WorldGrid.TryGetGround` is the
+  fallback outside the streamed area. The Y is no longer interpolated between waypoints, so
+  slopes and steps are followed as the body moves.
+- Spawn grounding uses the same physics ray when the spawn is inside the streamed area, then
+  the terrain ray and the spiral.
+- Both the routine walker and `AI_GotoWP` use this shared `NpcWalker`.
+- Still open: the reference's stuck-capsule spiral and `distBias` at insertion, and re-snapping
+  after climbs/teleports (neither exists yet).
+
 ## Deferred
 
 AI, routines' action callbacks, movement collision avoidance, combat and armour attachments

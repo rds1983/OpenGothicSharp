@@ -132,8 +132,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   non-human bodies lazily from their model scripts. F2 drives daily routines from a game
   clock, walks NPCs between grounded routine points, and is complete. Cut-out foliage
   materials render with `AlphaTestEffect`. F3.1 (script AI states), F3.2 (AI queries/actions,
-  sitting and sleeping), F3.3 (engine perception) and F3.4 (process policies) are complete;
-  F3.5 (movement parity) is next.
+  sitting and sleeping), F3.3 (engine perception), F3.4 (process policies) and F3.5 (movement
+  parity) are complete; F3.6 (mob placement) is next.
 
 ---
 
@@ -843,7 +843,7 @@ tested, and the routine chain, sitting and sleeping still run.
 Done at the policy scope: normal NPCs tick fully, far ones only keep a slow state loop, and
 dormant ones cost nothing. Frame pacing itself is tracked in M4.
 
-#### F3.5 Movement parity and grounding follow-up
+#### F3.5 Movement parity and grounding follow-up — DONE
 Carry-over from F2; the state machine should drive this, not the other way round.
 - Translate the capsule (`tryTranslate`-style) instead of snapping the transform: slide along
   walls, honour step height, follow the ground every step instead of interpolating Y between
@@ -853,6 +853,18 @@ Carry-over from F2; the state machine should drive this, not the other way round
 - Re-snap after climbs and teleports.
 **Depends on F3.2.**
 **Done when:** NPCs walk around obstacles and stand on house floors anywhere on the map.
+
+**Implemented:** movement now sweeps the NPC capsule (`PhysicsWorld.SweepNpcCapsule`,
+ignoring the actor's own body) and stops short of walls and other NPCs, like the reference's
+`tryTranslate`. Each step re-grounds the body with a physics ray (vob floors and stairs near
+the player) with the terrain triangles as fallback, replacing the Y interpolation between
+waypoints. Spawn grounding uses the physics ray first. The routine walker and `AI_GotoWP` share
+`NpcWalker`, and Matteo still walks to his bed and lies down. Still open: the stuck-capsule
+spiral and `distBias` at insertion, and climb/teleport re-snapping (no climbs/teleports exist).
+
+Done at the movement scope: walking is capsule-swept and ground-followed everywhere the physics
+world is streamed, with the terrain fallback beyond it. The insertion spiral and climb handling
+land with the systems that need them.
 
 #### F3.6 Mob placement and item animations
 Follow-up from F3.2.

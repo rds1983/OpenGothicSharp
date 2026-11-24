@@ -69,6 +69,7 @@ public sealed class PhysicsWorld : IDisposable
 	private float _loadRadius = 3000f;
 	private bool _streaming;
 	private int _staticCount;
+	private Capsule? _npcSweepShape;
 
 	public Simulation Simulation { get; }
 
@@ -1026,6 +1027,81 @@ public sealed class PhysicsWorld : IDisposable
 			ref BodyVelocityWide velocity)
 		{
 			velocity.Linear += _gravityWideDt;
+		}
+	}
+
+	/// <summary>
+	/// Sweeps the shared NPC capsule from <paramref name="feet"/> by <paramref name="delta"/>
+	/// and reports the first blocking hit. NPC movement uses it to stop short of walls and other
+	/// bodies instead of walking through them; the actor's own capsule can be ignored.
+	/// </summary>
+	public bool SweepNpcCapsule(Vector3 feet, Vector3 delta, BodyHandle? ignoreBody,
+		out float t, out Vector3 normal)
+	{
+		_npcSweepShape ??= new Capsule(
+			CharacterController.DefaultRadius, CharacterController.DefaultLength);
+
+		var handler = new SweepHitHandler
+		{
+			Surfaces = Surfaces,
+			IgnoreBody = ignoreBody ?? default,
+			HasBodyToIgnore = ignoreBody.HasValue
+		};
+
+		var pose = new RigidPose(ToNumerics(feet + Vector3.UnitY * CharacterController.CenterOffset));
+		var velocity = new BodyVelocity { Linear = ToNumerics(delta) };
+		Simulation.Sweep(_npcSweepShape.Value, pose, velocity, 1f, BufferPool, ref handler);
+
+		t = Math.Clamp(handler.T, 0f, 1f);
+		normal = handler.Hit ? ToXna(handler.Normal) : Vector3.UnitY;
+		return handler.Hit;
+	}
+
+	private struct SweepHitHandler : ISweepHitHandler
+	{
+		public CollidableProperty<PhysicsSurface> Surfaces;
+		public bool HasBodyToIgnore;
+		public BodyHandle IgnoreBody;
+
+		public bool Hit;
+		public float T;
+		public Num.Vector3 Normal;
+
+		public bool AllowTest(CollidableReference collidable)
+		{
+			if (Surfaces[collidable].Kind == PhysicsSurfaceKind.Sensor)
+			{
+				return false;
+			}
+
+			return !(HasBodyToIgnore &&
+			         collidable.Mobility is CollidableMobility.Dynamic or CollidableMobility.Kinematic &&
+			         collidable.BodyHandle == IgnoreBody);
+		}
+
+		public bool AllowTest(CollidableReference collidable, int childIndex) => AllowTest(collidable);
+
+		public void OnHit(ref float maximumT, float t, in Num.Vector3 hitLocation,
+			in Num.Vector3 hitNormal, CollidableReference collidable)
+		{
+			if (t < maximumT)
+			{
+				maximumT = t;
+			}
+
+			if (!Hit || t < T)
+			{
+				Hit = true;
+				T = t;
+				Normal = hitNormal;
+			}
+		}
+
+		public void OnHitAtZeroT(ref float maximumT, CollidableReference collidable)
+		{
+			maximumT = 0f;
+			Hit = true;
+			T = 0f;
 		}
 	}
 
