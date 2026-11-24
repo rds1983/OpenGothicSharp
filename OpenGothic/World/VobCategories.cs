@@ -13,7 +13,59 @@ namespace OpenGothic.Vobs;
 public sealed class NpcVob : VobNode
 {
 	internal NpcVob(IVirtualObject source, VobNode parent, Matrix world, Matrix local, VobKind kind,
-		BoundingBox bounds) : base(source, parent, world, local, kind, bounds) { }
+		BoundingBox bounds) : base(source, parent, world, local, kind, bounds)
+	{
+		var npc = source as INpc;
+		NpcInstance = !string.IsNullOrEmpty(npc?.NpcInstance) ? npc.NpcInstance : Name;
+		Guild = npc?.Guild ?? 0;
+		Level = Math.Max(1, npc?.Level ?? 1);
+
+		var attributes = npc?.Attributes;
+		var maxHp = attributes != null && attributes.Count > 1 && attributes[1] > 0
+			? attributes[1]
+			: 100;
+		MaxHp = maxHp;
+		Hp = attributes != null && attributes.Count > 0 && attributes[0] > 0
+			? Math.Min(attributes[0], maxHp)
+			: maxHp;
+	}
+
+	/// <summary>The NPC's script instance, e.g. <c>NPC_DIEGO</c>.</summary>
+	public string NpcInstance { get; }
+
+	public int Guild { get; }
+
+	public int Level { get; }
+
+	public int MaxHp { get; }
+
+	public int Hp { get; internal set; }
+
+	public bool IsDead => Hp <= 0;
+
+	/// <summary>Last line passed to <see cref="Say"/>; the script voice/bubble hooks arrive with G3.</summary>
+	public string LastMessage { get; private set; }
+
+	public void TakeDamage(int amount)
+	{
+		if (amount <= 0 || IsDead)
+		{
+			return;
+		}
+
+		Hp = Math.Max(0, Hp - amount);
+		Log.Info($"Npc '{Name}' damaged for {amount}: {Hp}/{MaxHp}.");
+		if (Hp == 0)
+		{
+			Log.Info($"Npc '{Name}' died.");
+		}
+	}
+
+	public void Say(string message)
+	{
+		LastMessage = message;
+		Log.Info($"Npc '{Name}' says: {message}");
+	}
 }
 
 public sealed class ItemVob : VobNode

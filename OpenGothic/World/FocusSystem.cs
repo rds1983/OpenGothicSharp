@@ -59,6 +59,13 @@ public sealed class FocusTarget
 		}
 
 		var name = Name;
+		if (Vob is NpcVob npc)
+		{
+			return string.IsNullOrEmpty(name)
+				? $"{Kind} hp {npc.Hp}/{npc.MaxHp} ({Distance:0.#})"
+				: $"{Kind} '{name}' hp {npc.Hp}/{npc.MaxHp} ({Distance:0.#})";
+		}
+
 		var state = Vob is InteractiveVob mob && mob.IsStateAnimated
 			? $" state {mob.State}/{mob.StateCount}"
 			: string.Empty;

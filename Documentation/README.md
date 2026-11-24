@@ -684,6 +684,17 @@ and removes its geometry — a direct node or one batch instance. The bottom-lef
 full inventory UI belong to I3. Items without an instance mesh remain invisible. Details in
 [Specifications/items.md](Specifications/items.md).
 
+### NPC runtime
+
+Gothic's shipped ZEN files contain no `oCNpc` vobs — scripts insert NPCs at startup. The F1
+runtime therefore stops at the data model: `NpcVob` exposes the script instance name, guild,
+level, `Hp`/`MaxHp`, `IsDead`, `TakeDamage` and the `Say` message hook, and the focus overlay
+shows `Npc '<name>' hp <hp>/<maxHp>` once a script-spawned NPC exists.
+
+There is deliberately **no placeholder NPC spawner or body**. Body, armour, head, animation,
+AI, movement and collision belong with the script-created NPC in F2/G2. Details in
+[Specifications/npcs.md](Specifications/npcs.md).
+
 ### Sky, fog and lighting
 
 `Sky` draws a gradient dome (8 rings × 16 segments) built from a 1×64 colour ramp between

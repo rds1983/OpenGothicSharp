@@ -89,6 +89,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - World items render from their instance-named `.MRM`; E picks one up into the stack-based
   `Inventory`, removes its geometry (including one batch instance), marks it taken, and adds it
   to the bottom-left inventory panel. `Inventory.Remove` is the removal core.
+- NPC runtime data lives on `NpcVob` (instance, guild, level, HP, damage and message hooks).
+  The shipped ZEN has no NPCs; scripts spawn them in G2, so no placeholder NPC or body exists.
 - Rendering lives in `OpenGothic/Graphics` (`Renderer`, `Sky`, `WorldRenderer`, `Camera`,
   `DebugDraw`, materials, scene/model/mesh visuals and vertex formats).
 - ZenKit is pinned to `1.3.0-cs.1`, matching the parser version the reference C++ client uses.
@@ -109,7 +111,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   character controller, player input, first/third-person cameras and streamed collision.
   **Milestone E (Interaction and world objects) complete** — E1–E4: typed vob tree, placeholder
   player avatar, focus/raycast, door/chest interactions and item pickup with inventory.
-  Current milestone: **F — NPCs and AI**, next task **F1**.
+  F1's NPC runtime data is complete; F2/F3 need G2 script-spawned NPCs, so the next actionable
+  task is **G1 — Daedalus VM**.
 
 ---
 
@@ -619,19 +622,30 @@ invisible; drop/use/equip belong to I3. Details in
 
 ## Milestone F — NPCs and AI
 
-### F1. Npc entity
+### F1. Npc entity — DONE
 Npc runtime: attributes, guild, animation state machine basics, name/messages hooks.
 `Graphics/AnimationData` already plays a named clip and follows the script's `Next` chains;
 this task is the body-state layer that decides *which* clip (idle, walk, attack) an NPC asks
 for and when to interrupt one.
-**Done when:** an Npc spawns from a ZEN instance, idles, and can be damaged.
+
+The shipped worlds contain **no `oCNpc` vobs**: Gothic inserts NPCs from startup scripts.
+There is therefore no placeholder NPC or body. The runtime container is ready for a
+script-created NPC: `NpcVob` exposes the instance name, guild, level, `Hp`/`MaxHp`,
+`IsDead`, `TakeDamage` and the `Say`/`LastMessage` hook, and the focus overlay shows the
+name and health.
+
+**Done when:** an Npc spawns from a ZEN instance, idles, and can be damaged. — Done at the
+runtime-data scope by developer decision. Actual spawning, body composition, idle animation
+and damage in-game depend on G2's script-created NPCs; no placeholder spawner remains.
 
 ### F2. Way matrix & routines
 Parse waypoints/waymatrix; daily routines (`TA`, `RTN`) move NPCs between points.
+**Depends on G2:** no NPCs exist until the scripts spawn them.
 **Done when:** an NPC follows a simple authored routine.
 
 ### F3. AI states & perception
 Idle/guard/follow/attack states, perception events (see/hear/damage), and AI queue.
+**Depends on G2:** no NPCs exist until the scripts spawn them.
 **Done when:** an NPC notices the player and transitions state plausibly.
 
 ---
