@@ -60,6 +60,7 @@ default chosen elsewhere.
 | `-nowalk` | Keep the fixed diagnostic camera even for a plain launch. |
 | `-thirdperson` | Start walking in the chase camera instead of first person. |
 | `-walkmode` | Start with walk mode on, the diagnostic equivalent of the in-game Shift toggle. |
+| `-interact` | Resolve the focus target once on the first walking frame, as if E had been pressed. |
 | `-player:<x,y,z>` | Start the walking capsule at a world position instead of the placeholder plaza; the player drops to the ground below the point. |
 | `-yaw:<degrees>` | Set the walking player's facing yaw. Needed to aim a diagnostic walk reliably, because `-lookat:` measures from the camera's own position. Mouse look is disabled while `-yaw` or `-walktest` is active so the direction stays fixed. |
 | `-walktest:<seconds>` | Hold forward for a diagnostic run and log the final feet position; a negative value holds backward. Useful for reproducing a stuck spot. |
@@ -572,10 +573,10 @@ into a wall, backs away from it and must not drift sideways. Each prints a singl
 
 A plain launch starts a playable first-person capsule at a placeholder point on the harbour
 plaza (until the game session supplies the scripted start point). **WASD** moves, the
-**mouse** looks, **F5** switches first/third person, **Shift** toggles walk mode, and
-`-thirdperson` starts in the chase camera. The third-person camera pulls in when a wall is
-behind the player. Diagnostics keep the static camera used by captures; `-nowalk` forces it
-back.
+**mouse** looks, **F5** switches first/third person, **Shift** toggles walk mode, **E**
+resolves the vob under the crosshair, and `-thirdperson` starts in the chase camera. The
+third-person camera pulls in when a wall is behind the player. Diagnostics keep the static
+camera used by captures; `-nowalk` forces it back.
 
 ### Character controller
 
@@ -638,6 +639,22 @@ The directional clips carry root motion (a run stride translates the root about 
 moves legs, not the capsule. The selection and placement rules are recorded in
 [Specifications/player-avatar.md](Specifications/player-avatar.md).
 
+### Focus and interaction
+
+`OpenGothic/World/FocusSystem.cs` casts the crosshair ray from the player's capsule centre
+along `Camera.Forward` and returns the nearest focusable vob within 200 units. Candidates are
+NPCs, items and the interactive family; static geometry, movers, triggers, lights and effects
+are skipped. The vob's world box is the broad phase, then a single visual's mesh-part boxes
+narrow it down. A physics ray cast to the target minus a 20-unit slack rejects objects behind
+walls without letting the target's own collider hide it. The query reuses its result object, so
+it allocates nothing per frame.
+
+The focused object's bounds are drawn as a cyan box and `DebugOverlay` shows its kind, tag and
+distance. **E** resolves the target and logs it; `-interact` does the same once on the first
+walking frame so a capture can exercise the path. Display names are the vob tags until the
+Daedalus VM supplies script names. Details and the differences from the reference's angle-cone
+selection are in [Specifications/focus.md](Specifications/focus.md).
+
 ### Sky, fog and lighting
 
 `Sky` draws a gradient dome (8 rings × 16 segments) built from a 1×64 colour ramp between
@@ -698,7 +715,7 @@ The HUD is three layouts in `OpenGothic/UI/`:
   corner: `DebugOverlay` top-left, `Controls` bottom-right, both inset 8px.
 - **`Controls`** — always visible, bottom-right. Lists the current key bindings.
 - **`DebugOverlay`** — toggleable, top-left. FPS, camera position, draw calls, triangles,
-  and the active debug views.
+  active debug views, and the vob under the crosshair.
 
 Anchoring relies on `Widget.Left`/`Top` being **additive offsets applied after alignment**,
 so a bottom-right block uses `Alignment = Right/Bottom` with *negative* offsets.

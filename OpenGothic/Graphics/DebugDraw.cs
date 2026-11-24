@@ -20,4 +20,7 @@ public class DebugDraw
 
 	/// <summary>Colour of wireframe edges.</summary>
 	public Color WireframeColor { get; } = new Color(120, 255, 160);
+
+	/// <summary>Colour of the box drawn around the vob under the crosshair.</summary>
+	public Color FocusColor { get; } = new Color(80, 255, 210);
 }

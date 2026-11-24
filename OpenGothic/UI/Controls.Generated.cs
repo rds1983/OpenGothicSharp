@@ -52,6 +52,11 @@ namespace OpenGothic.UI
 			_labelCamera.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
 			_labelCamera.Id = "_labelCamera";
 
+			_labelInteract = new Label();
+			_labelInteract.Text = "E - Interact";
+			_labelInteract.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
+			_labelInteract.Id = "_labelInteract";
+
 			_labelEscape = new Label();
 			_labelEscape.Text = "Escape - Exit";
 			_labelEscape.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
@@ -82,6 +87,7 @@ namespace OpenGothic.UI
 			Widgets.Add(_labelWalk);
 			Widgets.Add(_labelLook);
 			Widgets.Add(_labelCamera);
+			Widgets.Add(_labelInteract);
 			Widgets.Add(_labelEscape);
 			Widgets.Add(_labelToggleOverlay);
 			Widgets.Add(_labelWireframe);
@@ -94,6 +100,7 @@ namespace OpenGothic.UI
 		private Label _labelWalk;
 		private Label _labelLook;
 		private Label _labelCamera;
+		private Label _labelInteract;
 		private Label _labelEscape;
 		private Label _labelToggleOverlay;
 		private Label _labelWireframe;

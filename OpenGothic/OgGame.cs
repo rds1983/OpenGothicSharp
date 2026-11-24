@@ -6,6 +6,7 @@ using Myra;
 using Myra.Graphics2D.UI;
 using OpenGothic.Graphics;
 using OpenGothic.Physics;
+using OpenGothic.Focus;
 using OpenGothic.Utility;
 using OpenGothic.UI;
 using OpenGothic.Vobs;
@@ -26,6 +27,8 @@ public class OgGame : Game
 	private CharacterController _controller;
 	private PlayerAvatar _avatar;
 	private bool _walkMode;
+	private bool _pendingInteract;
+	private readonly FocusSystem _focus = new FocusSystem();
 	private float _mouseYaw;
 	private float _mousePitch;
 	private bool _thirdPerson;
@@ -462,6 +465,7 @@ public class OgGame : Game
 		_mousePitch = Camera.Pitch;
 		_thirdPerson = CommandLine.Instance.ThirdPerson;
 		_walkMode = CommandLine.Instance.WalkMode;
+		_pendingInteract = CommandLine.Instance.Interact;
 		_controller.Speed = _walkMode ? CharacterController.WalkSpeed : CharacterController.RunSpeed;
 		_walkTestSeconds = CommandLine.Instance.WalkTestSeconds ?? 0f;
 		// A fixed start yaw, a synthetic walk or a capture is a diagnostic run; keep the pointer
@@ -504,6 +508,11 @@ public class OgGame : Game
 		if (_controller != null)
 		{
 			UpdatePlayer(gameTime, keyboard);
+			UpdateFocus(keyboard);
+		}
+		else
+		{
+			_focus.Target.Clear();
 		}
 
 		_previousKeyboard = keyboard;
@@ -633,6 +642,40 @@ public class OgGame : Game
 	}
 
 	/// <summary>
+	/// Casts the crosshair ray from the player's eye and resolves the vob under it. The key
+	/// only confirms the target for now; E3 turns that into an actual interaction. The ray
+	/// starts at the capsule's centre rather than the chase camera, so both camera modes focus
+	/// on what the player is looking at.
+	/// </summary>
+	private void UpdateFocus(KeyboardState keyboard)
+	{
+		if (_world == null)
+		{
+			_focus.Target.Clear();
+			return;
+		}
+
+		var eye = _controller.FeetPosition + Vector3.UnitY * CharacterController.CenterOffset;
+		_focus.Find(_world, _physics, new Ray(eye, Camera.Forward));
+
+		var interact = _pendingInteract;
+		_pendingInteract = false;
+		if (interact || (keyboard.IsKeyDown(Keys.E) && _previousKeyboard.IsKeyUp(Keys.E)))
+		{
+			var target = _focus.Target;
+			if (target.HasValue)
+			{
+				var position = target.Vob.Position;
+				Log.Info($"Interact: {target.Describe()} at ({position.X:0.#}, {position.Y:0.#}, {position.Z:0.#}).");
+			}
+			else
+			{
+				Log.Info("Interact: no focus.");
+			}
+		}
+	}
+
+	/// <summary>
 	/// Advances every animating model in the world. <c>-freeze</c> pins the pose to
 	/// <c>-animtime</c> instead, so a capture does not depend on how long the process has run.
 	/// </summary>
@@ -673,12 +716,13 @@ public class OgGame : Game
 		// In first person the camera sits inside the head, so the body is skipped rather than
 		// drawn around it. The clip keeps running, ready for the next F5.
 		var avatar = _thirdPerson ? _avatar?.Node : null;
-		_worldRenderer.Draw(_renderer, Camera, _world, DebugDraw, avatar);
+		var highlight = _focus.Target.HasValue ? _focus.Target.Vob.Bounds : (BoundingBox?)null;
+		_worldRenderer.Draw(_renderer, Camera, _world, DebugDraw, avatar, highlight);
 
 		if (_hud.DebugOverlay.Visible)
 		{
 			// Read the counters after the world draw: BeginFrame resets them per frame.
-			_hud.DebugOverlay.Update(gameTime, Camera, _renderer, DebugDraw);
+			_hud.DebugOverlay.Update(gameTime, Camera, _renderer, DebugDraw, _focus.Target);
 		}
 
 		_desktop.Render();

@@ -18,4 +18,21 @@ public class InstancedMeshNode: SceneNode
 		InstancesCollision.Add(collision);
 		InstancesVobs.Add(vob);
 	}
+
+	public override bool RayTest(Ray ray, out float distance)
+	{
+		distance = float.MaxValue;
+		if (Mesh == null)
+		{
+			return false;
+		}
+
+		for (var i = 0; i < InstancesTransforms.Count; ++i)
+		{
+			var transform = InstancesTransforms[i];
+			RayTestBox(ray, Mesh.BoundingBox, ref transform, ref distance);
+		}
+
+		return distance < float.MaxValue;
+	}
 }

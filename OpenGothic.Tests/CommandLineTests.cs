@@ -45,6 +45,7 @@ public class CommandLineTests
 		Assert.False(result.NoMenu);
 		Assert.False(result.DevMode);
 		Assert.False(result.WalkMode);
+		Assert.False(result.Interact);
 	}
 
 	[Fact]
@@ -53,6 +54,14 @@ public class CommandLineTests
 		var result = CommandLine.Parse(new[] { "-walkmode" });
 
 		Assert.True(result.WalkMode);
+	}
+
+	[Fact]
+	public void Parse_ReadsInteract()
+	{
+		var result = CommandLine.Parse(new[] { "-interact" });
+
+		Assert.True(result.Interact);
 	}
 
 	[Fact]

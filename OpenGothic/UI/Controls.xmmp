@@ -6,6 +6,7 @@
     <Label Id="_labelWalk" Text="Shift - Toggle walk" TextColor="#E8E8E8" />
     <Label Id="_labelLook" Text="Mouse - Look" TextColor="#E8E8E8" />
     <Label Id="_labelCamera" Text="F5 - First/third person" TextColor="#E8E8E8" />
+    <Label Id="_labelInteract" Text="E - Interact" TextColor="#E8E8E8" />
     <Label Id="_labelEscape" Text="Escape - Exit" TextColor="#E8E8E8" />
     <Label Id="_labelToggleOverlay" Text="F1 - Toggle debug overlay" TextColor="#E8E8E8" />
     <Label Id="_labelWireframe" Text="F2 - Toggle wireframe" TextColor="#E8E8E8" />

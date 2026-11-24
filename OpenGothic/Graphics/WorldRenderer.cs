@@ -31,7 +31,7 @@ public class WorldRenderer : IDisposable
 	/// with a cell would only risk not drawing it at a cell border.
 	/// </summary>
 	public void Draw(Renderer renderer, Camera camera, WorldGrid world, DebugDraw debug = null,
-		SceneNode extra = null)
+		SceneNode extra = null, BoundingBox? highlight = null)
 	{
 		if (renderer == null)
 		{
@@ -84,6 +84,11 @@ public class WorldRenderer : IDisposable
 					}
 				}
 			}
+		}
+
+		if (highlight.HasValue && debug != null)
+		{
+			renderer.DrawBoundingBox(highlight.Value, debug.FocusColor);
 		}
 
 		if (extra != null)

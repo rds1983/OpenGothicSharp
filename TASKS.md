@@ -78,6 +78,10 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   `S_RUN`, runs on `S_RUNL` and walks on `S_WALKL` when walk mode is on; Shift toggles walk
   mode. The body is drawn in third person only, because the first-person camera sits inside
   the head.
+- Focus is the crosshair ray: the nearest NPC, item or interactive within 200 units, tested
+  against its world box and visual parts, with a physics occlusion check. The target is
+  outlined in cyan, `DebugOverlay` names it, and E resolves it. `-interact` reproduces the key
+  for a capture.
 - Rendering lives in `OpenGothic/Graphics` (`Renderer`, `Sky`, `WorldRenderer`, `Camera`,
   `DebugDraw`, materials, scene/model/mesh visuals and vertex formats).
 - ZenKit is pinned to `1.3.0-cs.1`, matching the parser version the reference C++ client uses.
@@ -86,9 +90,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - No audio or scripting yet.
 - UI exists: Myra `Desktop` rooted at a `Hud` panel with two independently anchored blocks
   — an always-visible `Controls` list (bottom-right) and a toggleable `DebugOverlay`
-  (top-left, F1) showing FPS, camera position, draw-call and triangle counts and the active
-  debug views. Layouts are `.xmmp` exported with `myra-export`; all UI lives in
-  `OpenGothic/UI/`.
+  (top-left, F1) showing FPS, camera position, draw-call and triangle counts, the active
+  debug views and the focused vob. Layouts are `.xmmp` exported with `myra-export`; all UI
+  lives in `OpenGothic/UI/`.
 - Debug views: F2 toggles wireframe, F3 toggles bounding boxes; independent of F1 and off by
   default. Both can be started on from the command line with `-wireframe`/`-bounds`.
 - Milestone A (Foundation) complete. **Milestone B (Static world rendering) complete.**
@@ -96,8 +100,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   animated culling boxes, vob hierarchy, attach points, animation layers, composed models.
   **Milestone D (Physics and movement) complete** — D1–D3: static collision, kinematic
   character controller, player input, first/third-person cameras and streamed collision.
-  Current milestone: **E — Interaction and world objects**; E1 (typed vob tree) and E1.5
-  (placeholder player avatar) complete, next task **E2**.
+  Current milestone: **E — Interaction and world objects**; E1 (typed vob tree), E1.5
+  (placeholder player avatar) and E2 (focus & raycast) are complete, next task **E3**.
 
 ---
 
@@ -538,11 +542,24 @@ stands on the ground, and switches between idle and walk/run with movement. — 
 the harbour and in the city with third-person captures, walk mode logs `S_WALKL`, and the
 loader stress run is clean.
 
-### E2. Focus & raycast
+### E2. Focus & raycast — DONE
 Crosshair focus: ray/mesh test against focused vobs within reach, highlight support.
 `VobTree.FindNear`/`FindAt` and `SceneNode.Vob` are ready; this task adds the ray/mesh test and
 the highlight itself.
-**Done when:** looking at a vob and pressing the interact key resolves the target.
+
+`FocusSystem` casts the crosshair ray from the capsule centre along `Camera.Forward` with a
+200-unit reach. NPCs, items and the interactive family are candidates; the vob's world box is
+the broad phase and a single visual's mesh-part boxes are the narrow phase. A physics ray
+rejects targets behind walls, with a 20-unit slack so the target's own collider cannot hide
+it. The query reuses its result object and allocates nothing per frame.
+
+The focused vob's bounds are drawn as a cyan box, `DebugOverlay` reports the kind, tag and
+distance, and **E** resolves the target and logs it. `-interact` performs the same resolution
+once on the first walking frame for captures.
+
+**Done when:** looking at a vob and pressing the interact key resolves the target. — Done;
+verified on the harbour bench in first and third person, and `-interact` logs
+`Interact: Interactive 'BENCH_NW_CITY_01.ASC' (145.7)`.
 
 ### E3. Interactions
 Chests/doors/levers/switches: state, animation, sound hooks, and script callbacks.

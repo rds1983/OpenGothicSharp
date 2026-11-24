@@ -58,6 +58,12 @@ public class CommandLine
 	public bool WalkMode { get; private set; }
 
 	/// <summary>
+	/// Resolve the focus target once on the first walking frame, as if the interact key had
+	/// been pressed. Useful for captures, where synthetic key events are unreliable.
+	/// </summary>
+	public bool Interact { get; private set; }
+
+	/// <summary>
 	/// Whether the game should start with the playable capsule. Explicit <see cref="Walk"/> or
 	/// <see cref="ThirdPerson"/> wins; otherwise a plain launch walks, while a diagnostic launch
 	/// (a spawned/composed/attached model, a camera override, a screenshot, a vob query or the
@@ -285,6 +291,9 @@ public class CommandLine
 					break;
 				case "-walkmode":
 					result.WalkMode = true;
+					break;
+				case "-interact":
+					result.Interact = true;
 					break;
 
 				default:
@@ -624,7 +633,7 @@ public class CommandLine
 
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
-		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] " +
+		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] [-interact] " +
 		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
 		"[-player:<x,y,z>] [-yaw:<degrees>] [-walktest:<seconds>] [-vobstats] [-vobfind:<x,y,z>] [-vobradius:<n>] [-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 

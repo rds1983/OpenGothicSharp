@@ -1,4 +1,5 @@
 using DigitalRiseModel;
+using Microsoft.Xna.Framework;
 using System.Collections.Generic;
 
 namespace OpenGothic.Graphics;
@@ -22,4 +23,33 @@ public class ModelNode : SceneNode
 
 	/// <summary>Clip playback for an animated model, or null for one that only renders.</summary>
 	public AnimationData AnimationData { get; set; }
+
+	public override bool RayTest(Ray ray, out float distance)
+	{
+		distance = float.MaxValue;
+		var instance = Instance;
+		var model = instance?.Model;
+		if (model == null)
+		{
+			return false;
+		}
+
+		var world = WorldTransform;
+		foreach (var mesh in model.Meshes)
+		{
+			var bone = mesh.ParentBone;
+			var boneWorld = bone != null
+				? instance.GetBoneGlobalTransform(bone.Index) * world
+				: world;
+
+			foreach (var part in mesh.MeshParts)
+			{
+				// A skinned part is already in model space; a static part is positioned by its bone.
+				var transform = part.Skin != null ? world : boneWorld;
+				RayTestBox(ray, part.BoundingBox, ref transform, ref distance);
+			}
+		}
+
+		return distance < float.MaxValue;
+	}
 }

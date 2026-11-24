@@ -57,6 +57,11 @@ namespace OpenGothic.UI
 			_labelDebugViews.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
 			_labelDebugViews.Id = "_labelDebugViews";
 
+			_labelFocus = new Label();
+			_labelFocus.Text = "Focus: (none)";
+			_labelFocus.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
+			_labelFocus.Id = "_labelFocus";
+
 			
 			Spacing = 2;
 			Padding = new Thickness(10, 6);
@@ -68,6 +73,7 @@ namespace OpenGothic.UI
 			Widgets.Add(_labelDrawCalls);
 			Widgets.Add(_labelTriangles);
 			Widgets.Add(_labelDebugViews);
+			Widgets.Add(_labelFocus);
 		}
 
 		
@@ -77,5 +83,6 @@ namespace OpenGothic.UI
 		private Label _labelDrawCalls;
 		private Label _labelTriangles;
 		private Label _labelDebugViews;
+		private Label _labelFocus;
 	}
 }
