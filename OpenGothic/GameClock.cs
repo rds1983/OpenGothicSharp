@@ -19,6 +19,9 @@ public sealed class GameClock
 
 	public float Hour { get; private set; }
 
+	/// <summary>Day counter, starting at 1; incremented when the clock wraps past midnight.</summary>
+	public int Day { get; private set; } = 1;
+
 	/// <summary>Game minutes elapsed per real second.</summary>
 	public float Scale { get; }
 
@@ -34,7 +37,13 @@ public sealed class GameClock
 			return;
 		}
 
-		Hour = Normalize(Hour + (float)elapsed.TotalSeconds * Scale / 60f);
+		var next = Normalize(Hour + (float)elapsed.TotalSeconds * Scale / 60f);
+		if (next < Hour)
+		{
+			++Day;
+		}
+
+		Hour = next;
 	}
 
 	public static float Normalize(float hour)

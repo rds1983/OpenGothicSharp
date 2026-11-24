@@ -161,6 +161,31 @@ shipped scripts with it instead of guessed.
   routine point, so a sleep state returning `LOOP_END` at dawn re-enters `ZS_GOTOBED` instead
   of leaving the NPC stateless until the next routine change.
 
+## Perception (F3.3, engine scope)
+
+- Each `C_NPC` carries `senses` (SENSE_SEE/HEAR) and `senses_range` (2000 for the tested NPCs).
+  `NpcAiSystem` samples the player on the NPC's perception interval (`NPC_SetPercTime`,
+  default 0.4 s) instead of every frame.
+- The view test copies `Npc::canRayHitPoint`: range check, then a ±80° cone around the body
+  facing, then a line-of-sight ray from the NPC's head. The ray stops short of the player's
+  capsule and ignores the NPC's own capsule, which it starts inside.
+- `NPC_PercEnable(type, fn)` stores a handler per `PercType` (33 slots) and
+  `NPC_PercDisable` clears it; `PERC_SetRange` overrides a type's range. When
+  `PERC_ASSESSPLAYER` triggers, its handler runs with the player as `OTHER`
+  (`B_AssessPlayer` for the tested guards).
+- The engine-side support the handlers need is in: `Hlp_GetInstanceId` (symbol index),
+  `WLD_IsTime` (inclusive start/exclusive end, midnight wrap), `WLD_GetDay`,
+  `NPC_GetAttitude`/`NPC_GetPermAttitude`, the `GIL_ATTITUDES` matrix (66 guilds, loaded at
+  boot like `GameScript::initialize`), `WLD_GetGuildAttitude`/`SetGuildAttitude`,
+  `NPC_SetTarget`/`GetTarget`, `NPC_GetHeightToNpc`, `NPC_IsInFightMode` (only FMODE_NONE is
+  true until weapons exist), `NPC_ClearAiQueue`.
+- Verified: a guard 254 units in front of the camera fires `PERC_ASSESSPLAYER` with the player
+  as `OTHER`; the same guard with the camera behind it never fires. The guard's
+  `B_AssessPlayer` then runs (`Hlp_GetInstanceId`, `Npc_HasEquippedArmor`, `Wld_GetDay`,
+  `Npc_GetEquippedArmor`, ...) and decides not to change state for a guildless, unarmoured
+  player - the reference's remaining inputs (room/portal guild, weapons, armour) are later
+  milestones.
+
 ## Deferred
 
 AI, routines' action callbacks, movement collision avoidance, combat and armour attachments

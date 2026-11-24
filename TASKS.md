@@ -131,8 +131,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   collision/focus path, and completes the dialog camera/voice hook. F1.6 builds the 50
   non-human bodies lazily from their model scripts. F2 drives daily routines from a game
   clock, walks NPCs between grounded routine points, and is complete. Cut-out foliage
-  materials render with `AlphaTestEffect`. F3.1 (script AI states) and F3.2 (AI queries,
-  actions, sitting/sleeping) are complete; F3.3 (perception) is next.
+  materials render with `AlphaTestEffect`. F3.1 (script AI states), F3.2 (AI queries/actions,
+  sitting and sleeping) and F3.3 (engine perception) are complete; F3.4 (process policies and
+  update budget) is next.
 
 ---
 
@@ -796,7 +797,7 @@ Follow-up work moved to F3.6.
 - `ZS_SIT_CHAIR_END` calls `AI_UseMob`; `ZS_SWEEP_FP_END` calls `AI_UseItemToState`.
 - `ZS_GOTOBED` -> `ZS_SLEEP` hand-off plus `AI_UseMob(BEDHIGH, 1)` produce the lying pose.
 
-#### F3.3 Perception
+#### F3.3 Perception — DONE (engine scope)
 - `senses_range` from the instance, view cone, head/eye ray with occlusion against the
   collision world; hearing radius for noise; damage events.
 - Per-type sampling on the reference's perception interval, not every frame.
@@ -805,6 +806,26 @@ Follow-up work moved to F3.6.
 **Depends on F3.1/F3.2.**
 **Done when:** walking into a guard's view makes him react, and approaching from behind out
 of the cone does not.
+
+**Implemented (engine scope):**
+- `PERC_ASSESSPLAYER` sampling per NPC on `NPC_SetPercTime`; `senses` bits and
+  `senses_range`; ±80° view cone; line-of-sight ray that ignores the NPC's own capsule and
+  stops short of the player's.
+- Per-type handler table from `NPC_PercEnable`/`NPC_PercDisable` (33 slots) and
+  `PERC_SetRange`; the handler runs with `SELF` = NPC, `OTHER` = player.
+- Guild attitudes (`GIL_ATTITUDES`, 66 guilds) loaded at boot, `NPC_GetAttitude`,
+  `WLD_GetGuildAttitude`/`SetGuildAttitude`, `Hlp_GetInstanceId`, `WLD_IsTime`/`GetDay`,
+  `NPC_SetTarget`/`GetTarget`, `NPC_GetHeightToNpc`, `NPC_IsInFightMode` (FMODE_NONE),
+  `NPC_ClearAiQueue`.
+- Verified: guard 254 units in front fires `B_AssessPlayer` with the player as `OTHER`;
+  behind the guard it never fires.
+- Open: the guard's script then decides against a state change for a guildless, unarmoured
+  player because room/portal guild, weapons and armour are still missing. Hearing and damage
+  perceptions are not wired yet.
+
+**Done at the engine scope** by developer decision: sampling, cone, line of sight, the
+per-type handler table and the queries the handlers call are the deliverable. The visible
+script reaction is tracked in F3.7 because it needs rooms and combat state.
 
 #### F3.4 Process policies & update budget
 - `NpcProcessPolicy` (AiNormal/AiFar/AiFar2) selected by distance to the player, like the
@@ -834,7 +855,20 @@ Follow-up from F3.2.
 **Depends on F3.2.**
 **Done when:** an NPC sits on the chair mesh and sweeps with the broom animation.
 
-Order: F3.1 → F3.2 → F3.3 → F3.4 → F3.5 → F3.6.
+#### F3.7 Visible reaction to perception
+Follow-up from F3.3.
+- The engine already detects the player and invokes the NPC's `PERC_ASSESSPLAYER` handler
+  (`B_AssessPlayer`), but the script needs the player's room/portal guild, equipped weapon and
+  armour before it changes state.
+- Implement room/portal tracking (K1) and feed `WLD_GetPlayerPortalGuild`,
+  `NPC_HasEquippedArmor`/`GetEquippedArmor`, weapon state and `NPC_IsInFightMode` from it, or
+  add the engine look-at/turn fallback the reference uses when an NPC notices someone.
+- Wire the remaining perception types: hearing, damage, item/body detection.
+**Depends on F3.3 and K1/H1.**
+**Done when:** a guard visibly reacts when the player enters his view and ignores the player
+behind him.
+
+Order: F3.1 → F3.2 → F3.3 → F3.4 → F3.5 → F3.6 → F3.7.
 
 ---
 

@@ -28,12 +28,24 @@ internal sealed class NpcAiSystem
 	private const float WaypointReach = 165f;
 	private const float MobSearchDistanceSquared = 1000f * 1000f;
 	private const double RoutineRestartSeconds = 1.0;
+	private const int PercAssessPlayer = 1;
+	private const int SenseSee = 1;
+	private const int MaxPerceptionLogs = 20;
+	private const float EyeHeight = 120f;
+	private const float PlayerCenterHeight = 100f;
+
+	// The reference's view test accepts an offset of up to 80 degrees from the facing
+	// (canRayHitPoint compares cos(180 - angle) against cos(100 degrees)).
+	private const float ViewConeCos = 0.17364818f;
 
 	private readonly ScriptRuntime _scripts;
 	private readonly List<NpcActor> _actors;
 	private readonly Dictionary<int, NpcActor> _bySymbol = new Dictionary<int, NpcActor>();
 	private readonly WorldGrid _world;
 	private readonly NpcWalker _walker;
+	private readonly PhysicsWorld _physics;
+	private readonly GameClock _clock;
+	private readonly int[] _perceptionRanges = new int[NpcActor.PerceptionCount];
 	private readonly HashSet<string> _reported = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
 
 	// AI_StartState is called from inside a state function, so the request is queued instead of
@@ -46,13 +58,16 @@ internal sealed class NpcAiSystem
 	private double _time;
 	private int _startLogs;
 	private int _endLogs;
+	private int _perceptionLogs;
 
 	public NpcAiSystem(ScriptRuntime scripts, List<NpcActor> actors, WorldGrid world,
-		PhysicsWorld physics)
+		PhysicsWorld physics, GameClock clock = null)
 	{
 		_scripts = scripts;
 		_actors = actors ?? new List<NpcActor>();
 		_world = world;
+		_physics = physics;
+		_clock = clock;
 		_walker = new NpcWalker(world, physics);
 
 		foreach (var actor in _actors)
@@ -277,6 +292,226 @@ internal sealed class NpcAiSystem
 		{
 			actor.PerceptionSeconds = seconds;
 		}
+	}
+
+	/// <summary>Backs <c>NPC_PercEnable</c>: stores the handler for one perception type.</summary>
+	internal void SetPerception(NpcInstance npc, int type, int function)
+	{
+		var actor = Find(npc);
+		if (actor == null || type < 0 || type >= NpcActor.PerceptionCount)
+		{
+			return;
+		}
+
+		actor.PerceptionFunctions[type] = function;
+
+		if (DebugSettings.AiTrace)
+		{
+			Log.Info($"AI trace: '{actor.Vob.Name}' perception {type} -> {function}.");
+		}
+	}
+
+	/// <summary>Backs <c>NPC_PercDisable</c>.</summary>
+	internal void ClearPerception(NpcInstance npc, int type)
+	{
+		var actor = Find(npc);
+		if (actor != null && type >= 0 && type < NpcActor.PerceptionCount)
+		{
+			actor.PerceptionFunctions[type] = -1;
+		}
+	}
+
+	/// <summary>Backs <c>WLD_GetDay</c>.</summary>
+	internal int Day => _clock?.Day ?? 1;
+
+	/// <summary>
+	/// Backs <c>WLD_IsTime</c>: inclusive start, exclusive end, with a range that may cross
+	/// midnight (reference <c>wld_istime</c>).
+	/// </summary>
+	internal bool IsTime(int startHour, int startMinute, int endHour, int endMinute)
+	{
+		if (_clock == null)
+		{
+			return false;
+		}
+
+		var now = _clock.Hour;
+		var start = startHour + startMinute / 60f;
+		var end = endHour + endMinute / 60f;
+
+		return start <= end
+			? now >= start && now < end
+			: now >= start || now < end;
+	}
+
+	/// <summary>Backs <c>Perc_SetRange</c>: a per-type range override, 0 keeps senses_range.</summary>
+	internal void SetPerceptionRange(int type, int distance)
+	{
+		if (type >= 0 && type < NpcActor.PerceptionCount && distance > 0)
+		{
+			_perceptionRanges[type] = distance;
+		}
+	}
+
+	/// <summary>
+	/// Backs <c>NPC_GetAttitude</c>: the player's attitude comes from the NPC's stored value
+	/// when present, otherwise both sides use their guilds (reference <c>personAttitude</c>).
+	/// </summary>
+	internal int GetAttitude(NpcInstance first, NpcInstance second)
+	{
+		if (first == null || second == null)
+		{
+			return ScriptRuntime.AttitudeNeutral;
+		}
+
+		var firstGuild = GuildOf(first);
+		var secondGuild = GuildOf(second);
+		if (firstGuild < 0 || secondGuild < 0)
+		{
+			return ScriptRuntime.AttitudeNeutral;
+		}
+
+		return _scripts?.GuildAttitude(firstGuild, secondGuild) ?? ScriptRuntime.AttitudeNeutral;
+	}
+
+	private int GuildOf(NpcInstance npc)
+	{
+		if (npc == null)
+		{
+			return -1;
+		}
+
+		if (_scripts?.Hero != null && npc.Index == _scripts.Hero.Index)
+		{
+			return _scripts.Hero.Guild;
+		}
+
+		return Find(npc)?.Instance?.Guild ?? npc.Guild;
+	}
+
+	/// <summary>Backs <c>NPC_GetHeightToNpc</c>.</summary>
+	internal int GetHeightToNpc(NpcInstance first, NpcInstance second)
+	{
+		var a = Find(first);
+		var b = Find(second);
+		if (a == null || b == null)
+		{
+			return 0;
+		}
+
+		return (int)MathF.Abs(a.Position.Y - b.Position.Y);
+	}
+
+	/// <summary>Backs <c>NPC_IsInFightMode</c>; nobody carries a weapon yet, so only FMODE_NONE is true.</summary>
+	internal bool IsInFightMode(NpcInstance npc, int mode)
+	{
+		return Find(npc) != null && mode == 0;
+	}
+
+	/// <summary>Backs <c>NPC_SetTarget</c>.</summary>
+	internal void SetTarget(NpcInstance npc, NpcInstance other)
+	{
+		var actor = Find(npc);
+		if (actor != null)
+		{
+			actor.TargetSymbol = other?.Index ?? -1;
+		}
+	}
+
+	/// <summary>Backs <c>NPC_GetTarget</c>: writes the target into global OTHER.</summary>
+	internal bool GetTarget(NpcInstance npc)
+	{
+		var actor = Find(npc);
+		if (actor == null || actor.TargetSymbol <= 0 ||
+		    !_bySymbol.TryGetValue(actor.TargetSymbol, out var target))
+		{
+			_scripts?.SetGlobalOther(null);
+			return false;
+		}
+
+		_scripts?.SetGlobalOther(target.Instance);
+		return true;
+	}
+
+	/// <summary>
+	/// Samples the player for <c>PERC_ASSESSPLAYER</c> on the NPC's perception interval. The
+	/// reference does the same in <c>Npc::perceptionProcess</c>: range, then the view cone,
+	/// then a line-of-sight ray, then the enabled script handler with the player as OTHER.
+	/// </summary>
+	private void Perceive(NpcActor actor, Vector3 playerFeet)
+	{
+		if (actor.Instance == null || _scripts?.Hero == null)
+		{
+			return;
+		}
+
+		if (_time < actor.NextPerceptionAt)
+		{
+			return;
+		}
+
+		actor.NextPerceptionAt = _time + Math.Max(0.1f, actor.PerceptionSeconds);
+
+		var handler = actor.PerceptionFunctions[PercAssessPlayer];
+		var range = _perceptionRanges[PercAssessPlayer];
+		if (range <= 0)
+		{
+			range = actor.Instance.SensesRange;
+		}
+
+		var distance = Vector3.Distance(actor.Position, playerFeet);
+		var inRange = range > 0 && distance * distance <= range * range;
+
+		var head = actor.Position + Vector3.UnitY * EyeHeight;
+		var target = playerFeet + Vector3.UnitY * PlayerCenterHeight;
+		var toTarget = target - head;
+		var inCone = inRange && WithinViewCone(actor.Yaw, toTarget);
+
+		var occluded = false;
+		if (inCone && distance > 1f && _physics != null)
+		{
+			// Stop short of the player's own capsule so it is not treated as an occluder, and
+			// ignore the NPC's own capsule, which the ray starts inside.
+			var reach = Math.Max(1f, distance - 45f);
+			occluded = _physics.RayCast(head, toTarget / toTarget.Length(), reach, false, out _,
+				actor.Vob.PhysicsBody);
+		}
+
+		if (DebugSettings.AiTrace && _reported.Add($"perc:{actor.SymbolIndex}"))
+		{
+			Log.Info($"AI trace: '{actor.Vob.Name}' perception handler {handler}, " +
+				$"senses {actor.Instance.Senses}, range {range}, distance {distance:0}, " +
+				$"in cone {inCone}, occluded {occluded}.");
+		}
+
+		if (handler < 0 || (actor.Instance.Senses & SenseSee) == 0 || !inRange || !inCone || occluded)
+		{
+			return;
+		}
+
+		_scripts.InvokeState(actor.Instance, _scripts.Hero, null, handler);
+		if (_perceptionLogs++ < MaxPerceptionLogs)
+		{
+			Log.Info($"NPC '{actor.Vob.Name}' perceives the player at {distance:0} units " +
+				$"(PERC_ASSESSPLAYER, range {range}).");
+		}
+	}
+
+	/// <summary>
+	/// Whether a direction lies inside the NPC's view cone. The facing for a yaw in
+	/// <see cref="NpcActor"/> is <c>(sin yaw, 0, -cos yaw)</c>; the reference accepts up to
+	/// 80 degrees either side.
+	/// </summary>
+	internal static bool WithinViewCone(float yaw, Vector3 toTarget)
+	{
+		var length = MathF.Sqrt(toTarget.X * toTarget.X + toTarget.Z * toTarget.Z);
+		if (length < 0.001f)
+		{
+			return true;
+		}
+
+		var dot = (MathF.Sin(yaw) * toTarget.X - MathF.Cos(yaw) * toTarget.Z) / length;
+		return dot >= ViewConeCos;
 	}
 
 	/// <summary>Backs <c>AI_GotoWP</c>: the state walks there until it arrives.</summary>
@@ -561,6 +796,8 @@ internal sealed class NpcAiSystem
 					actor.HasAiMove = false;
 				}
 			}
+
+			Perceive(actor, center);
 
 			var state = actor.State;
 			if (state == null || !state.TryRunLoop(_time, LoopInterval))

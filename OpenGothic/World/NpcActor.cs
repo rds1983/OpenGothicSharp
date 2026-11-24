@@ -79,6 +79,28 @@ public sealed class NpcActor
 	/// <summary>AI time before which an ended routine state is not restarted, in seconds.</summary>
 	public double NextRoutineStateAt { get; set; }
 
+	/// <summary>Number of <c>PercType</c> slots the script can enable (reference PERC_Count).</summary>
+	public const int PerceptionCount = 33;
+
+	/// <summary>
+	/// Perception handler per <c>PercType</c>, filled by <c>NPC_PercEnable</c>; -1 means the
+	/// type is disabled. The reference keeps the same table on the NPC.
+	/// </summary>
+	public int[] PerceptionFunctions { get; } = CreatePerceptionFunctions();
+
+	/// <summary>AI time at which this NPC samples its surroundings again.</summary>
+	public double NextPerceptionAt { get; set; }
+
+	/// <summary>Script target set by <c>NPC_SetTarget</c>; -1 when none.</summary>
+	public int TargetSymbol { get; set; } = -1;
+
+	private static int[] CreatePerceptionFunctions()
+	{
+		var functions = new int[PerceptionCount];
+		System.Array.Fill(functions, -1);
+		return functions;
+	}
+
 	public NpcVisual Visual { get; }
 
 	public Vector3 Position { get; private set; }

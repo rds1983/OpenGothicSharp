@@ -335,7 +335,7 @@ public class OgGame : Game
 				{
 					_npcActors = NpcSpawner.Spawn(_scripts, _assets, GraphicsDevice, _world,
 						_physics, _clock.Hour);
-					_ai = new NpcAiSystem(_scripts, _npcActors, _world, _physics);
+					_ai = new NpcAiSystem(_scripts, _npcActors, _world, _physics, _clock);
 					_scripts.AiSystem = _ai;
 					_routines = new NpcRoutineSystem(_world, _physics, _clock, _npcActors, _ai);
 				}

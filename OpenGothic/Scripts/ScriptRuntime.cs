@@ -77,6 +77,128 @@ public sealed class ScriptRuntime
 	/// </summary>
 	internal NpcAiSystem AiSystem { get; set; }
 
+	/// <summary>
+	/// Writes the global OTHER slot during a script call, used by queries such as
+	/// <c>NPC_GetTarget</c> that return their result through the VM rather than as an int.
+	/// </summary>
+	internal void SetGlobalOther(NpcInstance other)
+	{
+		if (Vm != null)
+		{
+			Vm.GlobalOther = other;
+		}
+	}
+
+	/// <summary>Reference attitude values (constants.h): hostile 0, neutral 2, friendly 3.</summary>
+	internal const int AttitudeHostile = 0;
+	internal const int AttitudeNeutral = 2;
+
+	private int[] _guildAttitudes;
+	private int _guildCount;
+
+	/// <summary>
+	/// Reads the <c>GIL_ATTITUDES</c> table like <c>GameScript::initialize</c>: a
+	/// <c>GIL_MAX</c>-wide matrix whose values come from a <c>TAB_ANZAHL</c>-entry constant.
+	/// </summary>
+	private void LoadGuildAttitudes()
+	{
+		if (Vm == null)
+		{
+			return;
+		}
+
+		var maxSymbol = Vm.GetSymbolByName("GIL_MAX");
+		var countSymbol = Vm.GetSymbolByName("TAB_ANZAHL");
+		var table = Vm.GetSymbolByName("GIL_ATTITUDES");
+		if (maxSymbol == null || countSymbol == null || table == null)
+		{
+			return;
+		}
+
+		var guilds = maxSymbol.GetInt(0);
+		var tableSize = (int)MathF.Sqrt(countSymbol.GetInt(0));
+		if (guilds <= 0 || tableSize <= 0)
+		{
+			return;
+		}
+
+		_guildCount = guilds;
+		_guildAttitudes = new int[guilds * guilds];
+		for (var row = 0; row < tableSize; ++row)
+		{
+			for (var column = 0; column < tableSize; ++column)
+			{
+				_guildAttitudes[row * guilds + column] =
+					table.GetInt((ushort)(row * tableSize + column));
+			}
+		}
+
+		Log.Info($"Guild attitudes: {guilds} guilds from 'GIL_ATTITUDES'.");
+	}
+
+	/// <summary>Backs <c>WLD_ExchangeGuildAttitudes</c>.</summary>
+	internal void ExchangeGuildAttitudes(string tableName)
+	{
+		if (Vm == null || string.IsNullOrEmpty(tableName))
+		{
+			return;
+		}
+
+		var maxSymbol = Vm.GetSymbolByName("GIL_MAX");
+		var countSymbol = Vm.GetSymbolByName("TAB_ANZAHL");
+		var table = Vm.GetSymbolByName(tableName);
+		if (maxSymbol == null || countSymbol == null || table == null)
+		{
+			return;
+		}
+
+		var guilds = maxSymbol.GetInt(0);
+		var tableSize = (int)MathF.Sqrt(countSymbol.GetInt(0));
+		if (guilds <= 0 || tableSize <= 0)
+		{
+			return;
+		}
+
+		_guildCount = guilds;
+		_guildAttitudes = new int[guilds * guilds];
+		for (var row = 0; row < tableSize; ++row)
+		{
+			for (var column = 0; column < tableSize; ++column)
+			{
+				_guildAttitudes[row * guilds + column] =
+					table.GetInt((ushort)(row * tableSize + column));
+			}
+		}
+	}
+
+	/// <summary>Backs <c>WLD_GetGuildAttitude</c>.</summary>
+	internal int GuildAttitude(int first, int second)
+	{
+		if (_guildAttitudes == null)
+		{
+			return AttitudeNeutral;
+		}
+
+		if (first < 0 || second < 0 || first >= _guildCount || second >= _guildCount)
+		{
+			return AttitudeHostile;
+		}
+
+		return _guildAttitudes[first * _guildCount + second];
+	}
+
+	/// <summary>Backs <c>WLD_SetGuildAttitude</c>; the reference argument order is (g1, att, g2).</summary>
+	internal void SetGuildAttitude(int first, int attitude, int second)
+	{
+		if (_guildAttitudes == null ||
+		    first < 0 || second < 0 || first >= _guildCount || second >= _guildCount)
+		{
+			return;
+		}
+
+		_guildAttitudes[first * _guildCount + second] = attitude;
+	}
+
 	public void LoadAndBoot(string gothicFolder, string worldName)
 	{
 		if (string.IsNullOrEmpty(gothicFolder))
@@ -109,6 +231,7 @@ public sealed class ScriptRuntime
 		Log.Info($"Daedalus script loaded: {Vm.SymbolCount:N0} symbols, {Vm.Symbols.Count:N0} listed.");
 
 		Boot(worldName);
+		LoadGuildAttitudes();
 
 		if (Booted)
 		{
@@ -190,6 +313,31 @@ public sealed class ScriptRuntime
 		// Queries and actions the shipped ZS_* states call; the set comes from -aitrace.
 		Vm.RegisterExternal("hlp_isvalidnpc", (NpcInstance npc) =>
 			AiSystem != null && AiSystem.IsValidNpc(npc) ? 1 : 0);
+		Vm.RegisterExternal("hlp_getinstanceid", (DaedalusInstance instance) =>
+			instance?.Index ?? -1);
+		Vm.RegisterExternal("npc_getattitude", (NpcInstance a, NpcInstance b) =>
+			AiSystem?.GetAttitude(a, b) ?? 2);
+		Vm.RegisterExternal("npc_getpermattitude", (NpcInstance a, NpcInstance b) =>
+			AiSystem?.GetAttitude(a, b) ?? 2);
+		Vm.RegisterExternal("npc_getheighttonpc", (NpcInstance a, NpcInstance b) =>
+			AiSystem?.GetHeightToNpc(a, b) ?? 0);
+		Vm.RegisterExternal("npc_isinfightmode", (NpcInstance npc, int mode) =>
+			AiSystem != null && AiSystem.IsInFightMode(npc, mode) ? 1 : 0);
+		Vm.RegisterExternal("npc_settarget", (NpcInstance npc, NpcInstance other) =>
+			AiSystem?.SetTarget(npc, other));
+		Vm.RegisterExternal("npc_gettarget", (NpcInstance npc) =>
+			AiSystem != null && AiSystem.GetTarget(npc) ? 1 : 0);
+		Vm.RegisterExternal("npc_clearaiqueue", (NpcInstance npc) => { });
+		Vm.RegisterExternal("wld_getguildattitude", (int first, int second) =>
+			GuildAttitude(first, second));
+		Vm.RegisterExternal("wld_setguildattitude", (int first, int attitude, int second) =>
+			SetGuildAttitude(first, attitude, second));
+		Vm.RegisterExternal("wld_exchangeguildattitudes", (string table) =>
+			ExchangeGuildAttitudes(table));
+		Vm.RegisterExternal("wld_getplayerportalguild", () => 0);
+		Vm.RegisterExternal("wld_getday", () => AiSystem?.Day ?? 1);
+		Vm.RegisterExternal("wld_istime", (int h0, int m0, int h1, int m1) =>
+			AiSystem != null && AiSystem.IsTime(h0, m0, h1, m1) ? 1 : 0);
 		Vm.RegisterExternal("hlp_strcmp", (string a, string b) =>
 			string.Equals(a, b, StringComparison.Ordinal) ? 1 : 0);
 		Vm.RegisterExternal("npc_getnearestwp", (NpcInstance npc) =>
@@ -208,7 +356,12 @@ public sealed class ScriptRuntime
 		Vm.RegisterExternal("npc_getlookattarget", (NpcInstance npc) => (NpcInstance)null);
 		Vm.RegisterExternal("npc_setperctime", (NpcInstance npc, float seconds) =>
 			AiSystem?.SetPerceptionTime(npc, seconds));
-		Vm.RegisterExternal("npc_percenable", (NpcInstance npc, int type, int function) => { });
+		Vm.RegisterExternal("npc_percenable", (NpcInstance npc, int type, int function) =>
+			AiSystem?.SetPerception(npc, type, function));
+		Vm.RegisterExternal("npc_percdisable", (NpcInstance npc, int type) =>
+			AiSystem?.ClearPerception(npc, type));
+		Vm.RegisterExternal("perc_setrange", (int type, int distance) =>
+			AiSystem?.SetPerceptionRange(type, distance));
 		Vm.RegisterExternal("wld_ismobavailable", (NpcInstance npc, string name) =>
 			AiSystem != null && AiSystem.IsMobAvailable(npc, name) ? 1 : 0);
 		Vm.RegisterExternal("wld_isfpavailable", (NpcInstance npc, string name) =>

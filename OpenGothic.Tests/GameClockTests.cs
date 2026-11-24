@@ -42,6 +42,18 @@ public class GameClockTests
 		clock.Advance(TimeSpan.FromSeconds(60));
 
 		Assert.Equal(0.5f, clock.Hour);
+		Assert.Equal(2, clock.Day);
+	}
+
+	[Fact]
+	public void SetHour_DoesNotChangeTheDay()
+	{
+		var clock = new GameClock(10f, 1f);
+
+		clock.SetHour(2f);
+
+		Assert.Equal(2f, clock.Hour);
+		Assert.Equal(1, clock.Day);
 	}
 
 	[Fact]
