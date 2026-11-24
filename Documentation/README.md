@@ -703,8 +703,9 @@ F1.5 places the human script NPCs in the world. `NpcSpawner` reads the waynet, p
 authored waypoint (or the nearest unused one within 800 units, like `findNextPoint`), builds
 the armour/body `.MDM` composed with `HUMANS` plus the `.MMB` head, and applies the
 `MDL_SetVisualBody` texture variants per instance. Each NPC gets a kinematic capsule and is
-registered for focus; E starts the G3 dialog. The tested startup places **356 human bodies**;
-**50 non-human bodies** and all routines/AI/movement remain F2/F3. Details in
+registered for focus; E starts the G3 dialog. The tested startup builds **356 human bodies**
+immediately; **50 non-human bodies** build lazily from their model scripts when the player is
+near. Routines/AI/movement remain F2/F3. Details in
 [Specifications/npcs.md](Specifications/npcs.md).
 
 ### Daedalus scripts

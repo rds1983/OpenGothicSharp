@@ -1088,11 +1088,30 @@ public class OgGame : Game
 			var center = _controller?.FeetPosition ?? Camera.Position;
 			const float near = 3000f;
 			var nearSquared = near * near;
+			var builtOne = false;
 
 			foreach (var actor in _npcActors)
 			{
-				if (actor.Node.AnimationData == null ||
-				    Vector3.DistanceSquared(actor.Position, center) > nearSquared)
+				if (Vector3.DistanceSquared(actor.Position, center) > nearSquared ||
+				    actor.ModelFailed)
+				{
+					continue;
+				}
+
+				if (!actor.HasModel)
+				{
+					// Monster bodies are large; build at most one per frame, and only when
+					// the player is close enough to see it.
+					if (!builtOne && _assets != null && _world != null)
+					{
+						NpcSpawner.TryBuildModel(actor, _assets, GraphicsDevice, _world);
+						builtOne = true;
+					}
+
+					continue;
+				}
+
+				if (actor.Node.AnimationData == null)
 				{
 					continue;
 				}

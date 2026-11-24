@@ -107,6 +107,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - Rendering lives in `OpenGothic/Graphics` (`Renderer`, `Sky`, `WorldRenderer`, `Camera`,
   `DebugDraw`, materials, scene/model/mesh visuals and vertex formats).
 - ZenKit is pinned to `1.3.0-cs.1`, matching the parser version the reference C++ client uses.
+  The native ZenKitCS dependency is scheduled for a managed C# port in **N1/N2** because its
+  handle lifetimes and native allocation failures are the remaining low-level risk.
 - Models skip submeshes whose material has no texture; the shipped data uses those as hidden
   placeholder faces (`REPAIR_PLANK`'s `ZM_REP_HIDDEN` was a white triangle on screen).
 - No audio yet; scripting is live in G1–G3.
@@ -126,8 +128,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   player avatar, focus/raycast, door/chest interactions and item pickup with inventory.
   F1's NPC runtime data, G1's Daedalus VM boot, G2's script-object/event bridge and G3's
   dialog engine/UI are complete. F1.5 places the **356 human** script NPCs, adds their
-  collision/focus path, and completes the dialog camera/voice hook. Fifty non-human bodies
-  remain in F1.6, which is the next task.
+  collision/focus path, and completes the dialog camera/voice hook. F1.6 builds the 50
+  non-human bodies lazily from their model scripts; F2 is next.
 
 ---
 
@@ -680,16 +682,25 @@ completed with the two-shot camera and `DialogLine.Voice`; City Guard `-talk` st
 The 50 non-human bodies are tracked in F1.6. The 172 NPCs at `NW_CITY_ENTRANCE_01` overlap on
 the five nearby waypoints until F2 routines disperse them.
 
-### F1.6. Non-human NPC bodies
+### F1.6. Non-human NPC bodies — DONE
 Give the monster `WLD_INSERTNPC` instances their model-script skeleton and animation set.
 **Depends on F1.5.**
 **Done when:** a monster NPC (wolf, rat, troll, …) is visible at its spawn point and plays
 its idle animation; building all monster models must stay lazy or otherwise bounded because
 the full animation sets are large.
 
+**Implemented:** `MDL_SetVisual`'s model script is resolved through the animation index, the
+body composes with the script's `.MDH`/`.MDL`, and the idle clip is `S_FISTRUN`. Monster
+bodies build lazily within 3000 units of the player, one per frame; startup creates 356 human
+bodies and 50 pending monsters. A sheep was verified visible and idling at `NW_FARM2_OUT_02`.
+One shipped model (`Snorting Dragon Snapper`) still fails with `std::bad_alloc` and is marked
+failed. **Done:** monster bodies derive their skeleton from the model script, build lazily
+within 3000 units, and play the `S_FISTRUN` idle. A sheep was verified at
+`NW_FARM2_OUT_02`.
+
 ### F2. Way matrix & routines
 Parse waypoints/waymatrix; daily routines (`TA`, `RTN`) move NPCs between points.
-**Depends on F1.5:** routines need placed, visible NPCs.
+**Depends on F1.5/F1.6:** routines need placed human and monster NPCs.
 **Done when:** an NPC follows a simple authored routine.
 
 ### F3. AI states & perception
@@ -842,3 +853,32 @@ Lighting, shadows, materials, sky, fog, particles matched to the original.
 Myra theme/layout matched to the original interface.
 ### M4. Performance
 Draw batching, instancing, culling, and frame pacing.
+
+---
+
+## Milestone N — Managed ZenKit port
+
+Replace the native **ZenKitCS** bindings with a C# port of ZenKit, using the available
+ZenKit source as the format/behavior reference. The native library is MIT, so this is a
+provenance-safe port, not a reverse-engineering step; never inspect the original game
+executables for it.
+
+**Why:** native handles/finalizers, `std::bad_alloc`, and recoverable Daedalus VM errors
+(`pop_reference`/`SELF`) are hard to diagnose and fix from C#. A managed port removes the
+whole class of memory-lifetime failures and lets the readers share the game's data model
+directly. The failed `Snorting Dragon Snapper` model load is the current visible symptom.
+
+**Scheduling:** after J in practice. It can start earlier in parallel because it is asset/VM
+infrastructure rather than gameplay.
+
+### N1. Managed file readers
+Port the VDF/record index, ZEN/world, model (MDL/MDM/MDH/MDS/MRM/MMB), texture, DAT,
+output-unit/cutscene and related binary readers.
+**Done when:** the client loads the shipped data through managed readers with the same test
+corpus and the native ZenKitCS package is gone.
+
+### N2. Managed Daedalus VM
+Port the Daedalus script/VM execution layer, including the external-call ABI and instance
+storage, and remove the native handle/finalizer workarounds.
+**Done when:** startup, script objects and dialogs pass from the managed VM, and no native
+ZenKit symbols remain in the process.

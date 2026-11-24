@@ -90,7 +90,7 @@ partial class Assets
 	/// (a hand-authored prop). The mesh list wins over the skeleton name because it is what
 	/// reaches the armour models, which are not skeletons of their own.
 	/// </summary>
-	private string FindScriptForModel(string modelStem)
+	internal string FindScriptForModel(string modelStem)
 	{
 		BuildScriptIndex();
 

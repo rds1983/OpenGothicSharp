@@ -24,6 +24,9 @@ internal static class NpcSpawner
 {
 	private const string Skeleton = "HUMANS";
 
+	private static readonly HashSet<string> MissingClips =
+		new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
 	public static List<NpcActor> Spawn(ScriptRuntime scripts, Assets assets, GraphicsDevice device,
 		WorldGrid world, PhysicsWorld physics)
 	{
@@ -34,7 +37,8 @@ internal static class NpcSpawner
 		}
 
 		var placer = new WaypointPlacer(world);
-		var missingClips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var humans = 0;
+		var pending = 0;
 		var skipped = 0;
 
 		foreach (var binding in scripts.Npcs)
@@ -46,100 +50,149 @@ internal static class NpcSpawner
 			var yaw = YawFromDirection(waypoint.Direction);
 			var scale = visual.Scale == Vector3.Zero ? Vector3.One : visual.Scale;
 
-			DrModel model;
-			try
-			{
-				model = BuildBody(assets, device, visual);
-			}
-			catch (Exception ex)
-			{
-				Log.Warning($"Unable to build the body of '{vob.Name}': {ex.Message}");
-				model = null;
-			}
-
-			if (model == null)
-			{
-				++skipped;
-				continue;
-			}
-
-			var instance = new DrModelInstance(model);
-			var node = new ModelNode
-			{
-				Instance = instance,
-				Collision = false
-			};
-
-			assets.ApplyMaterialVariants(device, model, visual.BodyTexture, 0, visual.BodyColor,
-				node.Materials);
-			AttachHead(assets, device, model, node, visual);
-
-			var animation = new AnimationData(instance);
-			if (IsHumanBody(visual, Stem(visual.Body)) && animation.Play("S_RUN"))
-			{
-				node.AnimationData = animation;
-			}
-			else if (IsHumanBody(visual, Stem(visual.Body)) && missingClips.Add(CompositionKey(visual)))
-			{
-				Log.Warning($"NPC body '{CompositionKey(visual)}' has no idle clip 'S_RUN'.");
-			}
-
-			var rootBone = model.FindBoneByName("BIP01") ??
-			               (model.Bones.Length > 0 ? model.Bones[0] : null);
-			if (rootBone == null)
-			{
-				Log.Warning($"NPC body '{CompositionKey(visual)}' has no root bone.");
-				++skipped;
-				continue;
-			}
-
-			BoundingBox bounds = instance.BoundingBox ?? new BoundingBox(position, position);
-			var defaultRootY = rootBone.DefaultPose.Translation.Y;
-			var idleRootY = instance.GetBoneGlobalTransform(rootBone.Index).Translation.Y;
-			var feetOffset = -bounds.Min.Y - (idleRootY - defaultRootY);
-
-			var actor = new NpcActor(vob, node, rootBone.Index, feetOffset, position, yaw, scale);
-			actor.UpdateTransform();
-
+			var actor = new NpcActor(vob, visual, position, yaw, scale);
 			vob.World = Matrix.CreateScale(scale) *
 			            Matrix.CreateRotationY(-yaw) *
 			            Matrix.CreateTranslation(position);
 			vob.Local = vob.World;
-
-			var worldMatrix = actor.Node.Transform;
-			vob.Bounds = bounds.Transform(ref worldMatrix);
-
-			world.Vobs.Add(vob);
-			var cell = world.FindCellByBox(vob.Bounds) ?? world.FindCellByPoint(position);
-			if (cell != null)
-			{
-				cell.Children.Add(node);
-				cell.ObjectBounds.Add(vob.Bounds);
-				vob.SceneNode = node;
-				node.Vob = vob;
-			}
-			else
-			{
-				Log.Warning($"NPC '{vob.Name}' at ({position.X:0.#}, {position.Z:0.#}) is outside the grid.");
-			}
 
 			if (physics != null)
 			{
 				vob.PhysicsBody = physics.AddNpcCapsule(position);
 			}
 
-			actors.Add(actor);
-
-			if (actors.Count <= 5)
+			var human = IsHumanBody(visual, Stem(visual.Body));
+			if (human)
 			{
-				Log.Info(
-					$"NPC spawned '{vob.Name}' ({vob.NpcInstance}) at '{waypointName}', " +
-					$"body '{CompositionKey(visual)}'.");
+				if (TryBuildModel(actor, assets, device, world))
+				{
+					actors.Add(actor);
+					++humans;
+
+					if (humans <= 5)
+					{
+						Log.Info(
+							$"NPC spawned '{vob.Name}' ({vob.NpcInstance}) at '{waypointName}', " +
+							$"body '{CompositionKey(visual)}'.");
+					}
+				}
+				else
+				{
+					++skipped;
+				}
+			}
+			else
+			{
+				actors.Add(actor);
+				++pending;
+
+				if (pending <= 5)
+				{
+					Log.Info(
+						$"NPC pending '{vob.Name}' ({vob.NpcInstance}) at '{waypointName}' " +
+						$"({position.X:0.#}, {position.Y:0.#}, {position.Z:0.#}), body " +
+						$"'{CompositionKey(visual)}'.");
+				}
 			}
 		}
 
-		Log.Info($"NPC spawn: {actors.Count} visible, {skipped} skipped, {scripts.InsertedNpcCount} script NPCs.");
+		Log.Info(
+			$"NPC spawn: {humans} human bodies, {pending} monster bodies pending, {skipped} " +
+			$"skipped, {scripts.InsertedNpcCount} script NPCs.");
 		return actors;
+	}
+
+	/// <summary>
+	/// Builds a pending actor's body and places it in the world. Monster models are built on
+	/// demand because their animation sets are large; the caller limits this to nearby actors.
+	/// </summary>
+	internal static bool TryBuildModel(NpcActor actor, Assets assets, GraphicsDevice device,
+		WorldGrid world)
+	{
+		if (actor == null || actor.HasModel || actor.ModelFailed)
+		{
+			return actor?.HasModel == true;
+		}
+
+		var vob = actor.Vob;
+		var visual = actor.Visual;
+
+		DrModel model;
+		try
+		{
+			model = BuildBody(assets, device, visual);
+		}
+		catch (Exception ex)
+		{
+			Log.Warning($"Unable to build the body of '{vob.Name}': {ex.Message}");
+			actor.ModelFailed = true;
+			return false;
+		}
+
+		if (model == null)
+		{
+			actor.ModelFailed = true;
+			return false;
+		}
+
+		var instance = new DrModelInstance(model);
+		var node = new ModelNode
+		{
+			Instance = instance,
+			Collision = false
+		};
+
+		assets.ApplyMaterialVariants(device, model, visual.BodyTexture, 0, visual.BodyColor,
+			node.Materials);
+		AttachHead(assets, device, model, node, visual);
+
+		var human = IsHumanBody(visual, Stem(visual.Body));
+		var animation = new AnimationData(instance);
+		var idleClip = human ? "S_RUN" : "S_FISTRUN";
+		if (animation.Play(idleClip) || (!human && animation.Play("S_RUN")))
+		{
+			node.AnimationData = animation;
+		}
+		else if (MissingClips.Add(CompositionKey(visual) + ":" + idleClip))
+		{
+			Log.Warning($"NPC body '{CompositionKey(visual)}' has no idle clip '{idleClip}'.");
+		}
+
+		var rootBone = model.FindBoneByName("BIP01") ??
+		               (model.Bones.Length > 0 ? model.Bones[0] : null);
+		if (rootBone == null)
+		{
+			Log.Warning($"NPC body '{CompositionKey(visual)}' has no root bone.");
+			actor.ModelFailed = true;
+			return false;
+		}
+
+		BoundingBox bounds = instance.BoundingBox ?? new BoundingBox(actor.Position, actor.Position);
+		var defaultRootY = rootBone.DefaultPose.Translation.Y;
+		var idleRootY = instance.GetBoneGlobalTransform(rootBone.Index).Translation.Y;
+		var feetOffset = -bounds.Min.Y - (idleRootY - defaultRootY);
+
+		actor.AttachModel(node, rootBone.Index, feetOffset);
+
+		var worldMatrix = node.Transform;
+		vob.Bounds = bounds.Transform(ref worldMatrix);
+
+		world.Vobs.Add(vob);
+		var cell = world.FindCellByBox(vob.Bounds) ?? world.FindCellByPoint(actor.Position);
+		if (cell != null)
+		{
+			cell.Children.Add(node);
+			cell.ObjectBounds.Add(vob.Bounds);
+			vob.SceneNode = node;
+			node.Vob = vob;
+		}
+		else
+		{
+			Log.Warning(
+				$"NPC '{vob.Name}' at ({actor.Position.X:0.#}, {actor.Position.Z:0.#}) is outside the grid.");
+		}
+
+		return true;
 	}
 
 	private static DrModel BuildBody(Assets assets, GraphicsDevice device, NpcVisual visual)
@@ -178,9 +231,22 @@ internal static class NpcSpawner
 			return assets.GetComposedModel(device, Skeleton, body);
 		}
 
-		// Monster bodies need their model-script skeleton and animation set. Composing them
-		// against HUMANS deforms them, and loading every monster model at startup is too
-		// expensive for the F1.5 visibility step, so they stay script objects until F2/F3.
+		// A monster body is driven by a model script (.MSB/.MDS) that names the mesh and its
+		// skeleton. The animation index already maps that mesh to the script, so derive the
+		// skeleton from the script instead of a hand-written monster table.
+		var script = assets.FindScriptForModel(body);
+		if (!string.IsNullOrEmpty(script) &&
+		    (assets.HasRecord(script + ".MDH") || assets.HasRecord(script + ".MDL")))
+		{
+			return assets.GetComposedModel(device, script, body);
+		}
+
+		// Last resort: a self-contained .MDL with its own hierarchy.
+		if (assets.HasRecord(body + ".MDL"))
+		{
+			return assets.GetModel(device, body);
+		}
+
 		return null;
 	}
 

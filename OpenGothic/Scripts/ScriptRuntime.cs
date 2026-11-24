@@ -474,7 +474,8 @@ public sealed class ScriptRuntime
 
 	private DialogSession StartDialog(NpcBinding npc)
 	{
-		if (Vm == null || Hero == null || _infosByNpc == null)
+		if (Vm == null || Hero == null || _infosByNpc == null ||
+		    !_infosByNpc.ContainsKey(npc.SymbolIndex))
 		{
 			return null;
 		}
