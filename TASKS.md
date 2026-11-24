@@ -130,7 +130,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   dialog engine/UI are complete. F1.5 places the **356 human** script NPCs, adds their
   collision/focus path, and completes the dialog camera/voice hook. F1.6 builds the 50
   non-human bodies lazily from their model scripts. F2 drives daily routines from a game
-  clock, walks NPCs between grounded routine points, and is complete; F3 is next.
+  clock, walks NPCs between grounded routine points, and is complete. Cut-out foliage
+  materials render with `AlphaTestEffect`. F3 is split into F3.1–F3.5; F3.1 (state container
+  and routine actions) is next.
 
 ---
 
@@ -720,15 +722,61 @@ Idle/guard/follow/attack states, perception events (see/hear/damage), and AI que
 **Depends on F2:** routines run on placed NPCs.
 **Done when:** an NPC notices the player and transitions state plausibly.
 
-**Carry-over from F2:**
-- Invoke the stored routine `action` (the `ZS_*` state name, e.g. `ZS_STAND_WP`, `ZS_GOTOBED`,
-  `ZS_SIT_BENCH`) instead of only walking to the waypoint, so NPCs sit/sleep/work.
-- Finish `fixNpcPosition` parity: the reference rejects spots where the capsule is stuck
-  (`hasCollision()` spiral) and offsets NPCs by `distBias` when inserting. Ours only corrects
-  the height against the terrain mesh; once movement owns the capsule, use the physics world
-  so vob floors are valid ground everywhere, not just near the player.
-- Climb/teleport re-snap and per-step ground following (currently the Y between two path
-  points is interpolated).
+Large enough for several sessions; split below. The reference is the guide: AI states are
+Daedalus functions (`ZS_*`), the engine stores each state's ini/loop/end trio and calls them
+with `SELF`/`OTHER`/`VICTIM`, and scripts drive movement through an AI queue. The routine's
+stored `action` (`ZS_STAND_WP`, `ZS_GOTOBED`, `ZS_SIT_BENCH`, …) is the first state to run.
+
+#### F3.1 State container, `AI_StartState`/`AI_EndState`, routine actions
+- `ScriptRuntime.InvokeState(npc, other, victim, symbol)` sets the three globals, calls the
+  function and returns its int, like the reference's `invokeState`.
+- `NpcAiState` per actor: `funcIni`/`funcLoop`/`funcEnd`, start time, next loop time,
+  started flag. Starting a state ends the previous one (end callback), then runs ini; the
+  loop runs on the perception interval; clearing runs end.
+- Externals `AI_StartState(fn, stateName)`, `AI_EndState`, `Npc_IsInState`.
+- The routine's `action` starts when the NPC arrives and ends when the routine changes.
+**Done when:** Matteo plays `ZS_GOTOBED` at 22:00 with ini/loop/end visible in the log, and
+the state ends when his routine changes again.
+
+#### F3.2 AI queue: movement and idle actions
+Port the queue actions the shipped scripts actually call: `AI_GotoWP`, `AI_GotoNpc`,
+`AI_GotoPos`, `AI_Wait`, `AI_Standup`, `AI_TurnToNpc`, `AI_TurnToSound`, `AI_PlayAni`,
+`AI_RemoveWeapon`/`AI_EquipWeapon` where trivial, plus the queue result the state loop reads
+(e.g. `AI_Wait` blocking until its timer expires).
+Walking reuses the F2 walker (direct targets until N1 exposes waynet edges).
+**Depends on F3.1.**
+**Done when:** a `ZS_*` state walks to a waypoint, waits there and returns control without
+unimplemented-external errors.
+
+#### F3.3 Perception
+- `senses_range` from the instance, view cone, head/eye ray with occlusion against the
+  collision world; hearing radius for noise; damage events.
+- Per-type sampling on the reference's perception interval, not every frame.
+- Call the NPC's perception function with the player as `OTHER`/victim; when the script has
+  none, log and turn to face the player as an engine fallback.
+**Depends on F3.1/F3.2.**
+**Done when:** walking into a guard's view makes him react, and approaching from behind out
+of the cone does not.
+
+#### F3.4 Process policies & update budget
+- `NpcProcessPolicy` (AiNormal/AiFar/AiFar2) selected by distance to the player, like the
+  reference, so 406 NPCs do not all run perception and state loops each frame.
+- Clamp the loop/perception intervals and skip far NPCs entirely.
+**Depends on F3.1–F3.3.**
+**Done when:** frame time stays flat with all NPCs spawned and only nearby ones tick.
+
+#### F3.5 Movement parity and grounding follow-up
+Carry-over from F2; the state machine should drive this, not the other way round.
+- Translate the capsule (`tryTranslate`-style) instead of snapping the transform: slide along
+  walls, honour step height, follow the ground every step instead of interpolating Y between
+  waypoints.
+- Full `fixNpcPosition` parity: stuck-capsule spiral and `distBias`, using physics rays so vob
+  floors are valid ground everywhere (replaces the terrain-only 60-unit heuristic).
+- Re-snap after climbs and teleports.
+**Depends on F3.2.**
+**Done when:** NPCs walk around obstacles and stand on house floors anywhere on the map.
+
+Order: F3.1 → F3.2 → F3.3 → F3.4 → F3.5.
 
 ---
 
@@ -871,6 +919,9 @@ Addon content: new world, quests, mechanics.
 Replace stock MonoGame effects with a custom shader pipeline.
 ### M2. Visual parity
 Lighting, shadows, materials, sky, fog, particles matched to the original.
+**Known gap:** no transparent pass yet. `Blend`/`Add`/`Multiply` alpha functions and the
+water group are drawn opaque (cut-out foliage already uses `AlphaTestEffect`); water,
+windows and torch glows need a sorted transparent pass.
 ### M3. UI parity
 Myra theme/layout matched to the original interface.
 ### M4. Performance

@@ -28,6 +28,9 @@ public partial class Assets
 	private readonly Dictionary<string, List<RecordInfo>> _allRecords = new Dictionary<string, List<RecordInfo>>();
 	private readonly Dictionary<string, object> _cache = new Dictionary<string, object>();
 
+	/// <summary>Textures whose stored format is DXT1, by every name they were asked for.</summary>
+	private readonly HashSet<string> _dxt1Textures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
 	/// <summary>
 	/// Parses a VFS record while guaranteeing its <see cref="Read"/> stays alive. ZenKit's
 	/// managed wrapper has a finalizer and no <c>Dispose</c>: without this the finalizer can
@@ -139,6 +142,61 @@ public partial class Assets
 		return result;
 	}
 
+	/// <summary>
+	/// Whether a material is drawn with alpha testing. This is the reference's
+	/// <c>Material::loadAlphaFunc</c> classification copied over: only the unset alpha
+	/// functions are cut out; blending, additive, multiply and water belong to other passes;
+	/// and a DXT1 texture with an opaque material colour is solid. There is no scan of the
+	/// alpha channel - the texture format is the only texture input.
+	/// </summary>
+	internal static bool IsAlphaTested(ZenKit.AlphaFunction alpha, ZenKit.MaterialGroup group,
+		byte colorAlpha, bool hasTexture, bool dxt1)
+	{
+		switch (alpha)
+		{
+			case ZenKit.AlphaFunction.Blend:
+			case ZenKit.AlphaFunction.Add:
+			case ZenKit.AlphaFunction.Subtract:
+			case ZenKit.AlphaFunction.Multiply:
+			case ZenKit.AlphaFunction.MultiplyAlt:
+				return false;
+		}
+
+		if (group == ZenKit.MaterialGroup.Water)
+		{
+			return false;
+		}
+
+		if (dxt1 && colorAlpha == 255)
+		{
+			return false;
+		}
+
+		// Without a texture the reference draws a solid colour: it is cut out only when that
+		// colour itself is not opaque.
+		if (!hasTexture)
+		{
+			return colorAlpha != 255;
+		}
+
+		return true;
+	}
+
+	/// <summary>Applies <see cref="IsAlphaTested(ZenKit.AlphaFunction, ZenKit.MaterialGroup, byte, bool, bool)"/>
+	/// to a ZEN material; its texture must already be loaded so its format is known.</summary>
+	internal bool IsAlphaTested(ZenKit.IMaterial material)
+	{
+		if (material == null)
+		{
+			return false;
+		}
+
+		var hasTexture = !string.IsNullOrEmpty(material.Texture);
+		var dxt1 = hasTexture && _dxt1Textures.Contains(material.Texture);
+
+		return IsAlphaTested(material.AlphaFunction, material.Group, material.Color.A, hasTexture, dxt1);
+	}
+
 	/// <summary>Whether the installed data contains a record with this exact name.</summary>
 	public bool HasRecord(string name)
 	{
@@ -204,6 +262,7 @@ public partial class Assets
 				result.SetData(i, null, allMipmapsRaw[i], 0, allMipmapsRaw[i].Length);
 			}
 
+			MarkDxt1(name, record.Name, texture.Format);
 			return result;
 		}
 		else
@@ -216,8 +275,24 @@ public partial class Assets
 				result.SetData(i, null, allMipmapsRgba[i], 0, allMipmapsRgba[i].Length);
 			}
 
+			MarkDxt1(name, record.Name, texture.Format);
 			return result;
 		}
+	}
+
+	/// <summary>
+	/// Remembers DXT1 textures under the requested and the resolved name; the material
+	/// classification turns them solid when the material colour is opaque.
+	/// </summary>
+	private void MarkDxt1(string requestedName, string resolvedName, ZenKit.TextureFormat format)
+	{
+		if (format != ZenKit.TextureFormat.Dxt1)
+		{
+			return;
+		}
+
+		_dxt1Textures.Add(requestedName);
+		_dxt1Textures.Add(resolvedName);
 	}
 
 

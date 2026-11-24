@@ -17,6 +17,13 @@ public class Material
 
 	public bool CastsShadow { get; set; }
 
+	/// <summary>
+	/// Draw with alpha testing: texels whose alpha is below 0.5 are discarded. Foliage is
+	/// authored as DXT3/DXT5 cards with mostly transparent texels but an opaque material
+	/// alpha function, so the texture decides this, not the ZEN material.
+	/// </summary>
+	public bool AlphaTest { get; set; }
+
 	public bool LightingEnabled { get; set; } = true;
 
 	public bool FogEnabled { get; set; } = true;

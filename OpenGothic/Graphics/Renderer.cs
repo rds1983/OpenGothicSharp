@@ -16,6 +16,7 @@ public class Renderer : IDisposable
 	private readonly GraphicsDevice _device;
 	private readonly BasicEffect _effect;
 	private readonly SkinnedEffect _skinnedEffect;
+	private readonly AlphaTestEffect _alphaTestEffect;
 	private readonly BoundingFrustum _frustum = new BoundingFrustum(Matrix.Identity);
 
 	// Reused across draws: these are per-frame hot paths, so allocating a Material per call
@@ -95,6 +96,21 @@ public class Renderer : IDisposable
 
 		_skinnedEffect.DirectionalLight2.Enabled = false;
 
+		// Cut-out geometry (foliage, grates, torn cloth) samples a texture whose transparent
+		// texels are black, so an opaque draw shows black cards. Stock BasicEffect has no
+		// alpha test; this effect discards texels below the reference's 0.5 threshold. It is
+		// unlit, which suits Gothic's pre-shaded textures.
+		_alphaTestEffect = new AlphaTestEffect(device)
+		{
+			AlphaFunction = CompareFunction.GreaterEqual,
+			ReferenceAlpha = 128,
+
+			FogEnabled = true,
+			FogColor = Constants.SkyHorizonColor.ToVector3(),
+			FogStart = Constants.FogStart,
+			FogEnd = Constants.FogEnd
+		};
+
 		_fallbackTexture = new Texture2D(device, 1, 1);
 		_fallbackTexture.SetData(new[] { Color.White });
 
@@ -158,6 +174,10 @@ public class Renderer : IDisposable
 
 		_skinnedEffect.View = camera.View;
 		_skinnedEffect.Projection = camera.Projection;
+
+		_alphaTestEffect.View = camera.View;
+		_alphaTestEffect.Projection = camera.Projection;
+		_alphaTestEffect.Texture = _fallbackTexture;
 
 		// Reuse the same instance; BeginFrame runs every frame, so allocating here would be
 		// pure garbage.
@@ -276,6 +296,19 @@ public class Renderer : IDisposable
 
 			// Restore the frame default so the next part is unaffected.
 			_skinnedEffect.FogEnabled = true;
+		}
+		else if (material?.AlphaTest == true)
+		{
+			_alphaTestEffect.World = transform;
+			_alphaTestEffect.Texture = material.DiffuseTexture ?? _fallbackTexture;
+			_alphaTestEffect.DiffuseColor = material.DiffuseColor.ToVector3();
+			_alphaTestEffect.FogEnabled = material.FogEnabled;
+			_alphaTestEffect.CurrentTechnique.Passes[0].Apply();
+
+			DrawPrimitives(part);
+
+			// Restore the frame default so the next part is unaffected.
+			_alphaTestEffect.FogEnabled = true;
 		}
 		else
 		{
@@ -462,6 +495,7 @@ public class Renderer : IDisposable
 	{
 		_effect.Dispose();
 		_skinnedEffect.Dispose();
+		_alphaTestEffect.Dispose();
 		_boxLines?.Dispose();
 		_boxLines = null;
 		_wireframeRasterizerState?.Dispose();

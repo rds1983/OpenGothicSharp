@@ -252,7 +252,8 @@ namespace OpenGothic
 							var mat = new Material
 							{
 								DiffuseColor = Color.White,
-								DiffuseTexture = texture
+								DiffuseTexture = texture,
+								AlphaTest = IsAlphaTested(zkMaterial)
 							};
 
 							if (zkMaterial.Group == MaterialGroup.Water/* || zkMaterial.Group == MaterialGroup.Earth || zkMaterial.Group == MaterialGroup.Snow*/)

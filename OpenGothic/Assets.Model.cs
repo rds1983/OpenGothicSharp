@@ -71,7 +71,8 @@ partial class Assets
 		{
 			DiffuseColor = Color.White,
 			DiffuseTexture = texture,
-			SourceTexture = zkMaterial.Texture
+			SourceTexture = zkMaterial.Texture,
+			AlphaTest = IsAlphaTested(zkMaterial)
 		};
 
 		var result = meshBuilder.CreateMeshPart(device, true);

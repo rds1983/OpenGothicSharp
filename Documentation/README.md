@@ -215,7 +215,8 @@ Rendering is split three ways:
   `DrawMeshPart(DrMeshPart, Matrix, Matrix[]? boneTransforms, Material? customMaterial, bool cull)`,
   `DrawBoundingBox(BoundingBox, Color)`,
   `DrawMeshPartWireframe(DrMeshPart, Matrix, Color, Matrix[]? boneTransforms)`, `EndFrame()`.
-  It owns the `BasicEffect`, the `SkinnedEffect`, device blend/depth/rasterizer state,
+  It owns the `BasicEffect`, the `SkinnedEffect`, the `AlphaTestEffect`, device
+  blend/depth/rasterizer state,
   vertex/index-buffer binding and the draw call. It also exposes per-frame stats РІР‚вЂќ
   `DrawCalls`, `Triangles` РІР‚вЂќ reset in `BeginFrame`.
   `BeginFrame` **saves** the device state and installs the renderer's own (opaque blend,
@@ -241,6 +242,19 @@ Materials without a texture fall back to a 1x1 white texture. Textures in compre
 formats (DXT1/3/5) are uploaded from the raw mip chain; palettized and uncompressed formats
 are decoded to RGBA by ZenKit and uploaded as `SurfaceFormat.Color`. A texture that cannot
 be found logs a warning and renders untextured rather than aborting the world load.
+
+**Cut-out materials use `AlphaTestEffect`.** Foliage, plants, torn cloth and similar geometry
+sample textures whose transparent texels are black, so an opaque draw shows big black cards.
+`Assets.IsAlphaTested` copies the reference's `Material::loadAlphaFunc` decision verbatim:
+the unset alpha functions (`Default`/`None`) mean "cut out"; `Blend`, `Add`, `Subtract`,
+`Multiply`, `MultiplyAlt` and the water group belong to other passes; a **DXT1 texture with an
+opaque material colour is solid**; and a material without a texture is cut out only when its
+colour is not opaque. There is no scan of the alpha channel - the stored texture format is the
+only texture input, exactly like the reference. `Renderer` draws the cut-out parts with
+`AlphaTestEffect` (greater-or-equal, reference alpha 128 - the reference's 0.5 threshold). It
+is unlit, which suits Gothic's pre-shaded textures, and keeps the same fog. In `NEWWORLD.ZEN`
+this switches 33 of 1400 material groups (the DXT3 ones, e.g. foliage); the 1101 DXT1 groups
+stay solid and keep `BasicEffect` lighting.
 
 **Vertex data is used verbatim.** `MeshBuilder` swaps triangle indices (because mirroring Z
 reverses winding) but never flips or mirrors U/V. An earlier U-mirror (`1 - u`) corrupted
