@@ -58,10 +58,11 @@ public class CommandLine
 	public bool WalkMode { get; private set; }
 
 	/// <summary>
-	/// Resolve the focus target once on the first walking frame, as if the interact key had
-	/// been pressed. Useful for captures, where synthetic key events are unreliable.
+	/// Resolve the focus target this many times on the first walking frames, as if the
+	/// interact key had been pressed. Useful for captures, where synthetic key events are
+	/// unreliable; consecutive actions are spaced to let the mob animation finish.
 	/// </summary>
-	public bool Interact { get; private set; }
+	public int Interact { get; private set; }
 
 	/// <summary>
 	/// Whether the game should start with the playable capsule. Explicit <see cref="Walk"/> or
@@ -293,7 +294,7 @@ public class CommandLine
 					result.WalkMode = true;
 					break;
 				case "-interact":
-					result.Interact = true;
+					result.Interact = 1;
 					break;
 
 				default:
@@ -516,6 +517,19 @@ public class CommandLine
 							result._invalid = true;
 						}
 					}
+					else if (arg.StartsWith("-interact:", StringComparison.OrdinalIgnoreCase))
+					{
+						var value = arg.Substring("-interact:".Length);
+						if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) && count > 0)
+						{
+							result.Interact = count;
+						}
+						else
+						{
+							Log.Error($"Option '-interact:' requires a positive count, got '{value}'.");
+							result._invalid = true;
+						}
+					}
 					else if (arg.StartsWith("-walktest:", StringComparison.OrdinalIgnoreCase))
 					{
 						var value = arg.Substring("-walktest:".Length);
@@ -633,7 +647,7 @@ public class CommandLine
 
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
-		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] [-interact] " +
+		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] [-interact[:<count>]] " +
 		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
 		"[-player:<x,y,z>] [-yaw:<degrees>] [-walktest:<seconds>] [-vobstats] [-vobfind:<x,y,z>] [-vobradius:<n>] [-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 

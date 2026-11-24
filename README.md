@@ -41,18 +41,18 @@ and comment-only lines; inline comments count as code.
 
 | Area | C# files | Size | Physical lines | Code | Comments | Blank |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| All source | 59 | 331.3 KiB | 11,499 | 8,348 | 1,262 | 1,889 |
-| `OpenGothic/` | 50 | 288.5 KiB | 9,696 | 6,912 | 1,252 | 1,532 |
-| `OpenGothic.Tests/` | 9 | 42.8 KiB | 1,803 | 1,436 | 10 | 357 |
+| All source | 61 | 338.9 KiB | 11,756 | 8,524 | 1,304 | 1,928 |
+| `OpenGothic/` | 51 | 295.4 KiB | 9,920 | 7,060 | 1,294 | 1,566 |
+| `OpenGothic.Tests/` | 10 | 43.5 KiB | 1,836 | 1,464 | 10 | 362 |
 
 Main project by folder:
 
 | Folder | Files | Physical lines | Code | Size |
 | --- | ---: | ---: | ---: | ---: |
-| `(root)` | 16 | 4,619 | 3,330 | 139.7 KiB |
+| `(root)` | 16 | 4,663 | 3,366 | 141.0 KiB |
 | `Graphics` | 15 | 2,011 | 1,292 | 60.1 KiB |
 | `Physics` | 4 | 1,581 | 1,161 | 45.7 KiB |
-| `World` | 6 | 690 | 525 | 20.0 KiB |
+| `World` | 7 | 870 | 637 | 25.6 KiB |
 | `Utility` | 3 | 410 | 287 | 13.1 KiB |
 | `UI` | 6 | 385 | 317 | 9.9 KiB |
 

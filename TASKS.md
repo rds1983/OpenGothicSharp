@@ -82,6 +82,10 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   against its world box and visual parts, with a physics occlusion check. The target is
   outlined in cyan, `DebugOverlay` names it, and E resolves it. `-interact` reproduces the key
   for a capture.
+- Doors, chests, switches and wheels have a state machine: use advances the authored state,
+  plays `S_S0`/`T_S0_2_S1`/`S_S1`, rejects locks and item requirements, and raises the future
+  audio/script hook. The focus overlay shows the live state and `-interact[:<count>]` replays
+  the action.
 - Rendering lives in `OpenGothic/Graphics` (`Renderer`, `Sky`, `WorldRenderer`, `Camera`,
   `DebugDraw`, materials, scene/model/mesh visuals and vertex formats).
 - ZenKit is pinned to `1.3.0-cs.1`, matching the parser version the reference C++ client uses.
@@ -101,7 +105,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   **Milestone D (Physics and movement) complete** — D1–D3: static collision, kinematic
   character controller, player input, first/third-person cameras and streamed collision.
   Current milestone: **E — Interaction and world objects**; E1 (typed vob tree), E1.5
-  (placeholder player avatar) and E2 (focus & raycast) are complete, next task **E3**.
+  (placeholder player avatar), E2 (focus & raycast) and E3 (interactions) are complete, next
+  task **E4**.
 
 ---
 
@@ -553,17 +558,34 @@ the broad phase and a single visual's mesh-part boxes are the narrow phase. A ph
 rejects targets behind walls, with a 20-unit slack so the target's own collider cannot hide
 it. The query reuses its result object and allocates nothing per frame.
 
-The focused vob's bounds are drawn as a cyan box, `DebugOverlay` reports the kind, tag and
-distance, and **E** resolves the target and logs it. `-interact` performs the same resolution
-once on the first walking frame for captures.
+The focused vob's bounds are drawn as a cyan box, `DebugOverlay` reports the kind, tag, state
+and distance, and **E** resolves the target and logs it. `-interact[:<count>]` performs the
+same resolution once (or several times) on the first walking frames for captures.
 
 **Done when:** looking at a vob and pressing the interact key resolves the target. — Done;
 verified on the harbour bench in first and third person, and `-interact` logs
 `Interact: Interactive 'BENCH_NW_CITY_01.ASC' (145.7)`.
 
-### E3. Interactions
+### E3. Interactions — DONE
 Chests/doors/levers/switches: state, animation, sound hooks, and script callbacks.
 **Done when:** a door opens and a chest interaction round-trips state.
+
+`InteractiveVob` reads the authored state count, lock, required item, trigger target and
+state-change function. Doors, chests, switches and wheels start on `S_S0`; `InteractionSystem`
+advances the state and plays `T_S<from>_2_S<to>`, which the clip's `Next` chains into
+`S_S<to>`. Locked mobs, item-gated mobs and uses while a transition is playing are rejected.
+`StateChanged` is the subscription point for audio and the script event pipeline; the authored
+function and target names are logged as pending hooks. The focus overlay shows the live state,
+and `-interact[:<count>]` repeats a use for captures.
+
+**Done when:** a door opens and a chest interaction round-trips state. — Done; the chest logs
+`opened (state 0->1)` then `closed (state 1->0)`, the door does the same, and a locked chest
+resolves to `locked` without changing state. Build/tests pass (187 tests).
+
+Known limits: the player attach/use animation, inventory use, lock-picking, real trigger
+callbacks and sounds are later milestones; door/chest collision stays at the closed pose until
+the physics source can follow the animation. Details in
+[Specifications/interactions.md](Documentation/Specifications/interactions.md).
 
 ### E4. Items in world
 Render and pick up world items; inventory add/remove core.

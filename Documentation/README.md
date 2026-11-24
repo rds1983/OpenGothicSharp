@@ -60,7 +60,7 @@ default chosen elsewhere.
 | `-nowalk` | Keep the fixed diagnostic camera even for a plain launch. |
 | `-thirdperson` | Start walking in the chase camera instead of first person. |
 | `-walkmode` | Start with walk mode on, the diagnostic equivalent of the in-game Shift toggle. |
-| `-interact` | Resolve the focus target once on the first walking frame, as if E had been pressed. |
+| `-interact[:<count>]` | Resolve the focus target `count` times (default 1), two seconds apart, as if E had been pressed. |
 | `-player:<x,y,z>` | Start the walking capsule at a world position instead of the placeholder plaza; the player drops to the ground below the point. |
 | `-yaw:<degrees>` | Set the walking player's facing yaw. Needed to aim a diagnostic walk reliably, because `-lookat:` measures from the camera's own position. Mouse look is disabled while `-yaw` or `-walktest` is active so the direction stays fixed. |
 | `-walktest:<seconds>` | Hold forward for a diagnostic run and log the final feet position; a negative value holds backward. Useful for reproducing a stuck spot. |
@@ -649,11 +649,27 @@ narrow it down. A physics ray cast to the target minus a 20-unit slack rejects o
 walls without letting the target's own collider hide it. The query reuses its result object, so
 it allocates nothing per frame.
 
-The focused object's bounds are drawn as a cyan box and `DebugOverlay` shows its kind, tag and
-distance. **E** resolves the target and logs it; `-interact` does the same once on the first
-walking frame so a capture can exercise the path. Display names are the vob tags until the
+The focused object's bounds are drawn as a cyan box and `DebugOverlay` shows its kind, tag,
+state and distance. **E** resolves the target; `-interact[:<count>]` replays the same action
+for captures, spaced to let the mob animation finish. Display names are the vob tags until the
 Daedalus VM supplies script names. Details and the differences from the reference's angle-cone
 selection are in [Specifications/focus.md](Specifications/focus.md).
+
+### Interactions
+
+Doors, chests, switches and wheels own a small state machine. The loader reads the authored
+state count, lock, required item, trigger target and state-change function from the ZEN vob.
+Each supported model starts on `S_S0`; using it advances the state and plays
+`T_S<from>_2_S<to>` (then the script's `Next` clip, `S_S<to>`). A second use closes it again.
+Locked mobs, item-gated mobs and uses during a transition are rejected.
+
+The focus system's `Describe` text includes the current mob state for doors and chests, so the
+debug overlay shows an open/closed round-trip directly.
+
+The player does not yet play the attach/use animation, and the static door/chest collider does
+not follow the open state. Script targets, state-change functions and sounds are recorded as
+pending hooks until G2/J1. Beds and generic `Interactive` mobs are not implemented. See
+[Specifications/interactions.md](Specifications/interactions.md).
 
 ### Sky, fog and lighting
 

@@ -375,6 +375,11 @@ namespace OpenGothic
 							cell.Children.Add(modelNode);
 							vobNode.SceneNode = modelNode;
 							modelNode.Vob = vobNode;
+
+							if (vobNode is InteractiveVob interactive)
+							{
+								interactive.PrepareVisual(modelNode);
+							}
 						}
 					}
 				}

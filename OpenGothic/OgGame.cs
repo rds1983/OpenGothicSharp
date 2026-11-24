@@ -7,6 +7,7 @@ using Myra.Graphics2D.UI;
 using OpenGothic.Graphics;
 using OpenGothic.Physics;
 using OpenGothic.Focus;
+using OpenGothic.Interactions;
 using OpenGothic.Utility;
 using OpenGothic.UI;
 using OpenGothic.Vobs;
@@ -27,8 +28,10 @@ public class OgGame : Game
 	private CharacterController _controller;
 	private PlayerAvatar _avatar;
 	private bool _walkMode;
-	private bool _pendingInteract;
+	private int _pendingInteracts;
+	private float _interactDelay;
 	private readonly FocusSystem _focus = new FocusSystem();
+	private readonly InteractionSystem _interactions = new InteractionSystem();
 	private float _mouseYaw;
 	private float _mousePitch;
 	private bool _thirdPerson;
@@ -465,7 +468,8 @@ public class OgGame : Game
 		_mousePitch = Camera.Pitch;
 		_thirdPerson = CommandLine.Instance.ThirdPerson;
 		_walkMode = CommandLine.Instance.WalkMode;
-		_pendingInteract = CommandLine.Instance.Interact;
+		_pendingInteracts = CommandLine.Instance.Interact;
+		_interactDelay = 0f;
 		_controller.Speed = _walkMode ? CharacterController.WalkSpeed : CharacterController.RunSpeed;
 		_walkTestSeconds = CommandLine.Instance.WalkTestSeconds ?? 0f;
 		// A fixed start yaw, a synthetic walk or a capture is a diagnostic run; keep the pointer
@@ -508,7 +512,7 @@ public class OgGame : Game
 		if (_controller != null)
 		{
 			UpdatePlayer(gameTime, keyboard);
-			UpdateFocus(keyboard);
+			UpdateFocus(gameTime, keyboard);
 		}
 		else
 		{
@@ -647,7 +651,7 @@ public class OgGame : Game
 	/// starts at the capsule's centre rather than the chase camera, so both camera modes focus
 	/// on what the player is looking at.
 	/// </summary>
-	private void UpdateFocus(KeyboardState keyboard)
+	private void UpdateFocus(GameTime gameTime, KeyboardState keyboard)
 	{
 		if (_world == null)
 		{
@@ -658,21 +662,42 @@ public class OgGame : Game
 		var eye = _controller.FeetPosition + Vector3.UnitY * CharacterController.CenterOffset;
 		_focus.Find(_world, _physics, new Ray(eye, Camera.Forward));
 
-		var interact = _pendingInteract;
-		_pendingInteract = false;
-		if (interact || (keyboard.IsKeyDown(Keys.E) && _previousKeyboard.IsKeyUp(Keys.E)))
+		var interact = false;
+		if (_pendingInteracts > 0)
 		{
-			var target = _focus.Target;
-			if (target.HasValue)
+			_interactDelay -= (float)gameTime.ElapsedGameTime.TotalSeconds;
+			if (_interactDelay <= 0f)
 			{
-				var position = target.Vob.Position;
-				Log.Info($"Interact: {target.Describe()} at ({position.X:0.#}, {position.Y:0.#}, {position.Z:0.#}).");
-			}
-			else
-			{
-				Log.Info("Interact: no focus.");
+				interact = true;
+				--_pendingInteracts;
+				// Longer than the authored open/close transitions (1.2 s), so the next
+				// diagnostic action does not land while the previous one is still busy.
+				_interactDelay = 2f;
 			}
 		}
+
+		if (keyboard.IsKeyDown(Keys.E) && _previousKeyboard.IsKeyUp(Keys.E))
+		{
+			interact = true;
+		}
+
+		if (!interact)
+		{
+			return;
+		}
+
+		var target = _focus.Target;
+		if (!target.HasValue)
+		{
+			Log.Info("Interact: no focus.");
+			return;
+		}
+
+		var position = target.Vob.Position;
+		var description = target.Describe();
+		var outcome = _interactions.Interact(target.Vob);
+		Log.Info(
+			$"Interact: {description} at ({position.X:0.#}, {position.Y:0.#}, {position.Z:0.#}) => {outcome}.");
 	}
 
 	/// <summary>

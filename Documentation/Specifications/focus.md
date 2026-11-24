@@ -33,9 +33,9 @@ per-frame query allocates nothing.
 - The focused vob's bounds are drawn as a cyan wireframe box by `WorldRenderer` after the
   world geometry.
 - `DebugOverlay` shows `Focus: <Kind> '<tag>' (<distance>)`, or `Focus: (none)`.
-- **E** resolves the current target and logs it. Until E3 adds actions, this is the observable
-  result of the interaction key. `-interact` does the same once on the first walking frame for
-  a capture.
+- **E** resolves the current target and hands it to the interaction system. `-interact[:<count>]`
+  does the same for captures, repeating the action with a two-second gap so the mob animation
+  finishes.
 
 The displayed name is the vob's tag or instance name, since script display names are not
 available until the Daedalus VM exists.
@@ -44,4 +44,5 @@ available until the Daedalus VM exists.
 
 - The reference's angle cone and per-script focus priority/ranges.
 - NPC and item display names, and highlighting the model itself rather than its bounds.
-- Interaction actions, which are E3.
+- Interaction actions themselves are reached through E and implemented in E3; this document
+  covers only how the target is chosen.

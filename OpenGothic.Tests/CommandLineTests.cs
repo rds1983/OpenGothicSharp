@@ -45,7 +45,7 @@ public class CommandLineTests
 		Assert.False(result.NoMenu);
 		Assert.False(result.DevMode);
 		Assert.False(result.WalkMode);
-		Assert.False(result.Interact);
+		Assert.Equal(0, result.Interact);
 	}
 
 	[Fact]
@@ -61,7 +61,15 @@ public class CommandLineTests
 	{
 		var result = CommandLine.Parse(new[] { "-interact" });
 
-		Assert.True(result.Interact);
+		Assert.Equal(1, result.Interact);
+	}
+
+	[Fact]
+	public void Parse_ReadsInteractCount()
+	{
+		var result = CommandLine.Parse(new[] { "-interact:3" });
+
+		Assert.Equal(3, result.Interact);
 	}
 
 	[Fact]

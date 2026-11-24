@@ -54,9 +54,12 @@ public sealed class FocusTarget
 		}
 
 		var name = Name;
+		var state = Vob is InteractiveVob mob && mob.IsStateAnimated
+			? $" state {mob.State}/{mob.StateCount}"
+			: string.Empty;
 		return string.IsNullOrEmpty(name)
-			? $"{Kind} ({Distance:0.#})"
-			: $"{Kind} '{name}' ({Distance:0.#})";
+			? $"{Kind}{state} ({Distance:0.#})"
+			: $"{Kind} '{name}'{state} ({Distance:0.#})";
 	}
 }
 
