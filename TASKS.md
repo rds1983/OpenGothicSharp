@@ -132,8 +132,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   non-human bodies lazily from their model scripts. F2 drives daily routines from a game
   clock, walks NPCs between grounded routine points, and is complete. Cut-out foliage
   materials render with `AlphaTestEffect`. F3.1 (script AI states), F3.2 (AI queries/actions,
-  sitting and sleeping) and F3.3 (engine perception) are complete; F3.4 (process policies and
-  update budget) is next.
+  sitting and sleeping), F3.3 (engine perception) and F3.4 (process policies) are complete;
+  F3.5 (movement parity) is next.
 
 ---
 
@@ -827,12 +827,21 @@ of the cone does not.
 per-type handler table and the queries the handlers call are the deliverable. The visible
 script reaction is tracked in F3.7 because it needs rooms and combat state.
 
-#### F3.4 Process policies & update budget
+#### F3.4 Process policies & update budget — DONE
 - `NpcProcessPolicy` (AiNormal/AiFar/AiFar2) selected by distance to the player, like the
   reference, so 406 NPCs do not all run perception and state loops each frame.
 - Clamp the loop/perception intervals and skip far NPCs entirely.
 **Depends on F3.1–F3.3.**
 **Done when:** frame time stays flat with all NPCs spawned and only nearby ones tick.
+
+**Implemented:** the reference's radii (AiNormal < 3000, AiFar < 6000, AiFar2 beyond) now
+choose the budget per actor every update. AiNormal keeps movement, perception and the 0.5 s
+state loop; AiFar keeps only a 3 s state loop (no movement, no perception); AiFar2 is dormant.
+The routine walker and animation pass already use the 3000-unit gate. Thresholds are unit
+tested, and the routine chain, sitting and sleeping still run.
+
+Done at the policy scope: normal NPCs tick fully, far ones only keep a slow state loop, and
+dormant ones cost nothing. Frame pacing itself is tracked in M4.
 
 #### F3.5 Movement parity and grounding follow-up
 Carry-over from F2; the state machine should drive this, not the other way round.

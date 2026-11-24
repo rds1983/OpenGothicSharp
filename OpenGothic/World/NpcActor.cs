@@ -46,7 +46,6 @@ public sealed class NpcActor
 
 	/// <summary>Reference body-state flags: standing excludes sitting and adds free hands.</summary>
 	public const int BodyStateStand = (1 << 15) | (1 << 16);
-
 	/// <summary>Reference <c>BS_SIT</c> (11) with free hands.</summary>
 	public const int BodyStateSit = 11 | (1 << 16);
 
@@ -93,6 +92,9 @@ public sealed class NpcActor
 
 	/// <summary>Script target set by <c>NPC_SetTarget</c>; -1 when none.</summary>
 	public int TargetSymbol { get; set; } = -1;
+
+	/// <summary>Update budget chosen from the distance to the player (reference policy).</summary>
+	public NpcProcessPolicy Policy { get; set; } = NpcProcessPolicy.AiNormal;
 
 	private static int[] CreatePerceptionFunctions()
 	{

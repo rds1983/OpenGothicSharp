@@ -186,6 +186,20 @@ shipped scripts with it instead of guessed.
   player - the reference's remaining inputs (room/portal guild, weapons, armour) are later
   milestones.
 
+## Process policies (F3.4)
+
+- `NpcProcessPolicy` is chosen from the squared distance to the player with the reference's
+  radii (`WorldObjects::updateNpc`): **AiNormal** within 3000, **AiFar** up to 6000,
+  **AiFar2** beyond.
+- **AiNormal:** script movement, perception and the 0.5 s state loop.
+- **AiFar:** no movement and no perception; the state loop runs every 3 s so schedules still
+  progress. `Npc::perceptionProcess` also early-outs for non-normal policies in the reference.
+- **AiFar2:** dormant - no AI work at all.
+- The routine walker and the animation pass keep their 3000-unit gates, which line up with
+  AiNormal.
+- Thresholds are covered by hermetic tests; the routine chain and sleeping still run with the
+  policies active.
+
 ## Deferred
 
 AI, routines' action callbacks, movement collision avoidance, combat and armour attachments

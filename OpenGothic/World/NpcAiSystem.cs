@@ -21,7 +21,6 @@ namespace OpenGothic;
 internal sealed class NpcAiSystem
 {
 	private const double LoopInterval = 0.5;
-	private const float NearDistance = 3000f;
 	private const int MaxStartLogs = 40;
 	private const int MaxEndLogs = 40;
 	private const int MaxQueueDrain = 64;
@@ -33,6 +32,9 @@ internal sealed class NpcAiSystem
 	private const int MaxPerceptionLogs = 20;
 	private const float EyeHeight = 120f;
 	private const float PlayerCenterHeight = 100f;
+	private const float NormalDistance = 3000f;
+	private const float FarDistance = 6000f;
+	private const double FarLoopInterval = 3.0;
 
 	// The reference's view test accepts an offset of up to 80 degrees from the facing
 	// (canRayHitPoint compares cos(180 - angle) against cos(100 degrees)).
@@ -778,13 +780,32 @@ internal sealed class NpcAiSystem
 			return;
 		}
 
-		// Only nearby NPCs tick: 356 states polling scripts every half second would spend the
-		// frame in the VM. F3.4 replaces this with the reference's process policies.
-		var nearSquared = NearDistance * NearDistance;
+		// Only nearby NPCs tick fully; the reference picks AiNormal/AiFar/AiFar2 from the same
+		// 3000/6000 unit radii. Far NPCs keep a slow state loop, the rest is skipped.
 		foreach (var actor in _actors)
 		{
-			if (Vector3.DistanceSquared(actor.Position, center) > nearSquared)
+			var distanceSquared = Vector3.DistanceSquared(actor.Position, center);
+			var policy = PolicyFor(distanceSquared);
+			actor.Policy = policy;
+
+			if (policy == NpcProcessPolicy.AiFar2)
 			{
+				continue;
+			}
+
+			if (policy == NpcProcessPolicy.AiFar)
+			{
+				var farState = actor.State;
+				if (farState != null && farState.TryRunLoop(_time, FarLoopInterval))
+				{
+					var farResult = _scripts.InvokeState(actor.Instance, null, null,
+						farState.LoopFunction);
+					if (NpcAiState.ShouldEnd(farResult))
+					{
+						ClearState(actor);
+					}
+				}
+
 				continue;
 			}
 
@@ -811,6 +832,22 @@ internal sealed class NpcAiSystem
 				ClearState(actor);
 			}
 		}
+	}
+
+	/// <summary>
+	/// Picks the update budget for a squared distance to the player: normal within 3000 units,
+	/// far (slow loops only) up to 6000, dormant beyond (reference <c>NpcProcessPolicy</c>).
+	/// </summary>
+	internal static NpcProcessPolicy PolicyFor(float distanceSquared)
+	{
+		if (distanceSquared <= NormalDistance * NormalDistance)
+		{
+			return NpcProcessPolicy.AiNormal;
+		}
+
+		return distanceSquared <= FarDistance * FarDistance
+			? NpcProcessPolicy.AiFar
+			: NpcProcessPolicy.AiFar2;
 	}
 
 	/// <summary>

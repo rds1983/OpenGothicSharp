@@ -1,6 +1,18 @@
 namespace OpenGothic;
 
 /// <summary>
+/// How much of the NPC update runs for an actor, chosen from its distance to the player like
+/// the reference's <c>NpcProcessPolicy</c>: normal within 3000 units, a slow state loop up to
+/// 6000, and nothing beyond that.
+/// </summary>
+public enum NpcProcessPolicy
+{
+	AiNormal,
+	AiFar,
+	AiFar2
+}
+
+/// <summary>
 /// One running script AI state. The reference builds this from the state function's symbol:
 /// the entry function itself plus optional <c>&lt;name&gt;_Loop</c> and <c>&lt;name&gt;_End</c>
 /// siblings (<c>AiState</c> in <c>game/aistate.cpp</c>). The entry runs once when the state
