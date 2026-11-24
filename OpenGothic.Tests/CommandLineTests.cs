@@ -44,6 +44,15 @@ public class CommandLineTests
 		Assert.Null(result.World);
 		Assert.False(result.NoMenu);
 		Assert.False(result.DevMode);
+		Assert.False(result.WalkMode);
+	}
+
+	[Fact]
+	public void Parse_ReadsWalkMode()
+	{
+		var result = CommandLine.Parse(new[] { "-walkmode" });
+
+		Assert.True(result.WalkMode);
 	}
 
 	[Fact]

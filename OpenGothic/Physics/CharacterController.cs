@@ -30,9 +30,14 @@ public sealed class CharacterController
 	public const float CenterOffset = 150f;
 
 	private const float Gravity = -981f;
-	private const float WalkSpeed = 300f;
 	private const float GroundAcceleration = 3000f;
 	private const float AirAcceleration = 800f;
+
+	/// <summary>Full running speed, the reference's default when walk mode is off.</summary>
+	public const float RunSpeed = 300f;
+
+	/// <summary>Speed with walk mode on, half the run speed.</summary>
+	public const float WalkSpeed = 150f;
 
 	/// <summary>Largest horizontal substep; the reference uses the capsule radius.</summary>
 	private const float StepSize = DefaultRadius;
@@ -60,6 +65,12 @@ public sealed class CharacterController
 	public Vector3 Position;
 
 	public Vector3 Velocity;
+
+	/// <summary>
+	/// Top speed for the current walk mode. The reference toggles <c>WM_Walk</c> and moves at
+	/// a slower rate without changing the movement algorithm itself.
+	/// </summary>
+	public float Speed { get; set; } = RunSpeed;
 
 	/// <summary>Logical feet position, which is what scripts and the camera use.</summary>
 	public Vector3 FeetPosition => Position - Vector3.UnitY * CenterOffset;
@@ -114,8 +125,8 @@ public sealed class CharacterController
 		}
 
 		var acceleration = Grounded ? GroundAcceleration : AirAcceleration;
-		Velocity.X = MoveTowards(Velocity.X, wish.X * WalkSpeed, acceleration * dt);
-		Velocity.Z = MoveTowards(Velocity.Z, wish.Z * WalkSpeed, acceleration * dt);
+		Velocity.X = MoveTowards(Velocity.X, wish.X * Speed, acceleration * dt);
+		Velocity.Z = MoveTowards(Velocity.Z, wish.Z * Speed, acceleration * dt);
 
 		var horizontal = new Vector3(Velocity.X, 0f, Velocity.Z) * dt;
 		if (horizontal.LengthSquared() > 1e-8f && TryMove(horizontal) != MoveResult.Ok &&

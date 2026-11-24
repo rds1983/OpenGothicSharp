@@ -44,7 +44,7 @@ namespace OpenGothic
 		{
 			var record = GetLastRecord(name);
 
-			var zkWorld = new World(record.Node.Buffer);
+			var zkWorld = LoadRecord(record.Node, r => new World(r));
 
 			var polygons = zkWorld.Mesh.Polygons;
 			var materials = zkWorld.Mesh.Materials;
@@ -338,11 +338,24 @@ namespace OpenGothic
 					{
 						var instance = new DrModelInstance(model);
 
+						// A vob visual is a prop: the reference's ObjVisual disables root
+						// translation, so the model's bind (which now includes it) must be
+						// cancelled again. NPCs keep it and stand on the vob position.
+						var modelWorld = world;
+						if (vob.Type != VirtualObjectType.oCNpc)
+						{
+							var rootTranslation = model.GetRootTranslation();
+							if (rootTranslation != Vector3.Zero)
+							{
+								modelWorld = Matrix.CreateTranslation(-rootTranslation) * world;
+							}
+						}
+
 						// The instance box is in model space; the vob transform places it. A
 						// model with no geometry yields a degenerate box at the vob's own
 						// position, which is still the right cell to register it in.
 						var bb = instance.BoundingBox ?? new BoundingBox(vob.Position.ToXna(), vob.Position.ToXna());
-						var worldBounds = bb.Transform(ref world);
+						var worldBounds = bb.Transform(ref modelWorld);
 						vobNode.Bounds = worldBounds;
 
 						var cell = result.FindCellByBox(worldBounds);
@@ -353,7 +366,7 @@ namespace OpenGothic
 							var modelNode = new ModelNode
 							{
 								Instance = instance,
-								Transform = world,
+								Transform = modelWorld,
 								// NPC collision is the dynamic capsule from milestone E, not the
 								// static bind-pose model.
 								Collision = vob.CdDynamic && vob.Type != VirtualObjectType.oCNpc

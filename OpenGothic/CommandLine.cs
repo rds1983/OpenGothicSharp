@@ -52,6 +52,12 @@ public class CommandLine
 	public bool ThirdPerson { get; private set; }
 
 	/// <summary>
+	/// Whether walk mode starts on. This is a diagnostic version of the in-game Shift toggle,
+	/// useful when a capture has no keyboard input.
+	/// </summary>
+	public bool WalkMode { get; private set; }
+
+	/// <summary>
 	/// Whether the game should start with the playable capsule. Explicit <see cref="Walk"/> or
 	/// <see cref="ThirdPerson"/> wins; otherwise a plain launch walks, while a diagnostic launch
 	/// (a spawned/composed/attached model, a camera override, a screenshot, a vob query or the
@@ -276,6 +282,9 @@ public class CommandLine
 
 				case "-thirdperson":
 					result.ThirdPerson = true;
+					break;
+				case "-walkmode":
+					result.WalkMode = true;
 					break;
 
 				default:
@@ -615,7 +624,7 @@ public class CommandLine
 
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
-		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] " +
+		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] " +
 		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
 		"[-player:<x,y,z>] [-yaw:<degrees>] [-walktest:<seconds>] [-vobstats] [-vobfind:<x,y,z>] [-vobradius:<n>] [-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 

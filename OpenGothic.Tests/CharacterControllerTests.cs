@@ -44,6 +44,20 @@ public class CharacterControllerTests
 	}
 
 	[Fact]
+	public void WalkModeMovesSlowerThanRunning()
+	{
+		using var runWorld = CreateWorld(out var runner);
+		using var walkWorld = CreateWorld(out var walker);
+		walker.Speed = CharacterController.WalkSpeed;
+
+		Step(runner, Vector3.UnitZ, 60);
+		Step(walker, Vector3.UnitZ, 60);
+
+		Assert.True(walker.Position.Z < runner.Position.Z - 50f,
+			$"walked {walker.Position.Z:0} vs ran {runner.Position.Z:0}");
+	}
+
+	[Fact]
 	public void DoesNotFallThroughTheFloor()
 	{
 		using var world = CreateWorld(out var controller);

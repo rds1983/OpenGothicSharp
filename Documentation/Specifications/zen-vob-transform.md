@@ -82,7 +82,7 @@ animated morphs, not static placement.
 A `.MDL`/`.MDH` hierarchy carries a `root_translation` (and the root node carries a local
 transform). For a human actor it lifts the bind pose so its feet reach the vob origin: the mesh
 is authored around the hips. `Skeleton` adds that translation to the root node in the
-reference.
+reference, and our loader puts it on the root bone's default pose.
 
 For a **vob prop** the reference deliberately removes it again:
 `ObjVisual::setVisual` calls `MdlVisual::setYTranslationEnable(false)`, which sets
@@ -90,28 +90,28 @@ For a **vob prop** the reference deliberately removes it again:
 prop's raw model bounds sit exactly on the vob position. An actor keeps the translation because
 it is driven through `MdlVisual` directly.
 
-Our model loader stores the hierarchy root translation on the model's `DrModelTag`; the raw mesh
-stays raw. The reference cancels X and Z for every model, and props cancel Y too.
-`Assets.World.cs` uses the vob transform directly for props, which matches the reference's
-`NoTranslation` result:
+Our loader's default pose now matches the reference skeleton, so a prop visual cancels the
+translation on the node transform:
 
 ```
-prop geometry = vobWorld * rawModelBounds
+prop geometry = Translate(-rootTranslation) * vobWorld * model
 ```
 
-Actor-like callers (the diagnostic `-model`/`-compose` spawns, and later NPCs) add the stored
-Y in model space:
+`Assets.World.cs` applies this for every non-NPC vob. Actor-like callers (the diagnostic
+`-model`/`-compose` spawns, and later NPCs) use the vob transform directly; the bind already
+includes the translation, so no extra offset is needed:
 
 ```
-actor world = Translate(0, rootTranslationY, 0) * vobWorld
+actor world = vobWorld * model
 ```
 
-X/Z stay on the tag for later placement work that has to reproduce the reference's
-cancellation exactly; they are not applied today.
+Animated clips store absolute root positions, so a moving actor must also cancel the animated
+root X/Z while keeping the default root height. Props with root animation cancel all three at
+playback time via the same `NoTranslation` rule; static props need only the load-time offset.
 
 That is why the harbour bookstand's vob at `y = -53.4` renders with its base at the floor
 (`y ≈ -187`) instead of `133.6` units above it. Its raw collision triangles use the same vob
-transform, so the visual and collision stay together. NPC models will add the translation at
+transform, so the visual and collision stay together. NPC models keep the translation at
 their spawn; their collision is the dynamic capsule from milestone E rather than the static
 bind-pose mesh.
 

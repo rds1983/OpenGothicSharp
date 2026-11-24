@@ -28,6 +28,39 @@ public partial class Assets
 	private readonly Dictionary<string, List<RecordInfo>> _allRecords = new Dictionary<string, List<RecordInfo>>();
 	private readonly Dictionary<string, object> _cache = new Dictionary<string, object>();
 
+	/// <summary>
+	/// Parses a VFS record while guaranteeing its <see cref="Read"/> stays alive. ZenKit's
+	/// managed wrapper has a finalizer and no <c>Dispose</c>: without this the finalizer can
+	/// free the native read handle while a parser is still reading it, which shows up as
+	/// random out-of-range node indices in otherwise valid models.
+	/// </summary>
+	private static T LoadRecord<T>(VfsNode node, Func<Read, T> parse)
+	{
+		var read = node.Buffer;
+		try
+		{
+			return parse(read);
+		}
+		finally
+		{
+			GC.KeepAlive(read);
+		}
+	}
+
+	/// <summary>
+	/// Keeps a native owner alive for the rest of the process. ZenKit getters such as
+	/// <c>Model.Hierarchy</c> and <c>Model.Mesh</c> return borrowed handles: the child wrapper
+	/// does not own its native object and becomes invalid when the parent is finalized. These
+	/// owners are the parent models behind such handles used beyond their parser call.
+	/// </summary>
+	private static readonly List<object> NativeOwners = new List<object>();
+
+	private static T KeepNativeOwner<T>(T owner) where T : class
+	{
+		NativeOwners.Add(owner);
+		return owner;
+	}
+
 	public string Folder { get; }
 
 	public string[] Keys { get; }
@@ -133,7 +166,7 @@ public partial class Assets
 
 		var record = records[records.Count - 1];
 
-		var texture = new ZenKit.Texture(record.Node.Buffer);
+		var texture = LoadRecord(record.Node, r => new ZenKit.Texture(r));
 		var mipmapCount = texture.MipmapCount;
 
 		// Compressed formats upload directly; everything else (including palettized

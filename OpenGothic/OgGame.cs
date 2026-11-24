@@ -24,6 +24,8 @@ public class OgGame : Game
 	private WorldGrid _world;
 	private PhysicsWorld _physics;
 	private CharacterController _controller;
+	private PlayerAvatar _avatar;
+	private bool _walkMode;
 	private float _mouseYaw;
 	private float _mousePitch;
 	private bool _thirdPerson;
@@ -139,14 +141,9 @@ public class OgGame : Game
 			+ Camera.Forward * (distance + offset.Z);
 		var transform = Matrix.CreateRotationY(MathHelper.ToRadians(yaw)) * Matrix.CreateTranslation(position);
 
-		// A diagnostic model is actor-like: the reference keeps the root translation's Y so
-		// the bind pose's feet reach the origin, and cancels X/Z for every model. World vobs
-		// ignore the root translation entirely.
-		var rootTranslation = model.GetRootTranslation();
-		if (rootTranslation.Y != 0f)
-		{
-			transform = Matrix.CreateTranslation(0f, rootTranslation.Y, 0f) * transform;
-		}
+		// The model's bind already carries the hierarchy root translation, so an actor-like
+		// placement is just the transform: the feet reach the origin without a second offset.
+		// World props intentionally keep the same bind; their vob transform places them.
 
 		// One node type serves props and actors alike; a model with no clips simply never plays.
 		var node = new ModelNode { Instance = instance, Collision = false };
@@ -449,11 +446,23 @@ public class OgGame : Game
 			Position = ground.Position + Vector3.UnitY * CharacterController.CenterOffset
 		};
 
+		try
+		{
+			_avatar = PlayerAvatar.Create(GraphicsDevice, _assets);
+		}
+		catch (Exception ex)
+		{
+			// The capsule must remain usable even when the placeholder body cannot load.
+			Log.Warning($"Unable to create the player avatar: {ex.Message}");
+		}
+
 		_mouseYaw = CommandLine.Instance.PlayerYaw.HasValue
 			? MathHelper.ToRadians(CommandLine.Instance.PlayerYaw.Value)
 			: Camera.Yaw;
 		_mousePitch = Camera.Pitch;
 		_thirdPerson = CommandLine.Instance.ThirdPerson;
+		_walkMode = CommandLine.Instance.WalkMode;
+		_controller.Speed = _walkMode ? CharacterController.WalkSpeed : CharacterController.RunSpeed;
 		_walkTestSeconds = CommandLine.Instance.WalkTestSeconds ?? 0f;
 		// A fixed start yaw, a synthetic walk or a capture is a diagnostic run; keep the pointer
 		// out of it so the result does not depend on where the OS cursor happened to be.
@@ -515,6 +524,15 @@ public class OgGame : Game
 			_thirdPerson = !_thirdPerson;
 		}
 
+		// The reference toggles walk mode rather than requiring the key to be held.
+		if ((keyboard.IsKeyDown(Keys.LeftShift) && _previousKeyboard.IsKeyUp(Keys.LeftShift)) ||
+		    (keyboard.IsKeyDown(Keys.RightShift) && _previousKeyboard.IsKeyUp(Keys.RightShift)))
+		{
+			_walkMode = !_walkMode;
+			_controller.Speed = _walkMode ? CharacterController.WalkSpeed : CharacterController.RunSpeed;
+			Log.Info($"Walk mode {(_walkMode ? "on" : "off")}.");
+		}
+
 		var viewport = GraphicsDevice.Viewport;
 		var centerX = viewport.Width / 2;
 		var centerY = viewport.Height / 2;
@@ -568,6 +586,12 @@ public class OgGame : Game
 
 		_controller.Step(gameTime.ElapsedGameTime, wish, forward);
 		_physics.Update(_controller.Position);
+
+		if (_avatar != null)
+		{
+			var speed = new Vector2(_controller.Velocity.X, _controller.Velocity.Z).Length();
+			_avatar.Update(gameTime.ElapsedGameTime, _controller.FeetPosition, _mouseYaw, speed, _walkMode);
+		}
 
 		if (_walkTestSeconds != 0f)
 		{
@@ -646,7 +670,10 @@ public class OgGame : Game
 
 	protected override void Draw(GameTime gameTime)
 	{
-		_worldRenderer.Draw(_renderer, Camera, _world, DebugDraw);
+		// In first person the camera sits inside the head, so the body is skipped rather than
+		// drawn around it. The clip keeps running, ready for the next F5.
+		var avatar = _thirdPerson ? _avatar?.Node : null;
+		_worldRenderer.Draw(_renderer, Camera, _world, DebugDraw, avatar);
 
 		if (_hud.DebugOverlay.Visible)
 		{

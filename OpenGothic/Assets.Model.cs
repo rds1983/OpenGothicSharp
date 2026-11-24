@@ -244,11 +244,18 @@ partial class Assets
 		public IModelMesh Mesh { get; }
 		public IModelHierarchy Hierarchy { get; }
 
-		public ModelMeshSource(string name, IModelMesh mesh, IModelHierarchy hierarchy)
+		/// <summary>
+		/// The native model that owns <see cref="Mesh"/> and <see cref="Hierarchy"/>. Both are
+		/// borrowed ZenKit handles, so the owner must outlive every read of them.
+		/// </summary>
+		public object Owner { get; }
+
+		public ModelMeshSource(string name, IModelMesh mesh, IModelHierarchy hierarchy, object owner = null)
 		{
 			Name = name;
 			Mesh = mesh;
 			Hierarchy = hierarchy;
+			Owner = owner;
 		}
 	}
 
@@ -299,7 +306,18 @@ partial class Assets
 			}
 
 			var bone = new DrModelBone(node.Name, mesh);
-			bone.DefaultPose = new SrtTransform(node.Transform.ToXna());
+			var defaultPose = new SrtTransform(node.Transform.ToXna());
+
+			// The hierarchy's root translation is part of the bind: the reference adds it to
+			// every root node when it builds the skeleton, and animation samples store the
+			// same absolute root position. Leaving it out would make every clip shift the
+			// mesh by rootTranslation.
+			if (node.ParentIndex < 0)
+			{
+				defaultPose.Translation += zkHierarchy.RootTranslation.ToXna();
+			}
+
+			bone.DefaultPose = defaultPose;
 
 			bones[i] = bone;
 			parents[i] = node.ParentIndex;
@@ -416,7 +434,7 @@ partial class Assets
 
 		// Now that the parts exist, give each skinned mesh its skin. The GPU is handed
 		// inverseBind * boneWorld, so this must be the inverse of the pose the mesh was
-		// authored in — the shared skeleton's for a bare mesh, its own otherwise.
+		// authored in ï¿½ the shared skeleton's for a bare mesh, its own otherwise.
 		for (var i = 0; i < skinnedMeshes.Count; ++i)
 		{
 			var info = skinnedMeshes[i];
@@ -522,16 +540,19 @@ partial class Assets
 		var hierarchyName = Path.GetFileNameWithoutExtension(hierarchyStem).ToUpper();
 
 		IModelHierarchy hierarchy;
+		object hierarchyOwner = null;
 		var mdlName = hierarchyName + ".MDL";
 		var mdhName = hierarchyName + ".MDH";
 
 		if (_allRecords.ContainsKey(mdlName))
 		{
-			hierarchy = new ZenKit.Model(GetLastRecord(mdlName).Node.Buffer).Hierarchy;
+			var mdl = LoadRecord(GetLastRecord(mdlName).Node, r => new ZenKit.Model(r));
+			hierarchy = mdl.Hierarchy;
+			hierarchyOwner = mdl;
 		}
 		else if (_allRecords.ContainsKey(mdhName))
 		{
-			hierarchy = new ModelHierarchy(GetLastRecord(mdhName).Node.Buffer);
+			hierarchy = LoadRecord(GetLastRecord(mdhName).Node, r => new ModelHierarchy(r));
 		}
 		else
 		{
@@ -546,6 +567,7 @@ partial class Assets
 
 		var model = LoadModel(device, hierarchy, sources);
 		AttachAnimationsQuietly(model, hierarchyName);
+		GC.KeepAlive(hierarchyOwner);
 
 		return model;
 	}
@@ -562,8 +584,8 @@ partial class Assets
 		var mdlName = stem + ".MDL";
 		if (_allRecords.ContainsKey(mdlName))
 		{
-			var mdl = new ZenKit.Model(GetLastRecord(mdlName).Node.Buffer);
-			return new ModelMeshSource(stem, mdl.Mesh, mdl.Hierarchy);
+			var mdl = LoadRecord(GetLastRecord(mdlName).Node, r => new ZenKit.Model(r));
+			return new ModelMeshSource(stem, mdl.Mesh, mdl.Hierarchy, mdl);
 		}
 
 		var mdmName = stem + ".MDM";
@@ -574,10 +596,10 @@ partial class Assets
 
 		var mdhName = stem + ".MDH";
 		IModelHierarchy hierarchy = _allRecords.ContainsKey(mdhName)
-			? new ModelHierarchy(GetLastRecord(mdhName).Node.Buffer)
+			? LoadRecord(GetLastRecord(mdhName).Node, r => new ModelHierarchy(r))
 			: null;
 
-		return new ModelMeshSource(stem, new ZenKit.ModelMesh(GetLastRecord(mdmName).Node.Buffer), hierarchy);
+		return new ModelMeshSource(stem, LoadRecord(GetLastRecord(mdmName).Node, r => new ZenKit.ModelMesh(r)), hierarchy);
 	}
 
 	/// <summary>
@@ -600,9 +622,17 @@ partial class Assets
 	private DrMesh LoadMultiMesh(GraphicsDevice device, string name)
 	{
 		var record = GetLastRecord(name);
-		var zkMesh = new MultiResolutionMesh(record.Node.Buffer);
+		var zkMesh = LoadRecord(record.Node, r => new MultiResolutionMesh(r));
 
 		return CreateMesh(device, null, zkMesh);
+	}
+
+	private DrMesh LoadMorphMesh(GraphicsDevice device, string name)
+	{
+		var record = GetLastRecord(name);
+		var zkMorph = LoadRecord(record.Node, r => new MorphMesh(r));
+
+		return CreateMesh(device, null, zkMorph.Mesh);
 	}
 
 	public DrModel GetModel(GraphicsDevice device, string name) => Get(device, name, LoadModel);
@@ -624,4 +654,11 @@ partial class Assets
 	}
 
 	public DrMesh GetMultiMesh(GraphicsDevice device, string name) => Get(device, name, LoadMultiMesh);
+
+	/// <summary>
+	/// Loads a standalone mesh that carries morph animations, such as the human head
+	/// <c>.MMB</c>. Only the geometry is returned; the morph targets are not played yet, and
+	/// the mesh is authored in the space of the bone it is attached to.
+	/// </summary>
+	public DrMesh GetMorphMesh(GraphicsDevice device, string name) => Get(device, name, LoadMorphMesh);
 }

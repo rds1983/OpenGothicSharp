@@ -37,6 +37,11 @@ namespace OpenGothic.UI
 			_labelMove.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
 			_labelMove.Id = "_labelMove";
 
+			_labelWalk = new Label();
+			_labelWalk.Text = "Shift - Toggle walk";
+			_labelWalk.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
+			_labelWalk.Id = "_labelWalk";
+
 			_labelLook = new Label();
 			_labelLook.Text = "Mouse - Look";
 			_labelLook.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
@@ -74,6 +79,7 @@ namespace OpenGothic.UI
 			Id = "_panelRoot";
 			Widgets.Add(_labelHeader);
 			Widgets.Add(_labelMove);
+			Widgets.Add(_labelWalk);
 			Widgets.Add(_labelLook);
 			Widgets.Add(_labelCamera);
 			Widgets.Add(_labelEscape);
@@ -85,6 +91,7 @@ namespace OpenGothic.UI
 		
 		private Label _labelHeader;
 		private Label _labelMove;
+		private Label _labelWalk;
 		private Label _labelLook;
 		private Label _labelCamera;
 		private Label _labelEscape;

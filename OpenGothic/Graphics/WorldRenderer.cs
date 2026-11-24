@@ -25,7 +25,13 @@ public class WorldRenderer : IDisposable
 		Sky = new Sky(device);
 	}
 
-	public void Draw(Renderer renderer, Camera camera, WorldGrid world, DebugDraw debug = null)
+	/// <summary>
+	/// Draws the world and, when <paramref name="extra"/> is given, one visual that does not
+	/// belong to a grid cell. The player avatar is always next to the camera, so culling it
+	/// with a cell would only risk not drawing it at a cell border.
+	/// </summary>
+	public void Draw(Renderer renderer, Camera camera, WorldGrid world, DebugDraw debug = null,
+		SceneNode extra = null)
 	{
 		if (renderer == null)
 		{
@@ -78,6 +84,11 @@ public class WorldRenderer : IDisposable
 					}
 				}
 			}
+		}
+
+		if (extra != null)
+		{
+			DrawNode(renderer, extra, debug);
 		}
 
 		renderer.EndFrame();

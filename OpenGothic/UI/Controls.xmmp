@@ -3,6 +3,7 @@
   <VerticalStackPanel Id="_panelRoot" Spacing="2" Background="#000000A6" Padding="10,6">
     <Label Id="_labelHeader" Text="Controls" TextColor="#FFCC66" />
     <Label Id="_labelMove" Text="WASD - Move" TextColor="#E8E8E8" />
+    <Label Id="_labelWalk" Text="Shift - Toggle walk" TextColor="#E8E8E8" />
     <Label Id="_labelLook" Text="Mouse - Look" TextColor="#E8E8E8" />
     <Label Id="_labelCamera" Text="F5 - First/third person" TextColor="#E8E8E8" />
     <Label Id="_labelEscape" Text="Escape - Exit" TextColor="#E8E8E8" />

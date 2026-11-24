@@ -102,6 +102,13 @@ node-major reading does not.
 The sample values are bone-local transforms in Gothic's left-handed space and go through
 the same one-time Z mirror as every other loaded position and rotation.
 
+The root node's position is **absolute**, not relative to the root translation: the
+`HUMANS-S_RUN` sample above is `y ≈ 97.71`, which is the hierarchy's root translation. The
+reference cancels the root node's X/Z in `Pose::mkBaseTranslation` before composing the
+skeleton, and cancels Y too for props (`Pose::NoTranslation`). The directional clips depend on
+that: `S_RUNL` moves root Z by ~262 units over one cycle, so without the cancellation the mesh
+would slide forward and snap back at every loop.
+
 ## Clip metadata
 
 The `.MSB` entry (not the `.MAN`) carries the playback parameters, and they have to be

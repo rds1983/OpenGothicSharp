@@ -59,6 +59,7 @@ default chosen elsewhere.
 | `-walk` | Force the playable capsule. A plain launch already starts walking; this is for combining walking with a diagnostic option. |
 | `-nowalk` | Keep the fixed diagnostic camera even for a plain launch. |
 | `-thirdperson` | Start walking in the chase camera instead of first person. |
+| `-walkmode` | Start with walk mode on, the diagnostic equivalent of the in-game Shift toggle. |
 | `-player:<x,y,z>` | Start the walking capsule at a world position instead of the placeholder plaza; the player drops to the ground below the point. |
 | `-yaw:<degrees>` | Set the walking player's facing yaw. Needed to aim a diagnostic walk reliably, because `-lookat:` measures from the camera's own position. Mouse look is disabled while `-yaw` or `-walktest` is active so the direction stays fixed. |
 | `-walktest:<seconds>` | Hold forward for a diagnostic run and log the final feet position; a negative value holds backward. Useful for reproducing a stuck spot. |
@@ -405,10 +406,7 @@ multi-resolution visuals therefore receive the vob's world transform directly, a
 instance matrices in that flat list. The rotation is converted with the same Z mirror as
 positions (`L * transpose(R) * L`), which matters for pitched/rolled props; a vob's
 `show_visual` and `cd_dynamic` flags gate rendering and collision exactly as in the reference.
-Prop models use the raw mesh bounds and the vob transform, matching the reference's
-`ObjVisual::setYTranslationEnable(false)`; actor-like spawns add only the hierarchy root
-translation's Y so the bind pose's feet reach the origin. `-nomodels` skips the visuals so a
-frame can be compared against the same world without model geometry. Details in
+Prop models cancel that translation again, matching `ObjVisual::setYTranslationEnable(false)`, so a prop's bind starts at the vob origin; actor spawns keep it and the feet reach the origin without an extra offset. `-nomodels` skips the visuals so a frame can be compared against the same world without model geometry. Details in
 [Specifications/zen-vob-transform.md](Specifications/zen-vob-transform.md).
 
 #### Vob tree
@@ -574,9 +572,10 @@ into a wall, backs away from it and must not drift sideways. Each prints a singl
 
 A plain launch starts a playable first-person capsule at a placeholder point on the harbour
 plaza (until the game session supplies the scripted start point). **WASD** moves, the
-**mouse** looks, **F5** switches first/third person, and `-thirdperson` starts in the chase
-camera. The third-person camera pulls in when a wall is behind the player. Diagnostics keep
-the static camera used by captures; `-nowalk` forces it back.
+**mouse** looks, **F5** switches first/third person, **Shift** toggles walk mode, and
+`-thirdperson` starts in the chase camera. The third-person camera pulls in when a wall is
+behind the player. Diagnostics keep the static camera used by captures; `-nowalk` forces it
+back.
 
 ### Character controller
 
@@ -613,6 +612,31 @@ The controller is driven by `-walk`; the self-checks drive it directly. `-yaw`, 
 
 The format details and measurements are in
 [Specifications/gothic-collision-format.md](Specifications/gothic-collision-format.md).
+
+### Player avatar
+
+`OpenGothic/PlayerAvatar.cs` gives the capsule a body until the script layer can choose the
+hero model (milestones F1/G2). It composes `HUMANS` with `HUM_BODY_NAKED0`, `ARMOR_PRISONER`
+and the `HUM_HEAD_PONY.MMB` head — the head is a morph mesh bound to `BIP01 HEAD`. The bind
+already carries the skeleton's root translation, so the body is placed at
+`CharacterController.FeetPosition` with no extra Y offset. The visual is passed to
+`WorldRenderer.Draw` as an extra node rather than added to a grid cell: it is always next to
+the camera, and a cell test could drop it at a cell border. It is drawn in third person only;
+the first-person camera sits inside the head.
+
+The clips follow the reference's `AnimationSolver` for an actor with no weapon drawn. Idle is
+`S_RUN`; movement is not the same clip: the solver distinguishes `Idle` from `Move` and picks
+`S_RUNL` for running and `S_WALKL` for walk mode (the `S_%sRUN`/`S_%sRUNL`/`S_%sWALKL` pattern
+with an empty weapon prefix). `S_RUN` is a standing loop, which is why the first version that
+played it for movement looked static. Walk mode is a toggle, matching
+`PlayerControl::toggleWalkMode`, and caps the capsule at `CharacterController.WalkSpeed`
+(150 instead of 300).
+
+The directional clips carry root motion (a run stride translates the root about 262 units), so
+`PlayerAvatar` cancels the animated root's X/Z each frame, as the reference's
+`Pose::mkBaseTranslation` does. Movement comes from the character controller; the animation
+moves legs, not the capsule. The selection and placement rules are recorded in
+[Specifications/player-avatar.md](Specifications/player-avatar.md).
 
 ### Sky, fog and lighting
 

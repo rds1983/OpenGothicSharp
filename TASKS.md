@@ -73,6 +73,11 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   `newworld.zen` load is 23,288 nodes. It is the only transform hierarchy: `SceneNode` is a flat
   visual attached to its vob, and the renderer/batched meshes work from flat per-cell lists.
   `-vobstats` and `-vobfind:x,y,z` inspect it.
+- The walking player has a placeholder animated body: `HUMANS` composed with `HUM_BODY_NAKED0`,
+  `ARMOR_PRISONER` and the `HUM_HEAD_PONY.MMB` head, placed at the capsule's feet. It idles on
+  `S_RUN`, runs on `S_RUNL` and walks on `S_WALKL` when walk mode is on; Shift toggles walk
+  mode. The body is drawn in third person only, because the first-person camera sits inside
+  the head.
 - Rendering lives in `OpenGothic/Graphics` (`Renderer`, `Sky`, `WorldRenderer`, `Camera`,
   `DebugDraw`, materials, scene/model/mesh visuals and vertex formats).
 - ZenKit is pinned to `1.3.0-cs.1`, matching the parser version the reference C++ client uses.
@@ -91,8 +96,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   animated culling boxes, vob hierarchy, attach points, animation layers, composed models.
   **Milestone D (Physics and movement) complete** — D1–D3: static collision, kinematic
   character controller, player input, first/third-person cameras and streamed collision.
-  Current milestone: **E — Interaction and world objects**; E1 (typed vob tree) complete, next
-  task **E2**.
+  Current milestone: **E — Interaction and world objects**; E1 (typed vob tree) and E1.5
+  (placeholder player avatar) complete, next task **E2**.
 
 ---
 
@@ -474,13 +479,13 @@ is documented in the specification.
 
 Vob placement was then checked against `Try/OpenGothic` as well. The rotation now uses the
 reference's handedness conversion (`L * transpose(R) * L`); `show_visual` gates both rendering
-and collision, and `cd_dynamic` gates vob collision. A prop model uses its raw bounds and the
-vob transform, because the reference cancels the model hierarchy's root translation for props
+and collision, and `cd_dynamic` gates vob collision. A prop model cancels the hierarchy root
+translation, because the reference does so for props
 (`ObjVisual::setYTranslationEnable(false)`); this is why the harbour bookstand had been hovering
-`133.6` units above its floor and now sits on it. The root translation is kept on `DrModelTag`
-for actor-like spawns, which apply its Y. ZenKit was upgraded from `0.1.13` to `1.3.0-cs.1`,
-matching the reference's ZenKit 1.3 parser; only two enum casts were required. Details in
-[Specifications/zen-vob-transform.md](Documentation/Specifications/zen-vob-transform.md).
+`133.6` units above its floor and now sits on it. The actor bind keeps the translation on the
+root bone instead, so a spawn needs no extra offset. ZenKit was upgraded from `0.1.13` to
+`1.3.0-cs.1`, matching the reference's ZenKit 1.3 parser; only two enum casts were required.
+Details in [Specifications/zen-vob-transform.md](Documentation/Specifications/zen-vob-transform.md).
 
 ---
 
@@ -509,6 +514,29 @@ trigger/sound/zone/camera set.
 
 **Done when:** all vob kinds are enumerated and queryable by position/tag. — Done; build/tests
 pass and the diagnostics show the tree and the bookstand query.
+
+### E1.5. Placeholder player avatar — DONE
+The walking capsule gets a visible animated body before F1/G2 can select the real hero. It
+composes `HUMANS` with `HUM_BODY_NAKED0`, `ARMOR_PRISONER` and the `HUM_HEAD_PONY.MMB` head,
+places it at the capsule's feet, and plays the reference's unarmed locomotion clips: `S_RUN`
+for idle, `S_RUNL` for running and `S_WALKL` in walk mode. The body is drawn in third person
+only.
+
+The skeleton bind now carries the hierarchy root translation on the root bone's default pose.
+That is the reference's placement: actors keep it, props cancel it, and the avatar needs no
+second offset. Directional clips carry root motion, so the avatar cancels the animated root
+X/Z while the character controller owns movement. Walk mode is a Shift toggle and also has a
+`-walkmode` startup switch.
+
+Head support needed a morph-mesh loader: `.MMB` heads are `MorphMesh` data bound to
+`BIP01 HEAD`, not part of the body mesh. While testing this, borrowed ZenKit handles
+(`Model.Hierarchy`/`Model.Mesh`) were found to dangle when their temporary owner was collected;
+the owners are now retained, which also removed random corrupted world models.
+
+**Done when:** third person shows an animated hero with a head that faces the camera direction,
+stands on the ground, and switches between idle and walk/run with movement. — Done; verified at
+the harbour and in the city with third-person captures, walk mode logs `S_WALKL`, and the
+loader stress run is clean.
 
 ### E2. Focus & raycast
 Crosshair focus: ray/mesh test against focused vobs within reach, highlight support.

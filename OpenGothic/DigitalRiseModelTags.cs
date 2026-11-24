@@ -41,11 +41,11 @@ namespace OpenGothic
 	public record DrModelTag
 	{
 		/// <summary>
-		/// The hierarchy's root translation, in this engine's mirrored space. The reference
-		/// cancels X and Z for every model; props cancel Y too (<c>ObjVisual</c> disables Y
-		/// translation), while actor-like spawns keep the Y so the bind pose's feet reach the
-		/// origin. The full vector is kept so later placement code can reproduce the
-		/// reference's cancellation exactly.
+		/// The hierarchy's root translation, in this engine's mirrored space. It is already part
+		/// of the root bone's default pose, so actor-like callers place a model with the plain
+		/// vob transform. Props cancel it again (<c>ObjVisual</c> disables Y translation), and an
+		/// animated actor cancels the clip's root X/Z at playback so a stride does not slide the
+		/// mesh.
 		/// </summary>
 		public Vector3 RootTranslation { get; init; }
 
