@@ -585,6 +585,31 @@ public sealed class PhysicsWorld : IDisposable
 	}
 
 	/// <summary>
+	/// Adds a kinematic capsule for a script NPC. The player's character controller sweeps
+	/// against it, so an NPC blocks the player even before F2 gives it movement. The pose is
+	/// updated later by moving the body; for now it stays at its spawn point.
+	/// </summary>
+	public BodyHandle AddNpcCapsule(Vector3 feetPosition)
+	{
+		var shape = Simulation.Shapes.Add(new Capsule(
+			CharacterController.DefaultRadius, CharacterController.DefaultLength));
+		var center = feetPosition + Vector3.UnitY * CharacterController.CenterOffset;
+
+		var handle = Simulation.Bodies.Add(BodyDescription.CreateKinematic(
+			new RigidPose(ToNumerics(center)),
+			new CollidableDescription(shape, 0.1f),
+			new BodyActivityDescription(0.01f, 32)));
+
+		Surfaces.Allocate(handle) = new PhysicsSurface
+		{
+			Friction = 0.8f,
+			Kind = PhysicsSurfaceKind.Dynamic
+		};
+
+		return handle;
+	}
+
+	/// <summary>
 	/// Walks a capsule across the local terrain and reports whether it stayed on the surface.
 	/// This is the D2 self-check: it exercises slopes, ground following and long walks without
 	/// a renderer or input.
@@ -1015,7 +1040,8 @@ public sealed class PhysicsWorld : IDisposable
 				return false;
 			}
 
-			if (HasBodyToIgnore && collidable.Mobility == CollidableMobility.Dynamic &&
+			if (HasBodyToIgnore &&
+			    collidable.Mobility is CollidableMobility.Dynamic or CollidableMobility.Kinematic &&
 			    collidable.BodyHandle == IgnoreBody)
 			{
 				return false;

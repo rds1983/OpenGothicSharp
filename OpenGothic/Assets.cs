@@ -145,6 +145,23 @@ public partial class Assets
 		return !string.IsNullOrEmpty(name) && _allRecords.ContainsKey(name.ToUpperInvariant());
 	}
 
+	/// <summary>
+	/// Reads a whole record as bytes. Used for audio files, which MonoGame's decoders take
+	/// as a stream rather than through a ZenKit parser.
+	/// </summary>
+	public bool TryGetBytes(string name, out byte[] data)
+	{
+		data = null;
+		if (string.IsNullOrEmpty(name) || !_allRecords.TryGetValue(name.ToUpperInvariant(), out var records) ||
+		    records.Count == 0)
+		{
+			return false;
+		}
+
+		data = LoadRecord(records[records.Count - 1].Node, r => r.Bytes);
+		return data != null && data.Length > 0;
+	}
+
 	private RecordInfo GetLastRecord(string name)
 	{
 		var records = _allRecords[name.ToUpper()];

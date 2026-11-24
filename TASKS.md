@@ -99,7 +99,11 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - G3 completes the dialog engine: 4,139 `C_INFO` instances, condition/choice filtering,
   `AI_Output` text from `Ou.dat`, `Info_AddChoice`/`Ai_StopProcessInfos`, and a Myra choice
   panel. `-talk` and `-talkui` run conversations; the dialog camera and voice playback are
-  part of F1.5/J1.
+  implemented by F1.5.
+- F1.5 places 356 human script NPC bodies at their waynet spawn points, composes armour/body
+  and head with texture variants, adds a kinematic capsule and the E-to-talk focus path, and
+  runs the two-shot dialog camera plus `DialogLine.Voice`. Fifty non-human bodies await the
+  model-script skeleton layer.
 - Rendering lives in `OpenGothic/Graphics` (`Renderer`, `Sky`, `WorldRenderer`, `Camera`,
   `DebugDraw`, materials, scene/model/mesh visuals and vertex formats).
 - ZenKit is pinned to `1.3.0-cs.1`, matching the parser version the reference C++ client uses.
@@ -121,8 +125,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   **Milestone E (Interaction and world objects) complete** — E1–E4: typed vob tree, placeholder
   player avatar, focus/raycast, door/chest interactions and item pickup with inventory.
   F1's NPC runtime data, G1's Daedalus VM boot, G2's script-object/event bridge and G3's
-  dialog engine/UI are complete. The dialog camera/voice and every NPC movement now depend on
-  **F1.5 — World-bound script NPCs**, the next task.
+  dialog engine/UI are complete. F1.5 places the **356 human** script NPCs, adds their
+  collision/focus path, and completes the dialog camera/voice hook. Fifty non-human bodies
+  remain in F1.6, which is the next task.
 
 ---
 
@@ -648,7 +653,7 @@ name and health.
 runtime-data scope by developer decision. G2 supplies the script instances and F1.5 places
 them in the world; no placeholder spawner remains.
 
-### F1.5. World-bound script NPCs
+### F1.5. World-bound script NPCs — DONE
 Turn the G2 script instances into visible, interactable actors — the prerequisite for
 routines, AI, and the G3 dialog camera.
 
@@ -667,6 +672,20 @@ routines, AI, and the G3 dialog camera.
 **Done when:** a script-inserted NPC is visible at its waypoint, can be focused and talked to,
 a conversation ends with the camera returning to the player, and the spoken line's voice file
 plays (or is explicitly deferred to J1).
+
+**Done at the human-body scope:** 356 human NPCs are placed from their waynet spawn points,
+composed from armour/body + `HUMANS` + `.MMB` head, with per-instance `GothicModel.Materials`
+texture variants, kinematic capsules and the E-to-talk focus path. A Daron conversation was
+completed with the two-shot camera and `DialogLine.Voice`; City Guard `-talk` still passes.
+The 50 non-human bodies are tracked in F1.6. The 172 NPCs at `NW_CITY_ENTRANCE_01` overlap on
+the five nearby waypoints until F2 routines disperse them.
+
+### F1.6. Non-human NPC bodies
+Give the monster `WLD_INSERTNPC` instances their model-script skeleton and animation set.
+**Depends on F1.5.**
+**Done when:** a monster NPC (wolf, rat, troll, …) is visible at its spawn point and plays
+its idle animation; building all monster models must stay lazy or otherwise bounded because
+the full animation sets are large.
 
 ### F2. Way matrix & routines
 Parse waypoints/waymatrix; daily routines (`TA`, `RTN`) move NPCs between points.

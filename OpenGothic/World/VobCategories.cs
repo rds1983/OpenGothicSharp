@@ -1,3 +1,4 @@
+using BepuPhysics;
 using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using OpenGothic.Graphics;
@@ -5,6 +6,28 @@ using System;
 using ZenKit.Vobs;
 
 namespace OpenGothic.Vobs;
+
+/// <summary>
+/// Visual parameters gathered from <c>MDL_SetVisualBody</c>, <c>MDL_SetVisual</c> and
+/// <c>MDL_SetModelScale</c>. They are data only until the spawner builds the model.
+/// </summary>
+public sealed class NpcVisual
+{
+	public string Body = string.Empty;
+	public int BodyTexture;
+	public int BodyColor;
+	public string Head = string.Empty;
+	public int HeadTexture;
+	public int TeethTexture;
+
+	/// <summary>Armour item's on-body mesh, e.g. <c>Armor_Mil_L.asc</c>; empty for none.</summary>
+	public string ArmorModel = string.Empty;
+
+	/// <summary>Complete model override from <c>MDL_SetVisual</c> (monsters); empty for human.</summary>
+	public string ModelOverride = string.Empty;
+
+	public Vector3 Scale = Vector3.One;
+}
 
 // Thin category types. The concrete VobKind in the base carries the file-level behaviour;
 // these classes give later milestones a place for NPC/item/interactive/mobsi state without
@@ -32,6 +55,12 @@ public sealed class NpcVob : VobNode
 
 	/// <summary>The NPC's script instance, e.g. <c>NPC_DIEGO</c>.</summary>
 	public string NpcInstance { get; }
+
+	/// <summary>Body/armour/head parameters collected from the Daedalus visual externals.</summary>
+	public NpcVisual Visual { get; internal set; } = new NpcVisual();
+
+	/// <summary>Kinematic capsule in the physics world, or null when physics is off.</summary>
+	public BodyHandle? PhysicsBody { get; internal set; }
 
 	public int Guild { get; }
 

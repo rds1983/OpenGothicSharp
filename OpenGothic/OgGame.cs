@@ -39,6 +39,13 @@ public class OgGame : Game
 	private ScriptRuntime _scripts;
 	private DialogSession _dialog;
 	private int _dialogChoiceIndex;
+	private List<NpcActor> _npcActors;
+	private VoicePlayer _voice;
+	private int _voiceLineCursor;
+	private bool _dialogCamera;
+	private Vector3 _savedCameraPosition;
+	private float _savedCameraYaw;
+	private float _savedCameraPitch;
 	private float _mouseYaw;
 	private float _mousePitch;
 	private bool _thirdPerson;
@@ -309,6 +316,23 @@ public class OgGame : Game
 			_scripts.LoadAndBoot(CommandLine.Instance.GothicPath,
 				CommandLine.Instance.World ?? "newworld.zen");
 
+			if (_assets != null)
+			{
+				_voice = new VoicePlayer(_assets);
+			}
+
+			if (_scripts.Vm != null && _world != null && _assets != null)
+			{
+				try
+				{
+					_npcActors = NpcSpawner.Spawn(_scripts, _assets, GraphicsDevice, _world, _physics);
+				}
+				catch (Exception ex)
+				{
+					Log.Error($"Unable to spawn script NPCs: {ex.Message}");
+				}
+			}
+
 			if (CommandLine.Instance.Talk && _scripts.Vm != null)
 			{
 				Log.Info($"Script dialog: {_scripts.RunDialogToCompletion(CommandLine.Instance.DialogNpc)}.");
@@ -356,10 +380,81 @@ public class OgGame : Game
 
 		_dialog = session;
 		_dialogChoiceIndex = 0;
+		_voiceLineCursor = 0;
 		_hud.SetDialogMode(true);
 		_hud.Dialog.SelectedIndex = 0;
 		_hud.Dialog.Show(session, SelectDialogChoice, CloseDialog);
+		BeginDialogCamera(session);
+		PlayDialogVoices();
 		Log.Info($"Dialog opened with '{session.NpcName}': {session.Choices.Count} choice(s).");
+	}
+
+	/// <summary>
+	/// Frames the two actors the way the reference's dialog camera does: target the midpoint
+	/// and orbit to the side. The exploration camera is restored when the dialog closes.
+	/// The camera stays put when the NPC has no placed body or the player is not next to it.
+	/// </summary>
+	private void BeginDialogCamera(DialogSession session)
+	{
+		_dialogCamera = false;
+		if (_controller == null || session?.Npc?.SceneNode == null)
+		{
+			return;
+		}
+
+		var hero = _controller.FeetPosition + Vector3.UnitY * 120f;
+		var partner = session.Npc.Position + Vector3.UnitY * 120f;
+		var delta = partner - hero;
+		var horizontal = new Vector2(delta.X, delta.Z).Length();
+
+		// The player must actually be standing near the NPC; a diagnostic -talkui from the
+		// plaza should not yank the camera to a far-away gate.
+		if (horizontal < 20f || horizontal > 600f)
+		{
+			return;
+		}
+
+		var direction = Vector3.Normalize(new Vector3(delta.X, 0f, delta.Z));
+		var side = new Vector3(-direction.Z, 0f, direction.X);
+		var middle = (hero + partner) * 0.5f + Vector3.UnitY * 60f;
+		var distance = MathF.Max(300f, horizontal * 1.4f);
+
+		_savedCameraPosition = Camera.Position;
+		_savedCameraYaw = Camera.Yaw;
+		_savedCameraPitch = Camera.Pitch;
+
+		Camera.Position = middle + side * distance + Vector3.UnitY * 20f;
+		Camera.LookAt(middle);
+		_dialogCamera = true;
+	}
+
+	private void EndDialogCamera()
+	{
+		if (!_dialogCamera)
+		{
+			return;
+		}
+
+		Camera.Position = _savedCameraPosition;
+		Camera.Yaw = _savedCameraYaw;
+		Camera.Pitch = _savedCameraPitch;
+		_dialogCamera = false;
+	}
+
+	/// <summary>Plays voices for lines added since the last refresh; no-op without audio.</summary>
+	private void PlayDialogVoices()
+	{
+		if (_dialog == null || _voice == null)
+		{
+			return;
+		}
+
+		var lines = _dialog.Lines;
+		while (_voiceLineCursor < lines.Count)
+		{
+			_voice.Play(lines[_voiceLineCursor]);
+			++_voiceLineCursor;
+		}
 	}
 
 	private void SelectDialogChoice(int index)
@@ -375,6 +470,7 @@ public class OgGame : Game
 		_dialogChoiceIndex = 0;
 		_hud.Dialog.SelectedIndex = 0;
 		_hud.Dialog.Refresh();
+		PlayDialogVoices();
 
 		if (_dialog.Finished)
 		{
@@ -392,8 +488,10 @@ public class OgGame : Game
 		_scripts.CloseDialog();
 		_dialog = null;
 		_dialogChoiceIndex = 0;
+		_voiceLineCursor = 0;
 		_hud.Dialog.Hide();
 		_hud.SetDialogMode(false);
+		EndDialogCamera();
 	}
 
 	/// <summary>
@@ -908,7 +1006,11 @@ public class OgGame : Game
 		var position = target.Vob.Position;
 		var description = target.Describe();
 		string outcome;
-		if (target.Vob is ItemVob item)
+		if (target.Vob is NpcVob npc)
+		{
+			outcome = StartNpcDialog(npc);
+		}
+		else if (target.Vob is ItemVob item)
 		{
 			outcome = _itemPickup.PickUp(item, _world, _inventory);
 			_hud.Inventory.Refresh(_inventory);
@@ -920,6 +1022,28 @@ public class OgGame : Game
 
 		Log.Info(
 			$"Interact: {description} at ({position.X:0.#}, {position.Y:0.#}, {position.Z:0.#}) => {outcome}.");
+	}
+
+	private string StartNpcDialog(NpcVob npc)
+	{
+		if (_dialog != null)
+		{
+			return "already in a dialog";
+		}
+
+		if (_scripts == null)
+		{
+			return "scripts are disabled";
+		}
+
+		var session = _scripts.StartDialog(npc);
+		if (session == null)
+		{
+			return "no dialog data";
+		}
+
+		OpenDialog(session);
+		return $"talk to '{npc.Name}'";
 	}
 
 	/// <summary>
@@ -941,7 +1065,7 @@ public class OgGame : Game
 		{
 			foreach (var node in cell.Children)
 			{
-				if (node is not ModelNode model)
+				if (node is not ModelNode model || model.Vob is NpcVob)
 				{
 					continue;
 				}
@@ -954,6 +1078,35 @@ public class OgGame : Game
 				{
 					model.AnimationData?.Update(elapsed);
 				}
+			}
+		}
+
+		// Script NPCs are advanced only near the player. The world can hold hundreds of
+		// them, and a full skeleton update for each one is wasted when it is not visible.
+		if (_npcActors != null)
+		{
+			var center = _controller?.FeetPosition ?? Camera.Position;
+			const float near = 3000f;
+			var nearSquared = near * near;
+
+			foreach (var actor in _npcActors)
+			{
+				if (actor.Node.AnimationData == null ||
+				    Vector3.DistanceSquared(actor.Position, center) > nearSquared)
+				{
+					continue;
+				}
+
+				if (frozen)
+				{
+					actor.Node.AnimationData.Seek(poseTime);
+				}
+				else
+				{
+					actor.Node.AnimationData.Update(elapsed);
+				}
+
+				actor.UpdateTransform();
 			}
 		}
 	}
@@ -1039,6 +1192,9 @@ public class OgGame : Game
 
 	protected override void UnloadContent()
 	{
+		_voice?.Dispose();
+		_voice = null;
+
 		_physics?.Dispose();
 		_physics = null;
 

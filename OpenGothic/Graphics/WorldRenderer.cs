@@ -133,7 +133,7 @@ public class WorldRenderer : IDisposable
 		var instance = node.Instance;
 		var world = node.WorldTransform;
 
-		DrawInstance(renderer, instance, world, debug);
+		DrawInstance(renderer, instance, world, debug, node.Materials);
 
 		// An attachment is placed by the bone it follows, so it needs no scene node of its own.
 		foreach (var attachment in node.BonesAttachments)
@@ -145,18 +145,25 @@ public class WorldRenderer : IDisposable
 			}
 
 			var attachmentWorld = attachment.Transform * instance.GetBoneGlobalTransform(bone.Index) * world;
-			DrawInstance(renderer, attachment.Instance, attachmentWorld, debug);
+			DrawInstance(renderer, attachment.Instance, attachmentWorld, debug, attachment.Materials);
 		}
 	}
 
-	private static void DrawInstance(Renderer renderer, DrModelInstance instance, Matrix world, DebugDraw debug)
+	private static void DrawInstance(Renderer renderer, DrModelInstance instance, Matrix world, DebugDraw debug,
+		Material[][] materials)
 	{
 		var model = instance.Model;
+		var meshes = model.Meshes;
 
-		foreach (var mesh in model.Meshes)
+		for (var i = 0; i < meshes.Length; ++i)
 		{
-			foreach (var part in mesh.MeshParts)
+			var mesh = meshes[i];
+			var parts = mesh.MeshParts;
+			var row = materials != null && i < materials.Length ? materials[i] : null;
+
+			for (var j = 0; j < parts.Count; ++j)
 			{
+				var part = parts[j];
 				Matrix transform;
 				Matrix[] boneTransforms = null;
 
@@ -170,13 +177,14 @@ public class WorldRenderer : IDisposable
 					transform = instance.GetBoneGlobalTransform(mesh.ParentBone.Index) * world;
 				}
 
-				DrawMeshPart(renderer, part, transform, boneTransforms, part.GetCullBounds(), debug);
+				var material = row != null && j < row.Length ? row[j] : null;
+				DrawMeshPart(renderer, part, transform, boneTransforms, part.GetCullBounds(), debug, material);
 			}
 		}
 	}
 
 	private static void DrawMeshPart(Renderer renderer, DrMeshPart part, Matrix transform, Matrix[] boneTransforms,
-		BoundingBox bounds, DebugDraw debug)
+		BoundingBox bounds, DebugDraw debug, Material material)
 	{
 		if (debug?.Wireframe == true)
 		{
@@ -184,13 +192,13 @@ public class WorldRenderer : IDisposable
 		}
 		else
 		{
-			renderer.DrawMeshPart(part, transform, boneTransforms, bounds: bounds);
+			renderer.DrawMeshPart(part, transform, boneTransforms, material, bounds: bounds);
 		}
 	}
 
 	private static void DrawMeshPart(Renderer renderer, DrMeshPart part, Matrix transform, DebugDraw debug)
 	{
-		DrawMeshPart(renderer, part, transform, null, part.BoundingBox, debug);
+		DrawMeshPart(renderer, part, transform, null, part.BoundingBox, debug, null);
 	}
 
 	public void Dispose()

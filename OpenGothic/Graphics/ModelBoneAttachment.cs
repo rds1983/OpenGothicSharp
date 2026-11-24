@@ -10,8 +10,11 @@ namespace OpenGothic.Graphics;
 /// </summary>
 public class ModelBoneAttachment
 {
+	/// <summary>The attached model instance and its per-mesh-part draw materials.</summary>
+	public GothicModel Model { get; } = new GothicModel();
+
 	/// <summary>The attached model's own instance, independent of the parent's skeleton.</summary>
-	public DrModelInstance Instance { get; } = new DrModelInstance();
+	public DrModelInstance Instance => Model.Instance;
 
 	/// <summary>Bone of the parent model to follow, or null when unbound.</summary>
 	public DrModelBone Bone { get; set; }
@@ -19,9 +22,12 @@ public class ModelBoneAttachment
 	/// <summary>Local transform applied relative to the bone; identity by default.</summary>
 	public Matrix Transform { get; set; } = Matrix.Identity;
 
+	/// <summary>Forwarding shortcut for <see cref="GothicModel.Materials"/>.</summary>
+	public Material[][] Materials => Model.Materials;
+
 	public ModelBoneAttachment(DrModel model)
 	{
-		Model = model ?? throw new ArgumentNullException(nameof(model));
+		Model.Model = model ?? throw new ArgumentNullException(nameof(model));
 	}
 
 	/// <summary>
@@ -37,12 +43,5 @@ public class ModelBoneAttachment
 		}
 
 		return new DrModel(new DrModelBone(mesh.Name ?? "mesh", mesh));
-	}
-
-	/// <summary>The attached model.</summary>
-	public DrModel Model
-	{
-		get => Instance.Model;
-		set => Instance.Model = value;
 	}
 }

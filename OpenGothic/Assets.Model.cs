@@ -70,7 +70,8 @@ partial class Assets
 		Graphics.Material material = new Graphics.Material
 		{
 			DiffuseColor = Color.White,
-			DiffuseTexture = texture
+			DiffuseTexture = texture,
+			SourceTexture = zkMaterial.Texture
 		};
 
 		var result = meshBuilder.CreateMeshPart(device, true);
@@ -562,7 +563,9 @@ partial class Assets
 		var sources = new ModelMeshSource[meshStems.Length];
 		for (var i = 0; i < meshStems.Length; ++i)
 		{
-			sources[i] = LoadModelSource(meshStems[i]);
+			// An actor mesh is the bare .MDM/.ASC body or armour, not a self-contained prop
+			// .MDL that happens to share the stem.
+			sources[i] = LoadModelSource(meshStems[i], preferMdl: false);
 		}
 
 		var model = LoadModel(device, hierarchy, sources);
@@ -577,29 +580,37 @@ partial class Assets
 	/// self-contained <c>.MDL</c> supplies both; an <c>.MDH</c>/<c>.MDM</c> pair supplies the
 	/// skeleton separately; a bare <c>.MDM</c> is authored against the shared skeleton.
 	/// </summary>
-	private ModelMeshSource LoadModelSource(string name)
+	private ModelMeshSource LoadModelSource(string name, bool preferMdl = true)
 	{
 		var stem = Path.GetFileNameWithoutExtension(name).ToUpper();
 
 		var mdlName = stem + ".MDL";
-		if (_allRecords.ContainsKey(mdlName))
+		if (preferMdl && _allRecords.ContainsKey(mdlName))
 		{
 			var mdl = LoadRecord(GetLastRecord(mdlName).Node, r => new ZenKit.Model(r));
 			return new ModelMeshSource(stem, mdl.Mesh, mdl.Hierarchy, mdl);
 		}
 
 		var mdmName = stem + ".MDM";
-		if (!_allRecords.ContainsKey(mdmName))
+		if (_allRecords.ContainsKey(mdmName))
 		{
-			throw new InvalidOperationException($"Model '{stem}' has neither a .MDL nor a .MDM.");
+			var mdhName = stem + ".MDH";
+			IModelHierarchy hierarchy = _allRecords.ContainsKey(mdhName)
+				? LoadRecord(GetLastRecord(mdhName).Node, r => new ModelHierarchy(r))
+				: null;
+
+			return new ModelMeshSource(stem, LoadRecord(GetLastRecord(mdmName).Node, r => new ZenKit.ModelMesh(r)), hierarchy);
 		}
 
-		var mdhName = stem + ".MDH";
-		IModelHierarchy hierarchy = _allRecords.ContainsKey(mdhName)
-			? LoadRecord(GetLastRecord(mdhName).Node, r => new ModelHierarchy(r))
-			: null;
+		// An actor mesh is normally a bare .MDM, but accept a self-contained .MDL when no
+		// mesh file exists.
+		if (_allRecords.ContainsKey(mdlName))
+		{
+			var mdl = LoadRecord(GetLastRecord(mdlName).Node, r => new ZenKit.Model(r));
+			return new ModelMeshSource(stem, mdl.Mesh, mdl.Hierarchy, mdl);
+		}
 
-		return new ModelMeshSource(stem, LoadRecord(GetLastRecord(mdmName).Node, r => new ZenKit.ModelMesh(r)), hierarchy);
+		throw new InvalidOperationException($"Model '{stem}' has neither a .MDL nor a .MDM.");
 	}
 
 	/// <summary>

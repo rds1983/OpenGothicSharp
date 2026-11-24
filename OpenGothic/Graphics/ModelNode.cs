@@ -10,10 +10,24 @@ namespace OpenGothic.Graphics;
 /// </summary>
 public class ModelNode : SceneNode
 {
-	public DrModelInstance Instance { get; set; }
+	/// <summary>The model instance and the per-mesh-part draw materials.</summary>
+	public GothicModel Model { get; } = new GothicModel();
+
+	/// <summary>Forwarding shortcut for <see cref="GothicModel.Instance"/>.</summary>
+	public DrModelInstance Instance
+	{
+		get => Model.Instance;
+		set => Model.Instance = value;
+	}
 
 	/// <summary>Whether the vob asks for collision; the reference uses its <c>cd_dynamic</c> flag.</summary>
 	public bool Collision { get; set; } = true;
+
+	/// <summary>Forwarding shortcut for <see cref="GothicModel.Materials"/>.</summary>
+	public Material[][] Materials => Model.Materials;
+
+	/// <summary>Re-reads the default materials from the current model instance.</summary>
+	public void SetMaterialsFromModel() => Model.SetMaterialsFromModel();
 
 	/// <summary>
 	/// Models drawn on this model's bones — armour, weapons, accessories. Each is placed by the

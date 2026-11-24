@@ -2,9 +2,27 @@ using Microsoft.Xna.Framework;
 using OpenGothic.Physics;
 using OpenGothic.Graphics;
 using OpenGothic.Vobs;
+using System;
 using System.Collections.Generic;
 
 namespace OpenGothic;
+
+/// <summary>One waynet point in engine space, plus the authored facing.</summary>
+public readonly struct Waypoint
+{
+	public Waypoint(Vector3 position, Vector3 direction, bool free)
+	{
+		Position = position;
+		Direction = direction;
+		Free = free;
+	}
+
+	public Vector3 Position { get; }
+
+	public Vector3 Direction { get; }
+
+	public bool Free { get; }
+}
 
 public class WorldGridCell
 {
@@ -60,6 +78,10 @@ public class WorldGrid
 	/// <summary>Typed ZEN vob tree, built once while the world is loaded.</summary>
 	public VobTree Vobs { get; } = new();
 
+	/// <summary>Waynet points by name, in engine space; scripts use these as spawn points.</summary>
+	public Dictionary<string, Waypoint> Waypoints { get; } =
+		new Dictionary<string, Waypoint>(StringComparer.OrdinalIgnoreCase);
+
 	public WorldGrid()
 	{
 		for (var i = 0; i < Constants.GridSize; ++i)
@@ -81,6 +103,20 @@ public class WorldGrid
 				{
 					return Cells[i, j];
 				}
+			}
+		}
+
+		return null;
+	}
+
+	/// <summary>Cell whose horizontal extent contains a world position, or null outside the mesh.</summary>
+	public WorldGridCell FindCellByPoint(Vector3 position)
+	{
+		foreach (var cell in Cells)
+		{
+			if (cell.BoundingBox.Contains(position) != ContainmentType.Disjoint)
+			{
+				return cell;
 			}
 		}
 

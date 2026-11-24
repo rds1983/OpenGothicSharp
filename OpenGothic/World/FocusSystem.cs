@@ -1,3 +1,4 @@
+using BepuPhysics;
 using Microsoft.Xna.Framework;
 using OpenGothic.Physics;
 using OpenGothic.Vobs;
@@ -132,7 +133,7 @@ public sealed class FocusSystem
 				continue;
 			}
 
-			if (physics != null && IsOccluded(physics, ray, distance))
+			if (physics != null && IsOccluded(physics, ray, distance, (vob as NpcVob)?.PhysicsBody))
 			{
 				continue;
 			}
@@ -147,14 +148,15 @@ public sealed class FocusSystem
 		}
 	}
 
-	private static bool IsOccluded(PhysicsWorld physics, Ray ray, float distance)
+	private static bool IsOccluded(PhysicsWorld physics, Ray ray, float distance, BodyHandle? ignoreBody)
 	{
 		if (distance <= OcclusionSlack)
 		{
 			return false;
 		}
 
-		return physics.RayCast(ray.Position, ray.Direction, distance - OcclusionSlack, false, out _);
+		return physics.RayCast(ray.Position, ray.Direction, distance - OcclusionSlack, false, out _,
+			ignoreBody);
 	}
 
 	private static bool IsFocusable(VobKind kind)

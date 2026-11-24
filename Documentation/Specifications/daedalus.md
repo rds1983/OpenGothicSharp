@@ -1,4 +1,4 @@
-# Daedalus scripts (G1–G3)
+# Daedalus scripts (G1вЂ“G3)
 
 The compiled scripts live outside the VDF archives:
 
@@ -50,8 +50,8 @@ inserted symbol. Each NPC binding stores only its `NpcInstance`, detached `NpcVo
 spawnpoint; name, guild, level and HP live on the `NpcVob`. `MDL_SETVISUAL*`, inventory and AI
 routines still use the default handler.
 
-The objects are **data-only**: there is no world node, body or collision yet. Visible NPCs
-and movement depend on the AI/visual pipeline (`F2`/`G2` continuation).
+The script objects were initially data-only. F1.5 now gives the human NPCs a world body,
+collision capsule and focus target; monster bodies and movement/AI remain.
 
 `LOG_ADDENTRY` is bound to the journal list. See the dialog section below for the real
 conversation path that replaced the old `B_ASSESSTALK` diagnostic.
@@ -77,7 +77,7 @@ The dialog engine mirrors `GameScript::dialogChoices`, `updateDialog` and
   the NPC menu. `Ai_StopProcessInfos` ends the conversation.
 - `AI_Output` resolves the output-unit name through `Ou.dat` and becomes a `DialogLine`.
   The speaker is derived from the first argument, so the hero's own lines are marked as such.
-  `AI_OutputSvm`/`AI_OutputSvm_Overlay` are recorded with their raw `$…` output unit; the SVM
+  `AI_OutputSvm`/`AI_OutputSvm_Overlay` are recorded with their raw `$вЂ¦` output unit; the SVM
   speech table is not loaded yet, so their text is unresolved.
 - `Npc_KnowsInfo`, `Npc_GiveInfo` and `Npc_CheckInfo` are bound. `AI_ProcessInfos` records a
   dialog request for the UI when no conversation is active. `InfoManager_HasFinished`
@@ -106,13 +106,14 @@ dialog.
 
 ### Limits
 
-- `DialogLine.Voice` is the `<output-unit>.wav` name the reference plays; audio playback is
-  not implemented yet.
+- `DialogLine.Voice` is the `<output-unit>.wav` name; `VoicePlayer` plays it through
+  MonoGame `SoundEffect`. J1 owns the general sound-definition system.
 - A choice authored as a trade entry runs its script function but does not open a trade UI.
-- The dialog camera is not active: it needs both actors in the world, and script NPCs still
-  have no world node or body. The camera is part of **F1.5 — World-bound script NPCs**.
+- The dialog camera targets the midpoint between the two placed actors and orbits to the
+  side, then restores the exploration camera on close. It is active only when the NPC has a
+  world body and the player is next to it.
 - Conditions that depend on quest/topic state (`LOG_GetTopicStatus`, `Npc_GetDistToWP`,
-  `Npc_HasItems`, …) return the VM default, so some entries are unavailable or repeat until
+  `Npc_HasItems`, ...) return the VM default, so some entries are unavailable or repeat until
   the quest/journal layer (G4) and the relevant world externals exist. A missing item
   external can also make ZenKit log a recoverable null-member message while the script still
   completes. The City Guard and Pablo conversations above complete with the current bindings.
@@ -122,7 +123,8 @@ dialog.
 
 ## Scope
 
-- Script objects are data-only: no world node, body, collision or AI queue yet.
+- Human script NPCs are world-bound and can start the dialog. Non-human bodies, routines,
+  movement and AI remain.
 - `-noscripts` skips loading and booting for diagnostics.
 
 **Done when:** startup scripts run without unimplemented-call crashes. The four entry points

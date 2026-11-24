@@ -9,7 +9,7 @@ from it, the divergence is called out with the reason.
 
 ## Layout
 
-- [Specifications/](Specifications/README.md) — behavioral and file-format specifications.
+- [Specifications/](Specifications/README.md) РІР‚вЂќ behavioral and file-format specifications.
 
 ## Subsystems
 
@@ -49,7 +49,7 @@ default chosen elsewhere.
 | `-nocull` / `-cull:true\|false` | Per-part frustum culling; see "Frustum culling". |
 | `-nomodels` / `-models:true\|false` | Instantiate vobs that carry a model. Off shows the level without model geometry, which separates a model bug from a world one. |
 | `-noanims` / `-anims:true\|false` | Attach the animation clips a model's script lists. Off keeps the bind pose and reads no `.MAN` file, which separates an animation problem from a model or world one. |
-| `-animdump:<script>` | Log a script's clip list — nodes, frames, fps, duration, next clip — for the shipped data. `-animclip:<clip>` adds the first frame of that clip's bone tracks. |
+| `-animdump:<script>` | Log a script's clip list РІР‚вЂќ nodes, frames, fps, duration, next clip РІР‚вЂќ for the shipped data. `-animclip:<clip>` adds the first frame of that clip's bone tracks. |
 | `-play:<clip>` | Play a clip on the `-model:` model. Accepts an alias name. Without it the model holds its bind pose. |
 | `-overlay:<clip>` | Play a clip on its script layer over `-play:`, so an upper-body gesture leaves the legs alone. |
 | `-freeze` | Pin playback to `-animtime:` instead of advancing it, so a capture does not depend on how long the process has been running. |
@@ -86,9 +86,9 @@ Captures go through `-screenshot:` rather than an OS-level screenshot: the hardw
 surface never passes through the desktop compositor here, so an external capture of the
 window comes back **black** even though the frame renders. On this machine the same was
 true of `PrintWindow` and of the HUD; `GraphicsDevice.GetBackBufferData` is the only path
-that returns the image. Frame 90–120 is a safe choice while the world is still loading.
+that returns the image. Frame 90РІР‚вЂњ120 is a safe choice while the world is still loading.
 
-The debugging trio — `-cam:`, `-lookat:` and `-model:` — is the quickest way to inspect a
+The debugging trio РІР‚вЂќ `-cam:`, `-lookat:` and `-model:` РІР‚вЂќ is the quickest way to inspect a
 single asset without walking there: the camera starts at the world origin, so the nearest
 model vob in `newworld.zen` is over 300 units away and below eye level.
 
@@ -138,7 +138,7 @@ Unit tests live in `OpenGothic.Tests` (xunit). Run them with:
 dotnet test OpenGothic.MonoGame.sln
 ```
 
-Tests avoid touching the real game installation — they build temporary folders and INI
+Tests avoid touching the real game installation РІР‚вЂќ they build temporary folders and INI
 files instead. Anything requiring a GPU, a window, or game data is exercised by running
 the app, not by unit tests.
 
@@ -175,7 +175,7 @@ There are two handedness regimes, and the boundary between them is **asset loadi
 
 | | Handedness | Used by |
 | --- | --- | --- |
-| Game data | **Left-handed** (LHS) | Gothic ZEN/MDL/DAT — VDF contents, on disk |
+| Game data | **Left-handed** (LHS) | Gothic ZEN/MDL/DAT РІР‚вЂќ VDF contents, on disk |
 | Engine | **Right-handed** (RHS) | MonoGame, XNA math, everything after loading |
 
 Gothic's files are left-handed; MonoGame is right-handed. Rather than poke at this on
@@ -214,8 +214,8 @@ Rendering is split three ways:
   `DrawBoundingBox(BoundingBox, Color)`,
   `DrawMeshPartWireframe(DrMeshPart, Matrix, Color, Matrix[]? boneTransforms)`, `EndFrame()`.
   It owns the `BasicEffect`, the `SkinnedEffect`, device blend/depth/rasterizer state,
-  vertex/index-buffer binding and the draw call. It also exposes per-frame stats —
-  `DrawCalls`, `Triangles` — reset in `BeginFrame`.
+  vertex/index-buffer binding and the draw call. It also exposes per-frame stats РІР‚вЂќ
+  `DrawCalls`, `Triangles` РІР‚вЂќ reset in `BeginFrame`.
   `BeginFrame` **saves** the device state and installs the renderer's own (opaque blend,
   default depth, back-face culling, `LinearWrap` sampler, full-viewport scissor);
   `EndFrame` **restores** what it saved. Everything in between can assume world defaults.
@@ -224,13 +224,13 @@ Rendering is split three ways:
   and the box mesh are created once and reused, because these run thousands of times per
   frame.
 - **`WorldRenderer`** owns the `WorldGrid` traversal and the cell-level culling early-out,
-  and drives the frame: `BeginFrame` → `Clear` → sky → cells → `EndFrame`.
+  and drives the frame: `BeginFrame` РІвЂ вЂ™ `Clear` РІвЂ вЂ™ sky РІвЂ вЂ™ cells РІвЂ вЂ™ `EndFrame`.
 - **`Sky`** owns its own geometry, gradient texture and material, and submits its
   `DrMeshPart` like any other object. It passes `cull: false`, because the dome encloses
   the camera and a background must always draw.
 
 **Materials live on the mesh part**, in `DrMeshPartTag(Scene.Material)`. `DrawMeshPart`
-reads the tag and only uses `customMaterial` when explicitly passed — it is expected to be
+reads the tag and only uses `customMaterial` when explicitly passed РІР‚вЂќ it is expected to be
 null in normal rendering and exists for rare cases such as debug drawing. `Material`
 carries `DiffuseColor`, `DiffuseTexture`, and the render state it needs
 (`LightingEnabled`, `FogEnabled`, `DepthStencilState`, `RasterizerState`).
@@ -259,7 +259,7 @@ F2 toggles `Wireframe`, F3 toggles `Bounds`. Both default to off.
   bone transforms it is passed, so the edges show the posed geometry rather than the bind
   pose.
 - **Bounds** (`DrawBoundingBox`) draws the twelve edges of a box using a shared unit-cube
-  `LineList` mesh scaled and translated onto the box — one draw call per box, no rebuilds.
+  `LineList` mesh scaled and translated onto the box РІР‚вЂќ one draw call per box, no rebuilds.
   Boxes are unlit, unfogged and `DepthStencilState.DepthRead`: they are occluded by
   geometry but do not write depth, so overlapping boxes do not mask each other.
 
@@ -278,9 +278,9 @@ it, so line lists and triangle lists both go through the same path.
 
 Culling happens at two levels:
 
-1. **Cells** — `WorldRenderer` tests the 16 `WorldGridCell` boxes and skips everything
+1. **Cells** РІР‚вЂќ `WorldRenderer` tests the 16 `WorldGridCell` boxes and skips everything
    inside a hidden cell. This is the cheap early-out that rejects most of the level.
-2. **Mesh parts** — `DrawMeshPart` transforms `part.BoundingBox` by the caller's transform
+2. **Mesh parts** РІР‚вЂќ `DrawMeshPart` transforms `part.BoundingBox` by the caller's transform
    and tests it against the frustum installed by `BeginFrame`. Because the test lives in
    `Renderer`, it covers `InstancedMeshNode` instances individually: previously an instance
    was drawn whenever its *cell* was visible, even if it stood far outside the view.
@@ -298,7 +298,7 @@ Consequences worth knowing:
   exact. For a skinned part it is the **bind pose**, which is also exactly the box the
   vertices form as loaded, so it is a valid cull test for a model that is not animated.
   Animation moves vertices outside it, so when C2 plays clips it must grow each skinned
-  part's box to cover the clip it plays — otherwise a limb gets culled mid-swing. Culling is
+  part's box to cover the clip it plays РІР‚вЂќ otherwise a limb gets culled mid-swing. Culling is
   not skipped for skinned parts in the meantime; the box is correct for what is drawn today.
 - `DebugSettings.CullEnabled` (default true) turns the per-part test off globally. Pass
   `-nocull` on the command line to see whether a missing object is a culling bug or a
@@ -309,29 +309,34 @@ Consequences worth knowing:
 transforming eight corners: for an affine matrix the results are identical, but it avoids
 materialising the corners. This runs once per part per frame, so it matters.
 
-Measured effect on a full `newworld.zen` frame at the default viewpoint: **11,937 → 2,005
-draw calls** and **1.39M → 386k triangles**. An A/B capture with culling forced off
+Measured effect on a full `newworld.zen` frame at the default viewpoint: **11,937 РІвЂ вЂ™ 2,005
+draw calls** and **1.39M РІвЂ вЂ™ 386k triangles**. An A/B capture with culling forced off
 restored the original counts and produced a **pixel-identical image** outside the HUD,
 confirming the discards were all invisible geometry.
 
 With model vobs drawing, the same frame is **2,136 draw calls / 393,076 triangles**; with
 `-nomodels` it returns to **2,005 / 385,934**, so the model path adds roughly 6% to the
 frame. Forcing culling off (`-nocull`) gives **13,471 / 1,501,566** and a **pixel-identical
-image outside the HUD**, confirming every discard was invisible geometry — skinned parts
+image outside the HUD**, confirming every discard was invisible geometry РІР‚вЂќ skinned parts
 included.
 
 ### Models
 
 A model is a `DrModel` (skeleton plus meshes) placed in the world by a `ModelNode`
-(`OpenGothic/Graphics/ModelNode.cs`), which holds a `DrModelInstance`, the models attached to its
-bones, and a world transform in `Transform`. A model driven by a script gets an
+(`OpenGothic/Graphics/ModelNode.cs`), which composes a `GothicModel` (the
+`DrModelInstance` plus `Materials[meshIndex][partIndex]`), the models attached to its bones,
+and a world transform in `Transform`. `GothicModel.Materials` starts from the model's
+`DrMeshPartTag.material` entries and individual entries can be replaced without touching the
+shared geometry; the outer array is read-only from outside because its dimensions must match
+the model. `ModelBoneAttachment` composes its own `GothicModel` for the attached model.
+A model driven by a script gets an
 `AnimationData` alongside its instance, which owns the `AnimationController` and the script's
 playback state; a prop leaves it null. `WorldRenderer.DrawModel` walks `instance.Model.Meshes`
 and dispatches per part:
 
-- **Static part** — drawn with the owning bone's global transform times the node
+- **Static part** РІР‚вЂќ drawn with the owning bone's global transform times the node
   transform, exactly as a hand-authored prop expects.
-- **Skinned part** — has a `Skin`, so `DrawMeshPart` deforms it with
+- **Skinned part** РІР‚вЂќ has a `Skin`, so `DrawMeshPart` deforms it with
   `instance.GetSkinTransforms(...)` before placing it with the node transform. MonoGame's
   `SkinnedEffect` takes up to `SkinnedEffect.MaxBones` (72) transforms; a mesh here tops
   out at 36 joints and a skeleton at 47 bones, so no model needs a custom effect. The draw
@@ -348,10 +353,10 @@ union is conservative, and `Renderer.DrawMeshPart` culls with it.
 `ModelNode.BonesAttachments` holds models drawn on the node's own bones. Each is placed as
 `attachment.Transform * boneGlobal * node.WorldTransform` when the model is drawn, so it
 follows the skeleton without becoming a scene node and without touching the node transform
-cache. A multi-resolution mesh — the form weapons ship in — is wrapped into a one-bone model
+cache. A multi-resolution mesh РІР‚вЂќ the form weapons ship in РІР‚вЂќ is wrapped into a one-bone model
 by `ModelBoneAttachment.WrapMesh`, so both forms take the same path. `-attach:<point>:<model>`
 exercises this from the command line. Gothic names attach points `ZS_RIGHTHAND`, `ZS_SWORD`
-and so on, but an armour model carries none of them — only the script skeleton does. A
+and so on, but an armour model carries none of them РІР‚вЂќ only the script skeleton does. A
 composed model (below) uses that skeleton, so a weapon attached to `ZS_RIGHTHAND` is placed at
 the hand. `attachment.Transform` is where an item's own grip offset belongs; the item
 definitions that carry it arrive with the item work, so today a weapon is placed at the bone
@@ -368,12 +373,12 @@ name**, exactly as clip channels are, and the sources' skinned meshes become `_M
 under the same `_ROOT`. `-compose:<skeleton>:<mesh>[,<mesh>...]` exposes it.
 
 The subtlety is that a mesh's skin keeps its **own authored bind**. The armour's rest
-rotations differ from `HUMANS.MDH` by up to ~34° at the shoulders, and its root translation is
+rotations differ from `HUMANS.MDH` by up to ~34Р’В° at the shoulders, and its root translation is
 different too; using the merged transforms for the inverse bind would rotate and displace the
 armour by those amounts. Keeping the authored bind means `inverseBind * boneWorld` maps the
 mesh from its own rest into the skeleton's, which is the same transform an animation applies,
 so body and armour land in one pose. Because the baked vertices are therefore in the authored
-space, each composed part's cull box is computed separately in the merged rest — that is
+space, each composed part's cull box is computed separately in the merged rest РІР‚вЂќ that is
 where the skeleton places it. A mesh that names a bone the explicit skeleton lacks is an
 error, not a silently dropped weight.
 
@@ -389,16 +394,16 @@ it only ever widens, so every instance of a shared model sees a box valid for an
 them plays, and a cross-fade needs no special case. `DrModelTag.MeasuredClips` records which
 clips have already been merged, so each clip is measured once per model, not once per instance
 and certainly not per frame. It cannot go on `AnimationClipTag`: a clip is shared by every
-model with the same script and bone layout — the ~40 armour models share one set — while their
+model with the same script and bone layout РІР‚вЂќ the ~40 armour models share one set РІР‚вЂќ while their
 meshes, and therefore their part boxes, differ.
 
 `Assets.GetModel(name, ...)` resolves a model name from the level (the authoring `.ASC` /
 `.MDS` name) to a file: `STEM.MDL` if present, otherwise the `STEM.MDH` + `STEM.MDM` pair.
 The loader builds absolute bind transforms in hierarchy order, reuses the hierarchy node
 indexing the weights use, and gives each skinned mesh a synthetic bone under a synthetic
-root so that a mesh can span many bones without one bone owning two meshes. The details —
+root so that a mesh can span many bones without one bone owning two meshes. The details РІР‚вЂќ
 including why the root translation goes on the root bone's default pose rather than into the
-bind matrices — are in
+bind matrices РІР‚вЂќ are in
 [Specifications/gothic-model-format.md](Specifications/gothic-model-format.md).
 
 `Assets.World.cs` builds the single `VobNode` hierarchy while it reads the ZEN. A vob's
@@ -417,8 +422,8 @@ Prop models cancel that translation again, matching `ObjVisual::setYTranslationE
 #### Vob tree
 
 The `VobNode` tree is the gameplay hierarchy, as in `Try/OpenGothic`: every ZEN virtual object
-becomes a node — including spawn points, triggers, sounds, decals and particle systems that
-have no rendered geometry — with its raw `zenkit::VirtualObject`, resolved world/local matrix,
+becomes a node РІР‚вЂќ including spawn points, triggers, sounds, decals and particle systems that
+have no rendered geometry РІР‚вЂќ with its raw `zenkit::VirtualObject`, resolved world/local matrix,
 world bounds, category (`VobKind`), name/tag and an optional `SceneNode` visual. The category
 mapping follows `Vob::load`: NPC, item, interactive/mobsi (container, door, bed, fire, ladder,
 switch, wheel), trigger family, mover, light, sound/zone music, decal, particle system, zone,
@@ -443,14 +448,14 @@ the posed geometry rather than the bind pose.
 
 `Assets.Animation.cs` attaches the clips a model can play. A model file carries none: the
 clips are listed by a *model script* (`.MSB`, Gothic 1 spells it `.MDS`) and stored one
-`<SCRIPT>-<CLIP>.MAN` file per clip. A script reaches its models two ways — the skeleton
-name it declares (`SHEEP` → `SHEEP_BODY.MDL`) and the `.ASC` meshes it can drive
-(`HUMANS.MSB` lists `ARMOR_PRISONER.ASC`) — and `Assets` indexes both once.
+`<SCRIPT>-<CLIP>.MAN` file per clip. A script reaches its models two ways РІР‚вЂќ the skeleton
+name it declares (`SHEEP` РІвЂ вЂ™ `SHEEP_BODY.MDL`) and the `.ASC` meshes it can drive
+(`HUMANS.MSB` lists `ARMOR_PRISONER.ASC`) РІР‚вЂќ and `Assets` indexes both once.
 
 The non-obvious part is that **a clip's channel indices address the script's skeleton, not
 the model's hierarchy**. The human skeleton has 34 nodes; `ARMOR_PRISONER.MDL` has 25,
 because it omits the nine `ZS_*` attach nodes. So channels are resolved by node *name* and
-channels the model cannot pose are dropped — 1,710 of `HUMANS`' 26,656 channels for a bare
+channels the model cannot pose are dropped РІР‚вЂќ 1,710 of `HUMANS`' 26,656 channels for a bare
 armour model, which is why `-animdump:` reports that count.
 
 Converted sets are cached by script plus the exact bone-name sequence, so the ~40 armour
@@ -479,15 +484,15 @@ alive at playback time.
 The script gives every clip a `Layer`, and the shipped `HUMANS` data uses it: layer 1 is
 full-body locomotion, layer 2 is upper-body combat overrides (`T_MOVE_2_FISTMOVE`, 14 bones),
 9 is head-only (`C_LOOK_*`), 11 is an arm gesture (`C_POINT_*`), and 20 is full-body turns.
-Attacks (`S_1HATTACK`, …) are layer 1 and full body, so they do reset the legs by design.
+Attacks (`S_1HATTACK`, РІР‚В¦) are layer 1 and full body, so they do reset the legs by design.
 
 `AnimationData.PlayLayer(name)` runs a clip on top of the base at the layer its script gives
 it. All active clips are layers of one `AnimationBlendNode`, ordered by that layer value, and
-each layer's `BoneFilter` keeps only the bones no higher layer drives — so a higher layer wins
+each layer's `BoneFilter` keeps only the bones no higher layer drives РІР‚вЂќ so a higher layer wins
 on exactly the bones it animates and everything else keeps the pose below. A per-layer
 `TimeOffset` turns the controller's single clock into each clip's own time, which is what lets
 a walk keep looping while a gesture starts mid-stride. A layered change snaps rather than
-fading — the reference ramps a new layer in over its blend time, which is the one piece not
+fading РІР‚вЂќ the reference ramps a new layer in over its blend time, which is the one piece not
 ported yet. `-overlay:<clip>` exercises it from the command line.
 
 The playback rules come from the script, not from guesswork:
@@ -531,7 +536,7 @@ bridge the two conventions:
   clip on frame 0. The game's reverse mirrors the sample walk and starts on the last stored
   frame, so the node wraps the clip in a one-layer blend node and adds one frame period of
   `AnimationBlendLayer.TimeOffset`. The shift stays on the layer rather than on the
-  controller's clock, so `AnimationController.Time` remains game time — which is what
+  controller's clock, so `AnimationController.Time` remains game time РІР‚вЂќ which is what
   `HasFinished` and the cross-fade progress are measured against.
 - **Zero-length fades.** 917 of the 1,253 declared transitions ask for no ramp at all, so the
   node calls `StartClip` for those instead of `CrossfadeToClip`, whose progress would be
@@ -543,7 +548,7 @@ Static collision is a [BepuPhysics2](https://github.com/bepu/bepuphysics2) set o
 meshes (`OpenGothic/Physics/PhysicsWorld.cs`). Two sources feed it:
 
 - **The level mesh**, triangulated in `Assets.World.cs` while the world is read. Unlike the
-  render path, every polygon is kept — a texture-less material is still a wall — and only
+  render path, every polygon is kept РІР‚вЂќ a texture-less material is still a wall РІР‚вЂќ and only
   `material.disableCollision` is skipped. Ghost occluders collide.
 - **Static vobs**, collected from the per-cell visual list when the physics world is built. A
   multi-resolution mesh collides with its full geometry; a model collides with its rigid
@@ -563,10 +568,10 @@ Water material is added as a sensor: it is present for queries but refuses conta
 too, while diagnostics (`-model`, `-compose`, `-attach`, `-cam`, `-lookat`, `-screenshot`,
 `-physics`) keep the fixed camera; `-nowalk` overrides even a plain launch. `-physics` builds
 the same collision and also runs the self-checks. Because building the whole level takes
-~15–25 s and a few hundred MB, collision is **streamed**: the level mesh is bucketed into
+~15РІР‚вЂњ25 s and a few hundred MB, collision is **streamed**: the level mesh is bucketed into
 2000-unit chunks while it is read, and the static vobs are collected once as bounds plus a
-triangle soup. A 3000-unit neighbourhood around the player is loaded — 16 chunks and ~394 vob
-sources for the harbour, 9.7k terrain + 33k vob source triangles in 478 static bodies — and
+triangle soup. A 3000-unit neighbourhood around the player is loaded РІР‚вЂќ 16 chunks and ~394 vob
+sources for the harbour, 9.7k terrain + 33k vob source triangles in 478 static bodies РІР‚вЂќ and
 `PhysicsWorld.Update` reloads it after the player moves 256 units, unloading with a 500-unit
 margin. The initial load is well under a second; a streaming step is a few milliseconds.
 
@@ -587,7 +592,7 @@ camera used by captures; `-nowalk` forces it back.
 `OpenGothic/Physics/CharacterController.cs` ports OpenGothic's NPC movement rather than using a
 dynamic body. The capsule is a **chest-height ghost**: radius 30, cylinder length 30, centred
 150 units above the feet, so it collides from feet + 105 to feet + 195. That is the reference's
-`HumShape` for a 180 × 60 human and is deliberate — the legs have no collider, so barrels,
+`HumShape` for a 180 Р“вЂ” 60 human and is deliberate РІР‚вЂќ the legs have no collider, so barrels,
 plank piles and terrain bumps below the chest cannot trap the player. `Position` is the capsule
 centre; `FeetPosition` is the logical position used by the camera and scripts.
 
@@ -596,9 +601,9 @@ centre; `FeetPosition` is the logical position used by the camera and scripts.
   remainder is **dropped**, not projected. Projecting the remainder was what turned a blocked
   backward move into a sideways slide.
 - **Forward-only bounce** ports `MoveAlgo::onMoveFailed`: an oblique hit while moving forward
-  retries headings rotated by ±5..35°. Backward and strafing moves never bounce.
+  retries headings rotated by Р’В±5..35Р’В°. Backward and strafing moves never bounce.
 - **Grounding** is a downward ray from the capsule centre +1 over 250 units. If the feet are
-  within 50 units of the hit, they snap onto it — up for a step, down for a drop. Steps work
+  within 50 units of the hit, they snap onto it РІР‚вЂќ up for a step, down for a drop. Steps work
   because the chest capsule passes over the riser; there is no separate step-assist. Farther
   drops fall under gravity.
 - **Overlap recovery** probes the capsule's sides with short rays and pushes out of a static
@@ -622,7 +627,7 @@ The format details and measurements are in
 
 `OpenGothic/PlayerAvatar.cs` gives the capsule a body until the script layer can choose the
 hero model (milestones F1/G2). It composes `HUMANS` with `HUM_BODY_NAKED0`, `ARMOR_PRISONER`
-and the `HUM_HEAD_PONY.MMB` head — the head is a morph mesh bound to `BIP01 HEAD`. The bind
+and the `HUM_HEAD_PONY.MMB` head РІР‚вЂќ the head is a morph mesh bound to `BIP01 HEAD`. The bind
 already carries the skeleton's root translation, so the body is placed at
 `CharacterController.FeetPosition` with no extra Y offset. The visual is passed to
 `WorldRenderer.Draw` as an extra node rather than added to a grid cell: it is always next to
@@ -681,22 +686,25 @@ World item vobs usually carry no visual; they name an item instance such as `ITF
 The loader renders the mesh named after that instance (`ITFO_SAUSAGE.MRM`) and joins the
 existing per-cell batch, ignoring the vob's false `show_visual` flag. Focusing an item and
 pressing **E** adds it to the stack-based `Inventory`, marks the vob taken so focus skips it,
-and removes its geometry — a direct node or one batch instance. The bottom-left
+and removes its geometry РІР‚вЂќ a direct node or one batch instance. The bottom-left
 `InventoryPanel` lists the stacks and refreshes on pickup.
 
 `Inventory` also supports removing stacks, but drop/use/equipment, item definitions and the
 full inventory UI belong to I3. Items without an instance mesh remain invisible. Details in
 [Specifications/items.md](Specifications/items.md).
 
-### NPC runtime
+### NPC runtime and spawning
 
-Gothic's shipped ZEN files contain no `oCNpc` vobs — scripts insert NPCs at startup. The F1
-runtime therefore stops at the data model: `NpcVob` exposes the script instance name, guild,
-level, `Hp`/`MaxHp`, `IsDead`, `TakeDamage` and the `Say` message hook, and the focus overlay
-shows `Npc '<name>' hp <hp>/<maxHp>` once a script-spawned NPC exists.
+Gothic's shipped ZEN files contain no `oCNpc` vobs - scripts insert NPCs at startup. `NpcVob`
+exposes the script instance name, guild, level, `Hp`/`MaxHp`, `IsDead`, `TakeDamage` and the
+`Say` message hook.
 
-There is deliberately **no placeholder NPC spawner or body**. Body, armour, head, animation,
-AI, movement and collision belong with the script-created NPC in F2/G2. Details in
+F1.5 places the human script NPCs in the world. `NpcSpawner` reads the waynet, picks the
+authored waypoint (or the nearest unused one within 800 units, like `findNextPoint`), builds
+the armour/body `.MDM` composed with `HUMANS` plus the `.MMB` head, and applies the
+`MDL_SetVisualBody` texture variants per instance. Each NPC gets a kinematic capsule and is
+registered for focus; E starts the G3 dialog. The tested startup places **356 human bodies**;
+**50 non-human bodies** and all routines/AI/movement remain F2/F3. Details in
 [Specifications/npcs.md](Specifications/npcs.md).
 
 ### Daedalus scripts
@@ -714,21 +722,21 @@ script-object layer described below. `-noscripts` skips the load for diagnostics
 
 G2 binds the script object layer: `WLD_INSERTNPC` and `WLD_INSERTITEM` initialize script
 objects (406 NPCs and 55 items in the tested NotR startup), `HLP_GETNPC` returns them, and
-`PC_HERO` is bound as the script hero. Each binding owns a detached `NpcVob` for the runtime
+`PC_HERO` is bound as the script hero. Each binding owns a `NpcVob` for the runtime
 name/guild/level/HP, so those values are not duplicated in the binding. `LOG_ADDENTRY` stores
-journal lines. These are data-only script objects — no world nodes or bodies yet; visible
-script NPCs and the AI/visual setup remain.
+journal lines. F1.5 now places the human bodies; the non-human bodies and movement/AI remain.
 
 G3 adds the dialog engine. All 4,139 `C_INFO` instances are grouped by NPC, conditions run
 with the NPC as `SELF` and the hero as `OTHER`, and `AI_Output` units resolve through
 `Ou.dat`. Executing an information function collects `Info_AddChoice` entries and
 `Ai_StopProcessInfos` ends the conversation. `-talk` runs a complete diagnostic dialog,
-`-talkui`/F4 opens the Myra choice panel, and `-npc:` selects the partner. The dialog camera
-waits for F1.5's world-bound NPCs; voice playback waits for the audio layer (J1).
+`-talkui`/F4 opens the Myra choice panel, and `-npc:` selects the partner. With F1.5, an
+in-world NPC opens the same panel, the dialog camera frames both actors, and
+`DialogLine.Voice` plays through the minimal audio hook.
 
 ### Sky, fog and lighting
 
-`Sky` draws a gradient dome (8 rings × 16 segments) built from a 1×64 colour ramp between
+`Sky` draws a gradient dome (8 rings Р“вЂ” 16 segments) built from a 1Р“вЂ”64 colour ramp between
 `Constants.SkyHorizonColor` and `SkyZenithColor`. It is unlit, unfogged, depth-test
 disabled and cull-none, and follows the camera. The reference's LUT/cloud sky is deferred
 to the shader milestone.
@@ -744,7 +752,7 @@ For reference, a full `newworld.zen` frame is roughly **2k draw calls / 386k tri
 the default viewpoint after per-part frustum culling (it was ~12k / 1.4M before). There is
 no batching or instancing yet; milestone M4 covers that.
 
-Uses stock MonoGame effects (`BasicEffect`, `SkinnedEffect`, …) until gameplay is polished.
+Uses stock MonoGame effects (`BasicEffect`, `SkinnedEffect`, РІР‚В¦) until gameplay is polished.
 A custom shader system and visual parity are deliberately deferred; see
 [TASKS.md](../TASKS.md) milestone M.
 
@@ -762,7 +770,7 @@ myra-export DebugOverlay.xmmp
 
 `myra-export` (a global .NET tool) writes two files per layout:
 `<Name>.Generated.cs` holds `BuildUI()` and the widget fields and is regenerated on every
-export; `<Name>.cs` holds the partial class and is written **once** — re-exporting does not
+export; `<Name>.cs` holds the partial class and is written **once** РІР‚вЂќ re-exporting does not
 touch it, so user code belongs there. Never edit a `.Generated.cs` by hand.
 
 `OgGame.Initialize` sets `MyraEnvironment.Game`, creates a single `Desktop`, and assigns the
@@ -775,20 +783,20 @@ need to be copied into the project.
 **Device state leaks across the UI/world boundary**, so the save/restore in
 `BeginFrame`/`EndFrame` is load-bearing, not defensive. Myra enables scissor testing, leaves
 its small rectangle set and binds a clamping sampler; `BasicEffect` sets neither. Without
-the reset, `Clear` clips to the UI's rectangle and terrain textures — whose UVs run well
-outside 0..1 — smear into long streaks.
+the reset, `Clear` clips to the UI's rectangle and terrain textures РІР‚вЂќ whose UVs run well
+outside 0..1 РІР‚вЂќ smear into long streaks.
 
 ### HUD
 
 The HUD is four layouts in `OpenGothic/UI/`:
 
-- **`Hud`** — the `Desktop` root. A stretched `Panel`, so each block anchors to its own
+- **`Hud`** РІР‚вЂќ the `Desktop` root. A stretched `Panel`, so each block anchors to its own
   corner: `DebugOverlay` top-left, `Inventory` bottom-left, `Controls` bottom-right, all
   inset 8px.
-- **`Controls`** — always visible, bottom-right. Lists the current key bindings.
-- **`InventoryPanel`** — always visible, bottom-left. Lists the picked-up item stacks and is
+- **`Controls`** РІР‚вЂќ always visible, bottom-right. Lists the current key bindings.
+- **`InventoryPanel`** РІР‚вЂќ always visible, bottom-left. Lists the picked-up item stacks and is
   refreshed only when the inventory changes.
-- **`DebugOverlay`** — toggleable, top-left. FPS, camera position, draw calls, triangles,
+- **`DebugOverlay`** РІР‚вЂќ toggleable, top-left. FPS, camera position, draw calls, triangles,
   active debug views, and the vob under the crosshair.
 
 Anchoring relies on `Widget.Left`/`Top` being **additive offsets applied after alignment**,
@@ -797,8 +805,8 @@ so a bottom-right block uses `Alignment = Right/Bottom` with *negative* offsets.
 default, and it does not emit per-child layout for a bare `Panel`. The alignment and offsets
 therefore live in `Hud.cs`, not the `.xmmp`.
 
-Both blocks are styled in their own `.xmmp`: a 65% black background (`#000000A6`), 10×6
-padding and a gold `#FFCC66` header. **Myra's 8-digit hex is `RRGGBBAA`, not `AARRGGBB`** —
+Both blocks are styled in their own `.xmmp`: a 65% black background (`#000000A6`), 10Р“вЂ”6
+padding and a gold `#FFCC66` header. **Myra's 8-digit hex is `RRGGBBAA`, not `AARRGGBB`** РІР‚вЂќ
 the alpha goes last. Writing `#A6000000` yields near-transparent red.
 
 `UI/DebugOverlay.cs` computes FPS from `GameTime` over a half-second window and pulls the

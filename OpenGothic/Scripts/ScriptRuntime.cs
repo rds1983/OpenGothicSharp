@@ -20,6 +20,8 @@ public sealed class ScriptRuntime
 	private readonly HashSet<string> _unbound = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 	private readonly Dictionary<int, NpcBinding> _npcs = new Dictionary<int, NpcBinding>();
 	private readonly Dictionary<int, ItemInstance> _items = new Dictionary<int, ItemInstance>();
+	private readonly Dictionary<int, ItemInstance> _itemInstances = new Dictionary<int, ItemInstance>();
+	private readonly Dictionary<int, NpcVisual> _pendingVisuals = new Dictionary<int, NpcVisual>();
 
 	private Dictionary<int, List<InfoInstance>> _infosByNpc;
 	private Dictionary<int, InfoInstance> _infosBySymbol;
@@ -58,6 +60,9 @@ public sealed class ScriptRuntime
 
 	/// <summary>Whether any script NPC can be talked to.</summary>
 	public bool HasScriptNpcs => _npcs.Count > 0;
+
+	/// <summary>The script NPCs, for the world spawner.</summary>
+	internal IEnumerable<NpcBinding> Npcs => _npcs.Values;
 
 	/// <summary>
 	/// NPC named by an <c>AI_ProcessInfos</c> call made outside a conversation. The game UI
@@ -168,6 +173,31 @@ public sealed class ScriptRuntime
 		Vm.RegisterExternal("npc_refusetalk", (NpcInstance npc) => 0);
 		Vm.RegisterExternal("npc_setrefusetalk", (NpcInstance npc, int seconds) => { });
 
+		// Visual parameters are collected while the C_NPC constructor runs, before the
+		// binding exists; the spawner builds the model after boot.
+		Vm.RegisterExternal("mdl_setvisualbody",
+			(NpcInstance npc, string body, int bodyTexNr, int bodyTexColor, string head, int headTexNr,
+				int teethTexNr, int armor) =>
+			{
+				SetVisualBody(npc, body, bodyTexNr, bodyTexColor, head, headTexNr, teethTexNr, armor);
+			});
+		Vm.RegisterExternal("mdl_setvisual", (NpcInstance npc, string visual) =>
+		{
+			var data = GetVisual(npc);
+			if (data != null)
+			{
+				data.ModelOverride = visual ?? string.Empty;
+			}
+		});
+		Vm.RegisterExternal("mdl_setmodelscale", (NpcInstance npc, float x, float y, float z) =>
+		{
+			var data = GetVisual(npc);
+			if (data != null)
+			{
+				data.Scale = new Vector3(x, y, z);
+			}
+		});
+
 		var heroSymbol = Vm.GetSymbolByName("PC_HERO");
 		if (heroSymbol != null)
 		{
@@ -193,9 +223,16 @@ public sealed class ScriptRuntime
 
 		try
 		{
+			// The C_NPC constructor calls MDL_SetVisualBody before the binding exists, so
+			// collect its visual parameters under the symbol and hand them to the new vob.
+			_npcs.Remove(symbolIndex);
+			var visual = new NpcVisual();
+			_pendingVisuals[symbolIndex] = visual;
+
 			var instance = Vm.InitInstance<NpcInstance>(symbol);
 			if (instance == null)
 			{
+				_pendingVisuals.Remove(symbolIndex);
 				return;
 			}
 
@@ -204,10 +241,11 @@ public sealed class ScriptRuntime
 				SymbolIndex = symbolIndex,
 				Instance = instance,
 				SpawnPoint = spawnPoint,
-				Vob = CreateNpcVob(instance, symbol.Name)
+				Vob = CreateNpcVob(instance, symbol.Name, visual)
 			};
 			instance.UserData = binding;
 			_npcs[symbolIndex] = binding;
+			_pendingVisuals.Remove(symbolIndex);
 
 			if (_npcs.Count <= 8)
 			{
@@ -219,11 +257,12 @@ public sealed class ScriptRuntime
 		}
 		catch (Exception ex)
 		{
+			_pendingVisuals.Remove(symbolIndex);
 			Log.Warning($"Unable to initialize script NPC '{symbol.Name}': {ex.Message}");
 		}
 	}
 
-	private static NpcVob CreateNpcVob(NpcInstance instance, string symbolName)
+	private static NpcVob CreateNpcVob(NpcInstance instance, string symbolName, NpcVisual visual)
 	{
 		var name = instance.GetName(NpcNameSlot.Slot0);
 		if (string.IsNullOrEmpty(name))
@@ -245,8 +284,10 @@ public sealed class ScriptRuntime
 			Attributes = new List<int> { hp, maxHp }
 		};
 
-		// The node is intentionally detached until the world/waypoint layer gives it a position.
-		return (NpcVob)VobFactory.Create(source, null, Matrix.Identity, Matrix.Identity);
+		// The node is intentionally detached until the waypoint layer gives it a position.
+		var vob = (NpcVob)VobFactory.Create(source, null, Matrix.Identity, Matrix.Identity);
+		vob.Visual = visual ?? new NpcVisual();
+		return vob;
 	}
 
 	private void InsertItem(int symbolIndex, string spawnPoint)
@@ -274,6 +315,82 @@ public sealed class ScriptRuntime
 	private NpcInstance GetNpc(int symbolIndex)
 	{
 		return _npcs.TryGetValue(symbolIndex, out var binding) ? binding.Instance : null;
+	}
+
+	private NpcVisual GetVisual(NpcInstance npc)
+	{
+		if (npc == null)
+		{
+			return null;
+		}
+
+		if (_npcs.TryGetValue(npc.Index, out var binding))
+		{
+			return binding.Vob.Visual;
+		}
+
+		if (!_pendingVisuals.TryGetValue(npc.Index, out var visual))
+		{
+			visual = new NpcVisual();
+			_pendingVisuals[npc.Index] = visual;
+		}
+
+		return visual;
+	}
+
+	private void SetVisualBody(NpcInstance npc, string body, int bodyTexNr, int bodyTexColor,
+		string head, int headTexNr, int teethTexNr, int armor)
+	{
+		var visual = GetVisual(npc);
+		if (visual == null)
+		{
+			return;
+		}
+
+		visual.Body = body ?? string.Empty;
+		visual.BodyTexture = bodyTexNr;
+		visual.BodyColor = bodyTexColor;
+		visual.Head = head ?? string.Empty;
+		visual.HeadTexture = headTexNr;
+		visual.TeethTexture = teethTexNr;
+		visual.ArmorModel = string.Empty;
+
+		if (armor > 0)
+		{
+			var item = GetItemInstance(armor);
+			visual.ArmorModel = item?.VisualChange ?? string.Empty;
+		}
+	}
+
+	private ItemInstance GetItemInstance(int symbolIndex)
+	{
+		if (_items.TryGetValue(symbolIndex, out var item))
+		{
+			return item;
+		}
+
+		if (_itemInstances.TryGetValue(symbolIndex, out item))
+		{
+			return item;
+		}
+
+		var symbol = Vm.GetSymbolByIndex(symbolIndex);
+		if (symbol == null)
+		{
+			return null;
+		}
+
+		try
+		{
+			item = Vm.InitInstance<ItemInstance>(symbol);
+			_itemInstances[symbolIndex] = item;
+		}
+		catch (Exception ex)
+		{
+			Log.Warning($"Unable to initialize item '{symbol.Name}' for an NPC visual: {ex.Message}");
+		}
+
+		return item;
 	}
 
 	/// <summary>

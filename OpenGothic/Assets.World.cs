@@ -46,6 +46,21 @@ namespace OpenGothic
 
 			var zkWorld = LoadRecord(record.Node, r => new World(r));
 
+			var waypoints = new Dictionary<string, Waypoint>(StringComparer.OrdinalIgnoreCase);
+			if (zkWorld.WayNet != null)
+			{
+				foreach (var point in zkWorld.WayNet.Points)
+				{
+					if (!string.IsNullOrEmpty(point.Name))
+					{
+						waypoints[point.Name] = new Waypoint(
+							point.Position.ToXna(),
+							point.Direction.ToXna(),
+							point.FreePoint);
+					}
+				}
+			}
+
 			var polygons = zkWorld.Mesh.Polygons;
 			var materials = zkWorld.Mesh.Materials;
 			var features = zkWorld.Mesh.Features;
@@ -146,6 +161,11 @@ namespace OpenGothic
 
 			var result = new WorldGrid();
 			result.MeshBounds = boundingBox;
+			foreach (var pair in waypoints)
+			{
+				result.Waypoints[pair.Key] = pair.Value;
+			}
+
 			for (var i = 0; i < Constants.GridSize; ++i)
 			{
 				for (var j = 0; j < Constants.GridSize; ++j)
