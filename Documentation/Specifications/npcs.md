@@ -27,6 +27,15 @@ typed vobs. The focus system already accepts `VobKind.Npc`, and its overlay repo
   authored spawn point; when that point is already used, the nearest unused waypoint within
   800 units is chosen, matching `WayMatrix::findNextPoint`. Missing points use the dead point
   `TOT` (or `(-1000,-1000,-1000)`).
+- **Waynet points sit about 50 units above the floor** and an NPC's model origin is at its
+  feet, so placing the node at the authored height makes the body hover. `WorldGrid.
+  TryGetGround` casts a vertical ray through the chunked terrain triangles and the NPC is
+  moved down onto the highest surface within `GroundSnap` (60 units); the reference solves
+  the same problem in `fixNpcPosition`. Surfaces beyond that band are ignored so a point on a
+  vob floor (a house's wooden boards) keeps its authored height instead of dropping to the
+  street below. A short spiral retries around points that hang over a ledge. Grounding needs
+  the collision chunks, so it is active whenever collision is (the normal gameplay path).
+  Waypoint ground heights are cached per point and reused by routine movement.
 - A human body is the armour item's `VisualChange` mesh (`Armor_Mil_L.asc` → `ARMOR_MIL_L.MDM`)
   or the naked body `.MDM`, composed with `HUMANS`; the head `.MMB` is attached to
   `BIP01 HEAD`. The composed geometry is cached and shared.
@@ -61,8 +70,33 @@ overlap until F2 routines move them.
   marked and not retried. This keeps startup bounded; one shipped body (`Snorting Dragon
   Snapper`) fails with `std::bad_alloc` and stays invisible.
 
+## Daily routines (F2)
+
+- After the C_NPC instance and its binding exist, `ScriptRuntime` calls the instance's
+  `daily_routine` entry point with `SELF` set to the NPC. Its `TA_MIN` calls add
+  `(start, end, action, waypoint)` entries to `NpcVob.Routines`.
+- `NpcRoutine.Select` picks the range active at the current game hour, including ranges that
+  cross midnight, and otherwise the routine whose end is closest before now. Routines whose
+  waypoint is missing are skipped.
+- The NPC is placed at the active routine's waypoint at spawn, so the city crowd starts at
+  its guard/shop/tavern points instead of all stacking on the insertion point.
+- `GameClock` starts at `-time:` (default 10:00) and advances at `-timescale:<game-min/sec>`
+  (default 1). `-time:21 -timescale:60` walks a full game hour per real second for tests.
+- When the routine changes, the actor walks to the new waypoint at 300 units/s, switching
+  from the idle clip to `S_RUNL`/`S_FISTRUNL`, and updates its vob bounds, grid cell and
+  kinematic capsule. Path targets use the grounded `WorldGrid.WaypointGroundY`, so a walk
+  ends on the floor instead of at the authored height; the Y between two points is
+  interpolated. The routine's `action` callback is stored for F3, not invoked yet.
+- **Waynet edges are not available through the installed ZenKitCS native export**
+  (`ZkWayNet_getEdges` is missing; the DLL exposes `getEdgeCount`/`getEdge` with a different
+  ABI). Way points are parsed and `WorldGrid.FindWaypointPath` is tested, but routine
+  movement currently falls back to the direct target. The managed ZenKit port (N1) removes
+  this limitation.
+- Verified: Matteo changes from `NW_CITY_MATTEO` to `NW_CITY_BED_MATTEO` at 22:00 and logs
+  the arrival; Citizen/Rupert routines change on the same clock.
+
 ## Deferred
 
-AI, routines, movement, combat and armour attachments (pauldrons and similar) remain. The
-dialog camera is a usability-first two-shot, not the reference's exact spin; voice playback is
-the minimal J1 hook.
+AI, routines' action callbacks, movement collision avoidance, combat and armour attachments
+(pauldrons and similar) remain. The dialog camera is a usability-first two-shot, not the
+reference's exact spin; voice playback is the minimal J1 hook.

@@ -609,6 +609,14 @@ public sealed class PhysicsWorld : IDisposable
 		return handle;
 	}
 
+	/// <summary>Moves an NPC's kinematic capsule and refreshes its broad-phase bounds.</summary>
+	public void SetNpcCapsulePosition(BodyHandle handle, Vector3 feetPosition)
+	{
+		var body = Simulation.Bodies[handle];
+		body.Pose.Position = ToNumerics(feetPosition + Vector3.UnitY * CharacterController.CenterOffset);
+		body.UpdateBounds();
+	}
+
 	/// <summary>
 	/// Walks a capsule across the local terrain and reports whether it stayed on the surface.
 	/// This is the D2 self-check: it exercises slopes, ground following and long walks without

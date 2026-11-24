@@ -85,6 +85,12 @@ public class CommandLine
 	/// </summary>
 	public string DialogNpc { get; private set; }
 
+	/// <summary>Game hour at startup for daily routines, or null for the default.</summary>
+	public float? TimeOfDay { get; private set; }
+
+	/// <summary>Game minutes per real second, or null for the default.</summary>
+	public float? TimeScale { get; private set; }
+
 	/// <summary>
 	/// Whether the game should start with the playable capsule. Explicit <see cref="Walk"/> or
 	/// <see cref="ThirdPerson"/> wins; otherwise a plain launch walks, while a diagnostic launch
@@ -573,6 +579,34 @@ public class CommandLine
 							result.DialogNpc = value;
 						}
 					}
+					else if (arg.StartsWith("-time:", StringComparison.OrdinalIgnoreCase))
+					{
+						var value = arg.Substring("-time:".Length);
+						if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture,
+							out var hour) && hour >= 0f && hour < 24f)
+						{
+							result.TimeOfDay = hour;
+						}
+						else
+						{
+							Log.Error($"Option '-time:' requires an hour in [0,24), got '{value}'.");
+							result._invalid = true;
+						}
+					}
+					else if (arg.StartsWith("-timescale:", StringComparison.OrdinalIgnoreCase))
+					{
+						var value = arg.Substring("-timescale:".Length);
+						if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture,
+							out var scale) && scale >= 0f)
+						{
+							result.TimeScale = scale;
+						}
+						else
+						{
+							Log.Error($"Option '-timescale:' requires non-negative game minutes per second, got '{value}'.");
+							result._invalid = true;
+						}
+					}
 					else if (arg.StartsWith("-walktest:", StringComparison.OrdinalIgnoreCase))
 					{
 						var value = arg.Substring("-walktest:".Length);
@@ -690,7 +724,7 @@ public class CommandLine
 
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
-		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] [-interact[:<count>]] [-noscripts] [-talk] [-talkui] [-npc:<instance>] " +
+		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] [-interact[:<count>]] [-noscripts] [-talk] [-talkui] [-npc:<instance>] [-time:<hour>] [-timescale:<game-min/sec>] " +
 		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
 		"[-player:<x,y,z>] [-yaw:<degrees>] [-walktest:<seconds>] [-vobstats] [-vobfind:<x,y,z>] [-vobradius:<n>] [-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 

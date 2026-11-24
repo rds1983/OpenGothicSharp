@@ -3,6 +3,7 @@ using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using OpenGothic.Graphics;
 using System;
+using System.Collections.Generic;
 using ZenKit.Vobs;
 
 namespace OpenGothic.Vobs;
@@ -27,6 +28,85 @@ public sealed class NpcVisual
 	public string ModelOverride = string.Empty;
 
 	public Vector3 Scale = Vector3.One;
+}
+
+/// <summary>
+/// One entry from the Daedalus <c>TA_MIN</c> daily routine. Times are hours in [0,24);
+/// <see cref="End"/> may be lower than <see cref="Start"/> for a range crossing midnight.
+/// </summary>
+public sealed class NpcRoutine
+{
+	public float Start;
+	public float End;
+	public int Action;
+	public string Waypoint = string.Empty;
+
+	/// <summary>
+	/// Picks the routine active at <paramref name="hour"/>, otherwise the routine whose end is
+	/// closest before the current time, like the reference. Routines without a resolvable
+	/// waypoint are ignored.
+	/// </summary>
+	public static NpcRoutine Select(IReadOnlyList<NpcRoutine> routines, float hour,
+		Func<string, bool> hasWaypoint)
+	{
+		if (routines == null || routines.Count == 0)
+		{
+			return null;
+		}
+
+		hour = ((hour % 24f) + 24f) % 24f;
+
+		foreach (var routine in routines)
+		{
+			if (!IsUsable(routine, hasWaypoint))
+			{
+				continue;
+			}
+
+			if (routine.End < routine.Start)
+			{
+				if (hour >= routine.Start || hour < routine.End)
+				{
+					return routine;
+				}
+			}
+			else if (hour >= routine.Start && hour < routine.End)
+			{
+				return routine;
+			}
+		}
+
+		NpcRoutine best = null;
+		var bestDelta = float.MaxValue;
+		foreach (var routine in routines)
+		{
+			if (!IsUsable(routine, hasWaypoint))
+			{
+				continue;
+			}
+
+			var delta = hour - routine.End;
+			if (delta < 0f)
+			{
+				delta += 24f;
+			}
+
+			if (delta <= bestDelta)
+			{
+				bestDelta = delta;
+				best = routine;
+			}
+		}
+
+		return best;
+	}
+
+	private static bool IsUsable(NpcRoutine routine, Func<string, bool> hasWaypoint)
+	{
+		return routine != null &&
+		       !string.IsNullOrEmpty(routine.Waypoint) &&
+		       (hasWaypoint == null || hasWaypoint(routine.Waypoint));
+	}
 }
 
 // Thin category types. The concrete VobKind in the base carries the file-level behaviour;
@@ -58,6 +138,9 @@ public sealed class NpcVob : VobNode
 
 	/// <summary>Body/armour/head parameters collected from the Daedalus visual externals.</summary>
 	public NpcVisual Visual { get; internal set; } = new NpcVisual();
+
+	/// <summary>Daily routine entries filled by <c>TA_MIN</c> during instance initialization.</summary>
+	public List<NpcRoutine> Routines { get; } = new List<NpcRoutine>();
 
 	/// <summary>Kinematic capsule in the physics world, or null when physics is off.</summary>
 	public BodyHandle? PhysicsBody { get; internal set; }

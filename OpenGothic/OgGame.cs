@@ -40,6 +40,8 @@ public class OgGame : Game
 	private DialogSession _dialog;
 	private int _dialogChoiceIndex;
 	private List<NpcActor> _npcActors;
+	private GameClock _clock;
+	private NpcRoutineSystem _routines;
 	private VoicePlayer _voice;
 	private int _voiceLineCursor;
 	private bool _dialogCamera;
@@ -312,6 +314,11 @@ public class OgGame : Game
 
 		try
 		{
+			_clock = new GameClock(
+				CommandLine.Instance.TimeOfDay ?? GameClock.DefaultHour,
+				CommandLine.Instance.TimeScale ?? GameClock.DefaultScale);
+			Log.Info($"Game clock: {_clock.Hour:00.00}h, scale {_clock.Scale:0.##} game-min/s.");
+
 			_scripts = new ScriptRuntime();
 			_scripts.LoadAndBoot(CommandLine.Instance.GothicPath,
 				CommandLine.Instance.World ?? "newworld.zen");
@@ -325,7 +332,9 @@ public class OgGame : Game
 			{
 				try
 				{
-					_npcActors = NpcSpawner.Spawn(_scripts, _assets, GraphicsDevice, _world, _physics);
+					_npcActors = NpcSpawner.Spawn(_scripts, _assets, GraphicsDevice, _world,
+						_physics, _clock.Hour);
+					_routines = new NpcRoutineSystem(_world, _physics, _clock, _npcActors);
 				}
 				catch (Exception ex)
 				{
@@ -827,6 +836,13 @@ public class OgGame : Game
 					OpenDialog(session);
 				}
 			}
+		}
+
+		_clock?.Advance(gameTime.ElapsedGameTime);
+		if (_dialog == null)
+		{
+			_routines?.Update((float)gameTime.ElapsedGameTime.TotalSeconds,
+				_controller?.FeetPosition ?? Camera.Position);
 		}
 
 		_previousKeyboard = keyboard;

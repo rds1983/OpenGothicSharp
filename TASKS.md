@@ -129,7 +129,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   F1's NPC runtime data, G1's Daedalus VM boot, G2's script-object/event bridge and G3's
   dialog engine/UI are complete. F1.5 places the **356 human** script NPCs, adds their
   collision/focus path, and completes the dialog camera/voice hook. F1.6 builds the 50
-  non-human bodies lazily from their model scripts; F2 is next.
+  non-human bodies lazily from their model scripts. F2 drives daily routines from a game
+  clock, walks NPCs between grounded routine points, and is complete; F3 is next.
 
 ---
 
@@ -679,8 +680,8 @@ plays (or is explicitly deferred to J1).
 composed from armour/body + `HUMANS` + `.MMB` head, with per-instance `GothicModel.Materials`
 texture variants, kinematic capsules and the E-to-talk focus path. A Daron conversation was
 completed with the two-shot camera and `DialogLine.Voice`; City Guard `-talk` still passes.
-The 50 non-human bodies are tracked in F1.6. The 172 NPCs at `NW_CITY_ENTRANCE_01` overlap on
-the five nearby waypoints until F2 routines disperse them.
+The 50 non-human bodies are tracked in F1.6. The 172 NPCs at `NW_CITY_ENTRANCE_01` share the
+five nearby waypoints; F2 now spreads them to their active routine points instead.
 
 ### F1.6. Non-human NPC bodies — DONE
 Give the monster `WLD_INSERTNPC` instances their model-script skeleton and animation set.
@@ -698,15 +699,36 @@ failed. **Done:** monster bodies derive their skeleton from the model script, bu
 within 3000 units, and play the `S_FISTRUN` idle. A sheep was verified at
 `NW_FARM2_OUT_02`.
 
-### F2. Way matrix & routines
+### F2. Way matrix & routines — DONE
 Parse waypoints/waymatrix; daily routines (`TA`, `RTN`) move NPCs between points.
 **Depends on F1.5/F1.6:** routines need placed human and monster NPCs.
 **Done when:** an NPC follows a simple authored routine.
+
+**Implemented:** `daily_routine` runs after the NPC binding exists; `TA_MIN` fills
+`NpcVob.Routines`. `GameClock` (`-time:`, `-timescale:`) selects the active range, NPCs spawn
+at their routine point, and a routine change walks the actor to the new waypoint at 300
+units/s with its run clip, updating vob bounds, grid cell and kinematic capsule. Waynet points
+are authored ~50 units above the floor, so `WorldGrid.TryGetGround` drops each NPC onto the
+terrain surface at spawn and at every path target (ported from the reference's
+`fixNpcPosition` ray-cast). Matteo was verified moving from `NW_CITY_MATTEO` to
+`NW_CITY_BED_MATTEO` at 22:00. Way points and the pathfinder are implemented and tested, but
+the installed ZenKitCS native DLL lacks the `ZkWayNet_getEdges` export, so movement currently
+falls back to direct targets; N1's managed ZenKit port removes this.
 
 ### F3. AI states & perception
 Idle/guard/follow/attack states, perception events (see/hear/damage), and AI queue.
 **Depends on F2:** routines run on placed NPCs.
 **Done when:** an NPC notices the player and transitions state plausibly.
+
+**Carry-over from F2:**
+- Invoke the stored routine `action` (the `ZS_*` state name, e.g. `ZS_STAND_WP`, `ZS_GOTOBED`,
+  `ZS_SIT_BENCH`) instead of only walking to the waypoint, so NPCs sit/sleep/work.
+- Finish `fixNpcPosition` parity: the reference rejects spots where the capsule is stuck
+  (`hasCollision()` spiral) and offsets NPCs by `distBias` when inserting. Ours only corrects
+  the height against the terrain mesh; once movement owns the capsule, use the physics world
+  so vob floors are valid ground everywhere, not just near the player.
+- Climb/teleport re-snap and per-step ground following (currently the Y between two path
+  points is interpolated).
 
 ---
 

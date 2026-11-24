@@ -47,17 +47,57 @@ namespace OpenGothic
 			var zkWorld = LoadRecord(record.Node, r => new World(r));
 
 			var waypoints = new Dictionary<string, Waypoint>(StringComparer.OrdinalIgnoreCase);
+			var waypointList = new List<Waypoint>();
+			var waypointIndices = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+			List<int>[] waypointNeighbors = null;
+
 			if (zkWorld.WayNet != null)
 			{
-				foreach (var point in zkWorld.WayNet.Points)
+				var points = zkWorld.WayNet.Points;
+				for (var i = 0; i < points.Count; ++i)
 				{
+					var point = points[i];
+					var waypoint = new Waypoint(
+						point.Position.ToXna(),
+						point.Direction.ToXna(),
+						point.FreePoint,
+						point.Name);
+					waypointList.Add(waypoint);
+
 					if (!string.IsNullOrEmpty(point.Name))
 					{
-						waypoints[point.Name] = new Waypoint(
-							point.Position.ToXna(),
-							point.Direction.ToXna(),
-							point.FreePoint);
+						waypoints[point.Name] = waypoint;
+						waypointIndices[point.Name] = i;
 					}
+				}
+
+				waypointNeighbors = new List<int>[waypointList.Count];
+				for (var i = 0; i < waypointNeighbors.Length; ++i)
+				{
+					waypointNeighbors[i] = new List<int>();
+				}
+
+				try
+				{
+					foreach (var edge in zkWorld.WayNet.Edges)
+					{
+						if (edge.A < 0 || edge.B < 0 ||
+						    edge.A >= waypointNeighbors.Length || edge.B >= waypointNeighbors.Length)
+						{
+							continue;
+						}
+
+						waypointNeighbors[edge.A].Add(edge.B);
+						waypointNeighbors[edge.B].Add(edge.A);
+					}
+				}
+				catch (Exception ex)
+				{
+					// The installed ZenKitCS/native pair does not expose the edge ABI the
+					// wrapper expects. Points are usable; routines fall back to direct
+					// targets until the managed ZenKit port (N1) reads the edges itself.
+					waypointNeighbors = null;
+					Log.Warning($"Waynet edges are unavailable; NPC routines use direct targets. {ex.Message}");
 				}
 			}
 
@@ -165,6 +205,14 @@ namespace OpenGothic
 			{
 				result.Waypoints[pair.Key] = pair.Value;
 			}
+
+			result.WaypointList.AddRange(waypointList);
+			foreach (var pair in waypointIndices)
+			{
+				result.WaypointIndices[pair.Key] = pair.Value;
+			}
+
+			result.WaypointNeighbors = waypointNeighbors;
 
 			for (var i = 0; i < Constants.GridSize; ++i)
 			{

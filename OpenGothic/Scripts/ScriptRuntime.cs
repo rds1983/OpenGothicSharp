@@ -197,6 +197,12 @@ public sealed class ScriptRuntime
 				data.Scale = new Vector3(x, y, z);
 			}
 		});
+		Vm.RegisterExternal("ta_min",
+			(NpcInstance npc, int startHour, int startMinute, int stopHour, int stopMinute,
+				int action, string waypoint) =>
+			{
+				AddRoutine(npc, startHour, startMinute, stopHour, stopMinute, action, waypoint);
+			});
 
 		var heroSymbol = Vm.GetSymbolByName("PC_HERO");
 		if (heroSymbol != null)
@@ -246,6 +252,8 @@ public sealed class ScriptRuntime
 			instance.UserData = binding;
 			_npcs[symbolIndex] = binding;
 			_pendingVisuals.Remove(symbolIndex);
+
+			CallDailyRoutine(instance);
 
 			if (_npcs.Count <= 8)
 			{
@@ -336,6 +344,60 @@ public sealed class ScriptRuntime
 		}
 
 		return visual;
+	}
+
+	private void AddRoutine(NpcInstance npc, int startHour, int startMinute, int stopHour,
+		int stopMinute, int action, string waypoint)
+	{
+		if (npc == null || !_npcs.TryGetValue(npc.Index, out var binding))
+		{
+			return;
+		}
+
+		binding.Vob.Routines.Add(new NpcRoutine
+		{
+			Start = startHour + startMinute / 60f,
+			End = stopHour + stopMinute / 60f,
+			Action = action,
+			Waypoint = waypoint ?? string.Empty
+		});
+	}
+
+	/// <summary>
+	/// Runs the NPC's <c>daily_routine</c> entry point after the binding exists, so its
+	/// <c>TA_MIN</c> calls can attach the routine list to the vob. This mirrors
+	/// <c>initializeInstanceNpc</c> in the reference.
+	/// </summary>
+	private void CallDailyRoutine(NpcInstance instance)
+	{
+		if (instance == null || instance.DailyRoutine == 0)
+		{
+			return;
+		}
+
+		var symbol = Vm.GetSymbolByIndex(instance.DailyRoutine);
+		if (symbol == null)
+		{
+			return;
+		}
+
+		var self = Vm.GlobalSelf;
+		var other = Vm.GlobalOther;
+		try
+		{
+			Vm.GlobalSelf = instance;
+			Vm.GlobalOther = Hero;
+			Vm.Call(symbol.Index);
+		}
+		catch (Exception ex)
+		{
+			Log.Warning($"NPC daily routine '{symbol.Name}' failed: {ex.Message}");
+		}
+		finally
+		{
+			Vm.GlobalSelf = self;
+			Vm.GlobalOther = other;
+		}
 	}
 
 	private void SetVisualBody(NpcInstance npc, string body, int bodyTexNr, int bodyTexColor,

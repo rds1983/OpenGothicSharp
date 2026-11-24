@@ -28,7 +28,7 @@ internal static class NpcSpawner
 		new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 	public static List<NpcActor> Spawn(ScriptRuntime scripts, Assets assets, GraphicsDevice device,
-		WorldGrid world, PhysicsWorld physics)
+		WorldGrid world, PhysicsWorld physics, float hour)
 	{
 		var actors = new List<NpcActor>();
 		if (scripts == null || assets == null || world == null)
@@ -40,17 +40,27 @@ internal static class NpcSpawner
 		var humans = 0;
 		var pending = 0;
 		var skipped = 0;
+		var routineLogs = 0;
 
 		foreach (var binding in scripts.Npcs)
 		{
 			var vob = binding.Vob;
 			var visual = vob.Visual;
-			var waypoint = placer.Resolve(binding.SpawnPoint, out var waypointName);
-			var position = waypoint.Position;
+			var routine = NpcRoutine.Select(vob.Routines, hour,
+				name => world.Waypoints.ContainsKey(name));
+			var placementName = routine?.Waypoint;
+			if (string.IsNullOrEmpty(placementName) || !world.Waypoints.ContainsKey(placementName))
+			{
+				placementName = binding.SpawnPoint;
+			}
+
+			var waypoint = placer.Resolve(placementName, out var waypointName);
+			var position = Ground(world, waypoint.Position);
 			var yaw = YawFromDirection(waypoint.Direction);
 			var scale = visual.Scale == Vector3.Zero ? Vector3.One : visual.Scale;
+			var human = IsHumanBody(visual, Stem(visual.Body));
 
-			var actor = new NpcActor(vob, visual, position, yaw, scale);
+			var actor = new NpcActor(vob, visual, position, yaw, scale, human);
 			vob.World = Matrix.CreateScale(scale) *
 			            Matrix.CreateRotationY(-yaw) *
 			            Matrix.CreateTranslation(position);
@@ -61,7 +71,13 @@ internal static class NpcSpawner
 				vob.PhysicsBody = physics.AddNpcCapsule(position);
 			}
 
-			var human = IsHumanBody(visual, Stem(visual.Body));
+			if (routine != null && routineLogs++ < 5)
+			{
+				Log.Info(
+					$"NPC routine '{vob.Name}': starts at '{waypointName}' for " +
+					$"'{routine.Waypoint}' ({routine.Start:00.00}-{routine.End:00.00}).");
+			}
+
 			if (human)
 			{
 				if (TryBuildModel(actor, assets, device, world))
@@ -146,16 +162,15 @@ internal static class NpcSpawner
 			node.Materials);
 		AttachHead(assets, device, model, node, visual);
 
-		var human = IsHumanBody(visual, Stem(visual.Body));
 		var animation = new AnimationData(instance);
-		var idleClip = human ? "S_RUN" : "S_FISTRUN";
-		if (animation.Play(idleClip) || (!human && animation.Play("S_RUN")))
+		if (animation.Play(actor.IdleClip) ||
+		    (!actor.IsHuman && animation.Play("S_RUN")))
 		{
 			node.AnimationData = animation;
 		}
-		else if (MissingClips.Add(CompositionKey(visual) + ":" + idleClip))
+		else if (MissingClips.Add(CompositionKey(visual) + ":" + actor.IdleClip))
 		{
-			Log.Warning($"NPC body '{CompositionKey(visual)}' has no idle clip '{idleClip}'.");
+			Log.Warning($"NPC body '{CompositionKey(visual)}' has no idle clip '{actor.IdleClip}'.");
 		}
 
 		var rootBone = model.FindBoneByName("BIP01") ??
@@ -172,7 +187,7 @@ internal static class NpcSpawner
 		var idleRootY = instance.GetBoneGlobalTransform(rootBone.Index).Translation.Y;
 		var feetOffset = -bounds.Min.Y - (idleRootY - defaultRootY);
 
-		actor.AttachModel(node, rootBone.Index, feetOffset);
+		actor.AttachModel(node, rootBone.Index, feetOffset, bounds);
 
 		var worldMatrix = node.Transform;
 		vob.Bounds = bounds.Transform(ref worldMatrix);
@@ -325,6 +340,35 @@ internal static class NpcSpawner
 	{
 		var armor = Stem(visual.ArmorModel);
 		return string.IsNullOrEmpty(armor) ? Stem(visual.Body) : armor;
+	}
+
+	/// <summary>
+	/// Stands a spawn point on the floor: waynet points are authored above the ground, which
+	/// is what the reference's <c>fixNpcPosition</c> ray-cast solves. A short spiral catches
+	/// points that hang over a ledge or sit inside geometry.
+	/// </summary>
+	private static Vector3 Ground(WorldGrid world, Vector3 position)
+	{
+		if (world.TryGetGround(position, WorldGrid.GroundSnap, out var ground))
+		{
+			return ground;
+		}
+
+		for (var radius = 40f; radius <= 400f; radius += 40f)
+		{
+			for (var angle = 0; angle < 360; angle += 45)
+			{
+				var radians = MathHelper.ToRadians(angle);
+				var probe = position + new Vector3(MathF.Cos(radians) * radius, 0f,
+					MathF.Sin(radians) * radius);
+				if (world.TryGetGround(probe, WorldGrid.GroundSnap, out ground))
+				{
+					return ground;
+				}
+			}
+		}
+
+		return position;
 	}
 
 	/// <summary>

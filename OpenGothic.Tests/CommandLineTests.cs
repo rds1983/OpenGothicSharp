@@ -50,6 +50,8 @@ public class CommandLineTests
 		Assert.False(result.Talk);
 		Assert.False(result.TalkUi);
 		Assert.Null(result.DialogNpc);
+		Assert.Null(result.TimeOfDay);
+		Assert.Null(result.TimeScale);
 	}
 
 	[Fact]
@@ -115,6 +117,44 @@ public class CommandLineTests
 		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-npc:" });
 
 		Assert.Null(result.DialogNpc);
+		Assert.False(result.Validate());
+	}
+
+	[Fact]
+	public void Parse_TimeAndScale_AreRead()
+	{
+		var result = CommandLine.Parse(new[] { "-time:20.5", "-timescale:60" });
+
+		Assert.Equal(20.5f, result.TimeOfDay);
+		Assert.Equal(60f, result.TimeScale);
+	}
+
+	[Theory]
+	[InlineData("-1")]
+	[InlineData("24")]
+	[InlineData("noon")]
+	public void Parse_InvalidTime_IsRejected(string value)
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", $"-time:{value}" });
+
+		Assert.Null(result.TimeOfDay);
+		Assert.False(result.Validate());
+	}
+
+	[Fact]
+	public void Parse_TimeScaleAcceptsZero()
+	{
+		var result = CommandLine.Parse(new[] { "-timescale:0" });
+
+		Assert.Equal(0f, result.TimeScale);
+	}
+
+	[Fact]
+	public void Parse_NegativeTimeScale_IsRejected()
+	{
+		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-timescale:-1" });
+
+		Assert.Null(result.TimeScale);
 		Assert.False(result.Validate());
 	}
 

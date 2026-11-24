@@ -65,6 +65,8 @@ default chosen elsewhere.
 | `-talk` | Run a diagnostic conversation with the first script NPC to completion, logging every line and choice. |
 | `-talkui` | Open the interactive dialog panel at boot with the first script NPC. |
 | `-npc:<instance>` | Script instance to use for `-talk`/`-talkui` (e.g. `VLK_425_REGIS`); defaults to the first inserted NPC. |
+| `-time:<hour>` | Start the game clock at this hour (0–24) for daily routines; default 10:00. |
+| `-timescale:<game-min/sec>` | Game minutes per real second for the clock; default 1, `0` freezes it. |
 | `-player:<x,y,z>` | Start the walking capsule at a world position instead of the placeholder plaza; the player drops to the ground below the point. |
 | `-yaw:<degrees>` | Set the walking player's facing yaw. Needed to aim a diagnostic walk reliably, because `-lookat:` measures from the camera's own position. Mouse look is disabled while `-yaw` or `-walktest` is active so the direction stays fixed. |
 | `-walktest:<seconds>` | Hold forward for a diagnostic run and log the final feet position; a negative value holds backward. Useful for reproducing a stuck spot. |
@@ -703,10 +705,16 @@ F1.5 places the human script NPCs in the world. `NpcSpawner` reads the waynet, p
 authored waypoint (or the nearest unused one within 800 units, like `findNextPoint`), builds
 the armour/body `.MDM` composed with `HUMANS` plus the `.MMB` head, and applies the
 `MDL_SetVisualBody` texture variants per instance. Each NPC gets a kinematic capsule and is
-registered for focus; E starts the G3 dialog. The tested startup builds **356 human bodies**
-immediately; **50 non-human bodies** build lazily from their model scripts when the player is
-near. Routines/AI/movement remain F2/F3. Details in
-[Specifications/npcs.md](Specifications/npcs.md).
+registered for focus; E starts the G3 dialog. Bodies stand on the floor: waynet points are
+authored about 50 units above it, so `WorldGrid.TryGetGround` casts through the terrain
+chunks and drops the NPC onto the surface (like the reference's `fixNpcPosition`). The tested
+startup builds **356 human bodies** immediately; **50 non-human bodies** build lazily from
+their model scripts when the player is near. `daily_routine`/`TA_MIN` drive the daily
+schedule: NPCs spawn at the active routine point, follow a `GameClock` (`-time:`,
+`-timescale:`) and walk to the next point when the routine changes. The installed ZenKitCS
+native edge export is missing, so routine walking currently uses direct targets;
+`WorldGrid.FindWaypointPath` is ready for the managed port. Routines' action callbacks and AI
+remain F3. Details in [Specifications/npcs.md](Specifications/npcs.md).
 
 ### Daedalus scripts
 
