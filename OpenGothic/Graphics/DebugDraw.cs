@@ -1,6 +1,6 @@
 using Microsoft.Xna.Framework;
 
-namespace OpenGothic;
+namespace OpenGothic.Graphics;
 
 /// <summary>
 /// Which debug views are currently enabled. Independent of the text overlay: these change

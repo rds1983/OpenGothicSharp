@@ -7,7 +7,7 @@ using BepuUtilities;
 using BepuUtilities.Memory;
 using DigitalRiseModel;
 using Microsoft.Xna.Framework;
-using OpenGothic.Scene;
+using OpenGothic.Graphics;
 using OpenGothic.Utility;
 using System;
 using System.Collections.Generic;

@@ -62,6 +62,9 @@ default chosen elsewhere.
 | `-player:<x,y,z>` | Start the walking capsule at a world position instead of the placeholder plaza; the player drops to the ground below the point. |
 | `-yaw:<degrees>` | Set the walking player's facing yaw. Needed to aim a diagnostic walk reliably, because `-lookat:` measures from the camera's own position. Mouse look is disabled while `-yaw` or `-walktest` is active so the direction stays fixed. |
 | `-walktest:<seconds>` | Hold forward for a diagnostic run and log the final feet position; a negative value holds backward. Useful for reproducing a stuck spot. |
+| `-vobstats` | Log how many vobs the typed world tree contains per kind. |
+| `-vobfind:<x,y,z>` | Log vobs near a world point, for checking placement and the typed tree. Keeps the fixed camera unless `-walk` is also passed. |
+| `-vobradius:<n>` | Radius for `-vobfind:` (default 1000). |
 | `-cam:<x,y,z>` | Override the camera position. |
 | `-lookat:<x,y,z>` | Point the camera at a world position (implies yaw and pitch). |
 | `-model:<name>` | Spawn a model directly in front of the camera, with or without an extension. Reaches models no world vob uses. |
@@ -314,7 +317,7 @@ included.
 ### Models
 
 A model is a `DrModel` (skeleton plus meshes) placed in the world by a `ModelNode`
-(`OpenGothic/Scene/ModelNode.cs`), which holds a `DrModelInstance`, the models attached to its
+(`OpenGothic/Graphics/ModelNode.cs`), which holds a `DrModelInstance`, the models attached to its
 bones, and a world transform in `Transform`. A model driven by a script gets an
 `AnimationData` alongside its instance, which owns the `AnimationController` and the script's
 playback state; a prop leaves it null. `WorldRenderer.DrawModel` walks `instance.Model.Meshes`
@@ -392,21 +395,39 @@ including why the root translation goes on the root bone's default pose rather t
 bind matrices — are in
 [Specifications/gothic-model-format.md](Specifications/gothic-model-format.md).
 
-`Assets.World.cs` creates a `ModelNode` for every visible `VisualModel` vob and an
-`InstancedMeshNode` for every visible `VisualMultiResolutionMesh` vob, and registers the
-instance's world bounds in the owning grid cell so debug bounds and the existing cell culling
-still apply. A vob's transform in the file is already in world space, so the loader derives the
-node's local transform against its parent and records the parent link; `SceneNode.WorldTransform`
-composes the chain and caches it until the node or an ancestor moves. That keeps every static
-vob exactly where the file puts it (the 1,870 parented vobs of `newnorld.zen` recompose within
-0.0125 units) while letting a parent that moves carry its children. The rotation is converted
-with the same Z mirror as positions (`L * transpose(R) * L`), which matters for pitched/rolled
-props; a vob's `show_visual` and `cd_dynamic` flags gate rendering and collision exactly as in
-the reference. Prop models use the raw mesh bounds and the vob transform, matching the
-reference's `ObjVisual::setYTranslationEnable(false)`; actor-like spawns add only the hierarchy
-root translation's Y so the bind pose's feet reach the origin. `-nomodels` skips this so a frame
-can be compared against the same world without model geometry. Details in
+`Assets.World.cs` builds the single `VobNode` hierarchy while it reads the ZEN. A vob's
+transform in the file is already in world space; the loader records it on the vob node and
+derives a local transform against the parent. The renderer does **not** keep a second
+hierarchy: a `SceneNode` is a flat visual attached to its vob (or to the level mesh) and stores
+the world matrix, and `WorldGridCell.Children` is the flat per-cell visual list. Model and
+multi-resolution visuals therefore receive the vob's world transform directly, and
+`SceneNode.Vob` points back to the owning node. Batched multi-resolution meshes are world-space
+instance matrices in that flat list. The rotation is converted with the same Z mirror as
+positions (`L * transpose(R) * L`), which matters for pitched/rolled props; a vob's
+`show_visual` and `cd_dynamic` flags gate rendering and collision exactly as in the reference.
+Prop models use the raw mesh bounds and the vob transform, matching the reference's
+`ObjVisual::setYTranslationEnable(false)`; actor-like spawns add only the hierarchy root
+translation's Y so the bind pose's feet reach the origin. `-nomodels` skips the visuals so a
+frame can be compared against the same world without model geometry. Details in
 [Specifications/zen-vob-transform.md](Specifications/zen-vob-transform.md).
+
+#### Vob tree
+
+The `VobNode` tree is the gameplay hierarchy, as in `Try/OpenGothic`: every ZEN virtual object
+becomes a node — including spawn points, triggers, sounds, decals and particle systems that
+have no rendered geometry — with its raw `zenkit::VirtualObject`, resolved world/local matrix,
+world bounds, category (`VobKind`), name/tag and an optional `SceneNode` visual. The category
+mapping follows `Vob::load`: NPC, item, interactive/mobsi (container, door, bed, fire, ladder,
+switch, wheel), trigger family, mover, light, sound/zone music, decal, particle system, zone,
+camera and spot/start point. Generic vobs are classified by their visual, so the 1,405 decals
+and 656 particle systems are separate from the 11,418 static vobs even though the file type is
+`zCVob`.
+
+`WorldGrid.Vobs` exposes the tree. `FindNear`/`FindAt` fill a caller-owned list and filter by
+kind or tag; `FindByName`, `FindByTag`, `FindByKind` and `CountOf` cover the common lookups.
+`-vobstats` prints the per-kind counts and `-vobfind:x,y,z` lists nearby nodes with their
+category, name, tag, position and bounds, so placement and enumeration are visible in `log.txt`
+without a debug renderer. A `newworld.zen` load currently reports 23,288 nodes.
 
 Model parts are **texture-driven the same way as static meshes**: the material comes from
 `DrMeshPartTag`. A submesh with no texture is skipped rather than drawn with a white fallback:
@@ -438,7 +459,7 @@ and is not consulted at playback.
 
 #### Animation playback
 
-`Scene/AnimationData.cs` plays a set's clips on a `DrModelInstance` through
+`Graphics/AnimationData.cs` plays a set's clips on a `DrModelInstance` through
 DigitalRiseModel's `AnimationController`: it owns the script's state machine and hands the
 controller a node to sample, so a pose reaches the GPU through the same `GetSkinTransforms`
 path a bind-pose model already used. `ModelNode.AnimationData` holds it only for a model that
@@ -521,11 +542,11 @@ meshes (`OpenGothic/Physics/PhysicsWorld.cs`). Two sources feed it:
 - **The level mesh**, triangulated in `Assets.World.cs` while the world is read. Unlike the
   render path, every polygon is kept — a texture-less material is still a wall — and only
   `material.disableCollision` is skipped. Ghost occluders collide.
-- **Static vobs**, collected from the scene graph when the physics world is built. A
+- **Static vobs**, collected from the per-cell visual list when the physics world is built. A
   multi-resolution mesh collides with its full geometry; a model collides with its rigid
   attachment meshes only, because a skinned mesh has no single static shape. The transform is
-  the same one the renderer uses: the node's world transform for a mesh, the bone's global
-  times the node's world transform for a model part.
+  the world matrix the visual carries from its vob: a mesh uses it directly, a model part uses
+  the bone's global times it.
 
 Two conventions are worth knowing. Bepu's meshes are **one-sided**, while Gothic's geometry
 has no consistent winding (the renderer does not cull back faces; over `newworld.zen` 131k

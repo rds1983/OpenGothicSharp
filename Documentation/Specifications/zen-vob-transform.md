@@ -25,25 +25,21 @@ it.
 Using the stored transform directly is correct for a static world, and that is why a naive
 loader looks right.
 
-The tree matters only when something moves. To support that without duplicating state, derive
-a local transform once per vob:
+The **vob tree is the only transform hierarchy**, as in the reference. Each `VobNode` keeps the
+world transform from the file and derives a local one against its parent:
 
 ```
 local = world * inverse(parentWorld)
 ```
 
-and compose it again when the node is placed:
+The renderer does not compose a second hierarchy: a `SceneNode` is a flat visual attached to its
+vob (or to the level mesh) and stores the **world** matrix. Batched multi-resolution meshes are
+world-space instance matrices in the cell's visual list, not nodes in the vob tree. A moving
+parent therefore has to update its children's `VobNode.World` and the attached visual matrices;
+static worlds need no such update.
 
-```
-world = local * parentWorld
-```
-
-The two operations round-trip: over the 1,870 parented vobs of `newworld.zen` the largest
-recomposition error is 0.0125 units, invisible in a world that spans tens of thousands.
-
-A vob with children but no visual of its own still needs a node for the children to hang from.
-Multi-resolution mesh vobs are recorded as world-space instance matrices, so they do not take
-part in the hierarchy; no mover uses one as a child.
+A vob with children but no visual of its own is still a `VobNode`, so the children hang from it
+in the gameplay tree. The old empty `SceneNode` placeholder is no longer needed.
 
 ## Rotation and the right-handed world
 
@@ -65,8 +61,8 @@ wrong.
 
 The reference's `ObjVisual::setVisual` uses two vob flags:
 
-- `show_visual` — when false, the visual is not added to the scene at all. A node is still
-  created when the vob has children, so the children keep their composed world transform.
+- `show_visual` — when false, the visual is not added to the scene at all. The `VobNode` still
+  exists so children and gameplay queries keep the full tree.
 - `cd_dynamic` — the vob collides with the player only when this is set (together with
   `show_visual`). The reference does not create a physics mesh for a hidden or non-dynamic
   vob, so the player can walk through decorative geometry and invisible markers.
@@ -121,6 +117,7 @@ bind-pose mesh.
 
 ## Open questions
 
-- A moving parent invalidates the child's load-time cell assignment and registered bounds.
-  Whatever moves vobs has to re-register them; this is why hierarchy support lands before
+- A moving parent invalidates the child's load-time cell assignment, registered bounds and
+  attached visual matrices. A mover has to update `VobNode.World` for the subtree and the
+  world-space `SceneNode.Transform` of each visual; this is why hierarchy support lands before
   movers (doors, levers) rather than with them.

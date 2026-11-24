@@ -1,9 +1,9 @@
-﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Graphics.PackedVector;
 using System.Runtime.InteropServices;
 
-namespace OpenGothic.Vertices;
+namespace OpenGothic.Graphics.Vertices;
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct VertexSkinned : IVertexType

@@ -1,6 +1,7 @@
-﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework;
 using OpenGothic.Physics;
-using OpenGothic.Scene;
+using OpenGothic.Graphics;
+using OpenGothic.Vobs;
 using System.Collections.Generic;
 
 namespace OpenGothic;
@@ -55,6 +56,9 @@ public class WorldGrid
 	/// physics world initializes.
 	/// </summary>
 	public Dictionary<(int X, int Z), CollisionChunk> CollisionChunks { get; } = new();
+
+	/// <summary>Typed ZEN vob tree, built once while the world is loaded.</summary>
+	public VobTree Vobs { get; } = new();
 
 	public WorldGrid()
 	{

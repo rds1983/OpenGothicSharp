@@ -1,11 +1,10 @@
 using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using OpenGothic.Scene;
 using OpenGothic.Utility;
 using System;
 
-namespace OpenGothic;
+namespace OpenGothic.Graphics;
 
 /// <summary>
 /// Low-level 3D drawing service: effects, device state and draw calls.

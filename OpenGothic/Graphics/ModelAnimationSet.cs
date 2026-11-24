@@ -2,7 +2,7 @@ using DigitalRiseModel.Animation;
 using System;
 using System.Collections.Generic;
 
-namespace OpenGothic.Scene;
+namespace OpenGothic.Graphics;
 
 /// <summary>
 /// The clips a model can play, keyed by every name the script exposes — its own clips and its

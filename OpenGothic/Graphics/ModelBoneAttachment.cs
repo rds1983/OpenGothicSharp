@@ -2,7 +2,7 @@ using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using System;
 
-namespace OpenGothic.Scene;
+namespace OpenGothic.Graphics;
 
 /// <summary>
 /// A model attached to a bone of another model. It is placed by the bone's current transform,

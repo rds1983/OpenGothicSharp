@@ -1,11 +1,10 @@
-using DigitalRiseModel;
+ using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using OpenGothic.Scene;
 using OpenGothic.Utility;
 using System;
 
-namespace OpenGothic;
+namespace OpenGothic.Graphics;
 
 /// <summary>
 /// Gradient sky dome. Owns its geometry, texture and material, and submits its mesh part

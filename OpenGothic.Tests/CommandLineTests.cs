@@ -536,6 +536,16 @@ public class CommandLineTests
 	}
 
 	[Fact]
+	public void Parse_VobQuery_ReadsStatsAndPoint()
+	{
+		var result = CommandLine.Parse(new[] { "-vobstats", "-vobfind:10,20,30", "-vobradius:250" });
+
+		Assert.True(result.VobStats);
+		Assert.Equal(new Vector3(10f, 20f, 30f), result.VobFind);
+		Assert.Equal(250f, result.VobRadius);
+	}
+
+	[Fact]
 	public void Parse_InvalidSpawnYaw_IsRejected()
 	{
 		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-modelrot:sideways" });

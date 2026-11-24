@@ -4,11 +4,13 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Myra;
 using Myra.Graphics2D.UI;
-using OpenGothic.Scene;
+using OpenGothic.Graphics;
 using OpenGothic.Physics;
 using OpenGothic.Utility;
 using OpenGothic.UI;
+using OpenGothic.Vobs;
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace OpenGothic;
@@ -331,6 +333,63 @@ public class OgGame : Game
 		if (_world != null && (CommandLine.Instance.Physics || CommandLine.Instance.StartWalking))
 		{
 			SetupPhysics();
+		}
+
+		if (_world != null)
+		{
+			LogVobQueries(_world);
+		}
+	}
+
+	/// <summary>
+	/// Diagnostic dump of the typed vob tree. <c>-vobstats</c> prints counts per kind, and
+	/// <c>-vobfind:x,y,z</c> lists nodes near a point (radius from <c>-vobradius:</c>).
+	/// </summary>
+	private static void LogVobQueries(WorldGrid world)
+	{
+		var commandLine = CommandLine.Instance;
+		if (commandLine.VobStats)
+		{
+			var counts = new Dictionary<VobKind, int>();
+			foreach (var vob in world.Vobs.All)
+			{
+				counts.TryGetValue(vob.Kind, out var count);
+				counts[vob.Kind] = count + 1;
+			}
+
+			var parts = new List<string>();
+			foreach (VobKind kind in Enum.GetValues(typeof(VobKind)))
+			{
+				if (counts.TryGetValue(kind, out var count) && count > 0)
+				{
+					parts.Add($"{kind}={count}");
+				}
+			}
+
+			Log.Info($"Vob tree: {world.Vobs.Count} nodes ({string.Join(", ", parts)}).");
+		}
+
+		if (!commandLine.VobFind.HasValue)
+		{
+			return;
+		}
+
+		var point = commandLine.VobFind.Value;
+		var radius = commandLine.VobRadius ?? 1000f;
+		var results = new List<VobNode>();
+		world.Vobs.FindNear(point, radius, results);
+
+		Log.Info($"Vobs near ({point.X:0.#}, {point.Y:0.#}, {point.Z:0.#}) within {radius:0}: {results.Count}.");
+		for (var i = 0; i < results.Count && i < 50; ++i)
+		{
+			var vob = results[i];
+			var position = vob.Position;
+			var bounds = vob.Bounds;
+			Log.Info(
+				$"  {vob.Kind} '{vob.Name}' tag '{vob.Tag}' at " +
+				$"({position.X:0.#}, {position.Y:0.#}, {position.Z:0.#}) " +
+				$"bounds ({bounds.Min.X:0.#}, {bounds.Min.Y:0.#}, {bounds.Min.Z:0.#}).." +
+				$"({bounds.Max.X:0.#}, {bounds.Max.Y:0.#}, {bounds.Max.Z:0.#})");
 		}
 	}
 

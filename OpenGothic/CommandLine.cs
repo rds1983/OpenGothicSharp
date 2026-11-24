@@ -54,8 +54,8 @@ public class CommandLine
 	/// <summary>
 	/// Whether the game should start with the playable capsule. Explicit <see cref="Walk"/> or
 	/// <see cref="ThirdPerson"/> wins; otherwise a plain launch walks, while a diagnostic launch
-	/// (a spawned/composed/attached model, a camera override, a screenshot or the physics
-	/// self-check) keeps the fixed camera that the capture or inspection expects.
+	/// (a spawned/composed/attached model, a camera override, a screenshot, a vob query or the
+	/// physics self-check) keeps the fixed camera that the capture or inspection expects.
 	/// </summary>
 	public bool StartWalking =>
 		!NoWalk &&
@@ -65,6 +65,8 @@ public class CommandLine
 			string.IsNullOrEmpty(AttachPoint) &&
 			!CameraPosition.HasValue &&
 			!LookAtTarget.HasValue &&
+			!VobStats &&
+			!VobFind.HasValue &&
 			string.IsNullOrEmpty(ScreenshotPath)));
 
 	/// <summary>
@@ -183,6 +185,15 @@ public class CommandLine
 	/// own position, which is not the player.
 	/// </summary>
 	public float? PlayerYaw { get; private set; }
+
+	/// <summary>Whether to log a count of the typed vob tree after the world loads.</summary>
+	public bool VobStats { get; private set; }
+
+	/// <summary>Point to query the typed vob tree around, or null for no query.</summary>
+	public Vector3? VobFind { get; private set; }
+
+	/// <summary>Radius of the <see cref="VobFind"/> query; null uses the default.</summary>
+	public float? VobRadius { get; private set; }
 
 	/// <summary>
 	/// Yaw in degrees applied to the placed <see cref="SpawnModel"/> or composed model, or null
@@ -466,6 +477,27 @@ public class CommandLine
 							result._invalid = true;
 						}
 					}
+					else if (arg.Equals("-vobstats", StringComparison.OrdinalIgnoreCase))
+					{
+						result.VobStats = true;
+					}
+					else if (arg.StartsWith("-vobfind:", StringComparison.OrdinalIgnoreCase))
+					{
+						result.VobFind = result.ParseVector(arg.Substring("-vobfind:".Length), arg);
+					}
+					else if (arg.StartsWith("-vobradius:", StringComparison.OrdinalIgnoreCase))
+					{
+						var value = arg.Substring("-vobradius:".Length);
+						if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var radius) && radius > 0f)
+						{
+							result.VobRadius = radius;
+						}
+						else
+						{
+							Log.Error($"Option '-vobradius:' requires a positive radius, got '{value}'.");
+							result._invalid = true;
+						}
+					}
 					else if (arg.StartsWith("-walktest:", StringComparison.OrdinalIgnoreCase))
 					{
 						var value = arg.Substring("-walktest:".Length);
@@ -585,7 +617,7 @@ public class CommandLine
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
 		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] " +
 		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
-		"[-player:<x,y,z>] [-yaw:<degrees>] [-walktest:<seconds>] [-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
+		"[-player:<x,y,z>] [-yaw:<degrees>] [-walktest:<seconds>] [-vobstats] [-vobfind:<x,y,z>] [-vobradius:<n>] [-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 
 	private Vector3? ParseVector(string value, string option)
 	{

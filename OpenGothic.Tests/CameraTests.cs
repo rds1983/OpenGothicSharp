@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using OpenGothic;
+using OpenGothic.Graphics;
 using System;
 using Xunit;
 namespace OpenGothic.Tests;

@@ -1,7 +1,7 @@
-﻿using DigitalRiseModel;
+using DigitalRiseModel;
 using DigitalRiseModel.Animation;
 using Microsoft.Xna.Framework;
-using OpenGothic.Scene;
+using OpenGothic.Graphics;
 using System.Collections.Generic;
 
 namespace OpenGothic

@@ -1,3 +1,5 @@
+using OpenGothic.Graphics;
+
 namespace OpenGothic;
 
 /// <summary>

@@ -1,16 +1,17 @@
-﻿using DigitalRiseModel;
+using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using OpenGothic.Physics;
-using OpenGothic.Scene;
+using OpenGothic.Graphics;
 using OpenGothic.Utility;
+using OpenGothic.Vobs;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using ZenKit;
 using ZenKit.Vobs;
 
-using Material = OpenGothic.Scene.Material;
+using Material = OpenGothic.Graphics.Material;
 
 namespace OpenGothic
 {
@@ -297,11 +298,10 @@ namespace OpenGothic
 
 			// Virtual objects
 
-			// Enqueue root objects. Gothic stores a vob's transform in world space, so a child's
-			// local transform is derived against its parent's. Rendering then composes the
-			// chain, which is what lets a moving parent carry its children; a static world
-			// still lands exactly where the file puts it.
-			var vobs = new List<(SceneNode node, Matrix world, IVirtualObject vob)>();
+			// Enqueue root objects. The vob tree owns the hierarchy; every visual is placed in
+			// world space because a visual is attached to one vob, like ObjVisual in the
+			// reference. The renderer then works from the flat per-cell visual list.
+			var vobs = new List<(VobNode parentVob, Matrix world, IVirtualObject vob)>();
 			foreach (var vob in zkWorld.RootObjects)
 			{
 				vobs.Add((null, Matrix.Identity, vob));
@@ -309,13 +309,13 @@ namespace OpenGothic
 
 			while (vobs.Count > 0)
 			{
-				var (parentNode, parentWorld, vob) = vobs[0];
+				var (parentVob, parentWorld, vob) = vobs[0];
 				vobs.RemoveAt(0);
 
 				var world = vob.Rotation.ToXna() * Matrix.CreateTranslation(vob.Position.ToXna());
-				var local = parentNode == null ? world : world * Matrix.Invert(parentWorld);
-
-				SceneNode node = null;
+				var local = parentVob == null ? world : world * Matrix.Invert(parentVob.World);
+				var vobNode = VobFactory.Create(vob, parentVob, world, local);
+				result.Vobs.Add(vobNode);
 
 				var asModel = vob.Visual as VisualModel;
 				if (asModel != null && vob.ShowVisual && DebugSettings.ModelsEnabled)
@@ -343,6 +343,7 @@ namespace OpenGothic
 						// position, which is still the right cell to register it in.
 						var bb = instance.BoundingBox ?? new BoundingBox(vob.Position.ToXna(), vob.Position.ToXna());
 						var worldBounds = bb.Transform(ref world);
+						vobNode.Bounds = worldBounds;
 
 						var cell = result.FindCellByBox(worldBounds);
 						if (cell != null)
@@ -352,15 +353,15 @@ namespace OpenGothic
 							var modelNode = new ModelNode
 							{
 								Instance = instance,
-								Transform = local,
+								Transform = world,
 								// NPC collision is the dynamic capsule from milestone E, not the
 								// static bind-pose model.
 								Collision = vob.CdDynamic && vob.Type != VirtualObjectType.oCNpc
 							};
 
 							cell.Children.Add(modelNode);
-							parentNode?.Children.Add(modelNode);
-							node = modelNode;
+							vobNode.SceneNode = modelNode;
+							modelNode.Vob = vobNode;
 						}
 					}
 				}
@@ -374,6 +375,7 @@ namespace OpenGothic
 					var mesh = GetMultiMesh(device, n);
 
 					var bb = mesh.BoundingBox.Transform(ref world);
+					vobNode.Bounds = bb;
 
 					var cell = result.FindCellByBox(bb);
 					if (cell != null)
@@ -397,7 +399,7 @@ namespace OpenGothic
 							// Add instance
 							foreach (var mm in multiMeshes)
 							{
-								mm.AddInstance(world, vob.CdDynamic);
+								mm.AddInstance(world, vob.CdDynamic, vobNode);
 							}
 						}
 						else
@@ -421,19 +423,7 @@ namespace OpenGothic
 
 				foreach (var child in vob.Children)
 				{
-					// A vob with children needs something to hang them from even when it has no
-					// visual of its own.
-					if (node == null)
-					{
-						node = new SceneNode
-						{
-							Transform = local
-						};
-
-						parentNode?.Children.Add(node);
-					}
-
-					vobs.Add((node, world, child));
+					vobs.Add((vobNode, world, child));
 				}
 			}
 
@@ -468,8 +458,14 @@ namespace OpenGothic
 									{
 										Mesh = mm.Mesh,
 										Transform = transform,
-										Collision = mm.InstancesCollision[k]
+										Collision = mm.InstancesCollision[k],
+										Vob = mm.InstancesVobs[k]
 									};
+
+									if (meshNode.Vob != null)
+									{
+										meshNode.Vob.SceneNode = meshNode;
+									}
 
 									cell.Children.Add(meshNode);
 								}

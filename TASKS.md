@@ -68,6 +68,13 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   and `cd_dynamic` gates, raw model bounds for props (their hierarchy root translation is
   cancelled, so the bookstand sits on the floor), and the root translation kept on
   `DrModelTag` for actor-like spawns.
+- The ZEN vobs form a typed `VobNode` tree (`NPC`, item, interactive/mobsi, trigger, light,
+  sound, decal, particle system, …) with raw type, name/tag, bounds and query helpers; a
+  `newworld.zen` load is 23,288 nodes. It is the only transform hierarchy: `SceneNode` is a flat
+  visual attached to its vob, and the renderer/batched meshes work from flat per-cell lists.
+  `-vobstats` and `-vobfind:x,y,z` inspect it.
+- Rendering lives in `OpenGothic/Graphics` (`Renderer`, `Sky`, `WorldRenderer`, `Camera`,
+  `DebugDraw`, materials, scene/model/mesh visuals and vertex formats).
 - ZenKit is pinned to `1.3.0-cs.1`, matching the parser version the reference C++ client uses.
 - Models skip submeshes whose material has no texture; the shipped data uses those as hidden
   placeholder faces (`REPAIR_PLANK`'s `ZM_REP_HIDDEN` was a white triangle on screen).
@@ -84,7 +91,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   animated culling boxes, vob hierarchy, attach points, animation layers, composed models.
   **Milestone D (Physics and movement) complete** — D1–D3: static collision, kinematic
   character controller, player input, first/third-person cameras and streamed collision.
-  Next milestone: **E — Interaction and world objects**, next task **E1**.
+  Current milestone: **E — Interaction and world objects**; E1 (typed vob tree) complete, next
+  task **E2**.
 
 ---
 
@@ -478,13 +486,34 @@ matching the reference's ZenKit 1.3 parser; only two enum casts were required. D
 
 ## Milestone E — Interaction and world objects
 
-### E1. Vob tree
+### E1. Vob tree — DONE
 Generalize ZEN `IVirtualObject` traversal into a typed vob tree (NPC, item,
 interactive/mobsi, trigger, light, sound, decal, particle system).
-**Done when:** all vob kinds are enumerated and queryable by position/tag.
+
+`Assets.World.cs` builds a `VobNode` for every virtual object, including those with no visual
+(spawn points, triggers, sounds, lights, zones, decals, particle systems). The category mapping
+follows the reference's `Vob::load`; generic vobs are classified by visual, so decals and
+particle systems are separate from static vobs. Each node keeps the raw ZenKit object, world and
+local matrices, world bounds, name/tag, category and an optional `SceneNode` visual with a
+`SceneNode.Vob` backlink.
+
+The vob tree is the **only transform hierarchy**; `SceneNode` is a flat visual with a world
+matrix, and `WorldGridCell.Children` is the flat per-cell render list. Multi-resolution meshes
+remain batched for drawing, with per-instance vob backlinks.
+
+`WorldGrid.Vobs` exposes `FindNear`, `FindAt`, `FindByName`, `FindByTag`, `FindByKind` and
+`CountOf`. `-vobstats` logs per-kind counts and `-vobfind:x,y,z` (`-vobradius:`) lists nearby
+nodes. A `newworld.zen` load reports **23,288 nodes**: 16 level, 11,418 static, 2,331 items,
+575 interactive, 3,401 lights, 2,289 spots, 1,405 decals, 656 particle systems, and the full
+trigger/sound/zone/camera set.
+
+**Done when:** all vob kinds are enumerated and queryable by position/tag. — Done; build/tests
+pass and the diagnostics show the tree and the bookstand query.
 
 ### E2. Focus & raycast
 Crosshair focus: ray/mesh test against focused vobs within reach, highlight support.
+`VobTree.FindNear`/`FindAt` and `SceneNode.Vob` are ready; this task adds the ray/mesh test and
+the highlight itself.
 **Done when:** looking at a vob and pressing the interact key resolves the target.
 
 ### E3. Interactions
@@ -501,7 +530,7 @@ Render and pick up world items; inventory add/remove core.
 
 ### F1. Npc entity
 Npc runtime: attributes, guild, animation state machine basics, name/messages hooks.
-`Scene/AnimationData` already plays a named clip and follows the script's `Next` chains;
+`Graphics/AnimationData` already plays a named clip and follows the script's `Next` chains;
 this task is the body-state layer that decides *which* clip (idle, walk, attack) an NPC asks
 for and when to interrupt one.
 **Done when:** an Npc spawns from a ZEN instance, idles, and can be damaged.

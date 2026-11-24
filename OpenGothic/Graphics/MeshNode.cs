@@ -1,6 +1,6 @@
-﻿using DigitalRiseModel;
+using DigitalRiseModel;
 
-namespace OpenGothic.Scene;
+namespace OpenGothic.Graphics;
 
 public class MeshNode: SceneNode
 {

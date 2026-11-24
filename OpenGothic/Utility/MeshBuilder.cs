@@ -1,7 +1,7 @@
-﻿using DigitalRiseModel;
+using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using OpenGothic.Vertices;
+using OpenGothic.Graphics.Vertices;
 using System;
 using System.Collections.Generic;
 

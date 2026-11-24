@@ -1,7 +1,7 @@
 using Microsoft.Xna.Framework;
 using System;
 
-namespace OpenGothic.Scene;
+namespace OpenGothic.Graphics;
 
 /// <summary>
 /// Static triangles of a mesh part in the part's own space, three consecutive corners per

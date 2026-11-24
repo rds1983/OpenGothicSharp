@@ -1,7 +1,7 @@
 using DigitalRiseModel;
 using System.Collections.Generic;
 
-namespace OpenGothic.Scene;
+namespace OpenGothic.Graphics;
 
 /// <summary>
 /// A placed model: its instance, the models attached to its bones, and optional clip playback.

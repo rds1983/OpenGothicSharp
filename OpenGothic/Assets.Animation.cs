@@ -2,7 +2,7 @@ using DigitalRiseModel;
 using DigitalRiseModel.Animation;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using OpenGothic.Scene;
+using OpenGothic.Graphics;
 using OpenGothic.Utility;
 using System;
 using System.Collections.Generic;

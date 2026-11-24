@@ -5,7 +5,7 @@ using OpenGothic.Utility;
 using System;
 using System.Collections.Generic;
 
-namespace OpenGothic.Scene;
+namespace OpenGothic.Graphics;
 
 /// <summary>
 /// Clip playback for one model instance: a stack of layers sampled by one

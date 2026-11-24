@@ -1,10 +1,9 @@
 using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using OpenGothic.Scene;
 using System;
 
-namespace OpenGothic;
+namespace OpenGothic.Graphics;
 
 /// <summary>
 /// Draws a <see cref="WorldGrid"/> plus the sky. Owns the frustum culling and the

@@ -1,7 +1,7 @@
 using Microsoft.Xna.Framework;
 using System;
 
-namespace OpenGothic;
+namespace OpenGothic.Graphics;
 
 /// <summary>
 /// Position and orientation of the viewer.

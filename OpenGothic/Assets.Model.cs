@@ -1,10 +1,10 @@
-﻿using DigitalRiseModel;
+using DigitalRiseModel;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Graphics.PackedVector;
-using OpenGothic.Scene;
+using OpenGothic.Graphics;
 using OpenGothic.Utility;
-using OpenGothic.Vertices;
+using OpenGothic.Graphics.Vertices;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -67,7 +67,7 @@ partial class Assets
 			meshBuilder.AddIndex(triangle.Wedge2);
 		}
 
-		Scene.Material material = new Scene.Material
+		Graphics.Material material = new Graphics.Material
 		{
 			DiffuseColor = Color.White,
 			DiffuseTexture = texture
@@ -416,7 +416,7 @@ partial class Assets
 
 		// Now that the parts exist, give each skinned mesh its skin. The GPU is handed
 		// inverseBind * boneWorld, so this must be the inverse of the pose the mesh was
-		// authored in — the shared skeleton's for a bare mesh, its own otherwise.
+		// authored in � the shared skeleton's for a bare mesh, its own otherwise.
 		for (var i = 0; i < skinnedMeshes.Count; ++i)
 		{
 			var info = skinnedMeshes[i];

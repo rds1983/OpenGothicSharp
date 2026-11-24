@@ -1,18 +1,21 @@
-﻿using DigitalRiseModel;
+using DigitalRiseModel;
 using Microsoft.Xna.Framework;
+using OpenGothic.Vobs;
 using System.Collections.Generic;
 
-namespace OpenGothic.Scene;
+namespace OpenGothic.Graphics;
 
 public class InstancedMeshNode: SceneNode
 {
 	public DrMeshPart Mesh { get; set; }
 	public List<Matrix> InstancesTransforms { get; } = new List<Matrix>();
 	public List<bool> InstancesCollision { get; } = new List<bool>();
+	public List<VobNode> InstancesVobs { get; } = new List<VobNode>();
 
-	public void AddInstance(Matrix transform, bool collision)
+	public void AddInstance(Matrix transform, bool collision, VobNode vob)
 	{
 		InstancesTransforms.Add(transform);
 		InstancesCollision.Add(collision);
+		InstancesVobs.Add(vob);
 	}
 }
