@@ -306,6 +306,11 @@ public class OgGame : Game
 			_scripts = new ScriptRuntime();
 			_scripts.LoadAndBoot(CommandLine.Instance.GothicPath,
 				CommandLine.Instance.World ?? "newworld.zen");
+
+			if (CommandLine.Instance.Talk && _scripts.Vm != null)
+			{
+				Log.Info($"Script NPC interaction: {_scripts.TalkToFirstNpc()}.");
+			}
 		}
 		catch (Exception ex)
 		{

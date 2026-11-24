@@ -47,6 +47,7 @@ public class CommandLineTests
 		Assert.False(result.WalkMode);
 		Assert.Equal(0, result.Interact);
 		Assert.False(result.NoScripts);
+		Assert.False(result.Talk);
 	}
 
 	[Fact]
@@ -79,6 +80,14 @@ public class CommandLineTests
 		var result = CommandLine.Parse(new[] { "-noscripts" });
 
 		Assert.True(result.NoScripts);
+	}
+
+	[Fact]
+	public void Parse_ReadsTalk()
+	{
+		var result = CommandLine.Parse(new[] { "-talk" });
+
+		Assert.True(result.Talk);
 	}
 
 	[Fact]

@@ -93,7 +93,10 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   The shipped ZEN has no NPCs; scripts spawn them in G2, so no placeholder NPC or body exists.
 - The Daedalus VM boots `GOTHIC.DAT` (74,649 symbols) and loads `Ou.dat` (20,826 cutscene
   blocks) through the four startup/init entry points. Unimplemented externals log once and use
-  the VM default; the VM and cutscene library stay alive for G2/G3.
+  the VM default; the VM and cutscene library stay alive for G3.
+- G2 binds script objects/events: 406 NPC and 55 item instances from `WLD_INSERTNPC`/`ITEM`,
+  `HLP_GETNPC`, `PC_HERO`, and `LOG_ADDENTRY`. Each NPC binding owns a detached `NpcVob`.
+  `-talk` runs `B_ASSESSTALK` + `B_LOGENTRY` and logs the journal side effect.
 - Rendering lives in `OpenGothic/Graphics` (`Renderer`, `Sky`, `WorldRenderer`, `Camera`,
   `DebugDraw`, materials, scene/model/mesh visuals and vertex formats).
 - ZenKit is pinned to `1.3.0-cs.1`, matching the parser version the reference C++ client uses.
@@ -114,8 +117,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   character controller, player input, first/third-person cameras and streamed collision.
   **Milestone E (Interaction and world objects) complete** — E1–E4: typed vob tree, placeholder
   player avatar, focus/raycast, door/chest interactions and item pickup with inventory.
-  F1's NPC runtime data and G1's Daedalus VM boot are complete. F2/F3 still need G2-spawned
-  NPCs, so the next actionable task is **G2 — script classes & events**.
+  F1's NPC runtime data, G1's Daedalus VM boot and G2's script-object/event bridge are complete.
+  F2/F3 still need world-bound script NPCs; the roadmap's next task is **G3 — Dialogs**.
 
 ---
 
@@ -677,9 +680,30 @@ routine data is applied yet; G2 supplies the real bindings.
 points return, the VM remains usable, build/tests pass (191 tests). Details in
 [Specifications/daedalus.md](Documentation/Specifications/daedalus.md).
 
-### G2. Script classes & events
+### G2. Script classes & events — DONE
 Expose NPC/item/world script objects and the event pipeline the scripts expect.
 **Done when:** a scripted NPC interaction fires its Daedalus side effects.
+
+`WLD_INSERTNPC` and `WLD_INSERTITEM` now initialize real script instances; the tested NotR
+startup creates **406 NPCs** and **55 items**. `HLP_GETNPC` resolves an inserted symbol to its
+`NpcInstance`, and `PC_HERO` is initialized and bound as `GlobalHero`. Each script binding
+stores only the instance, a detached `NpcVob` and the spawnpoint; name, guild, level, HP and
+damage/message state live on the `NpcVob`. `LOG_ADDENTRY` stores journal lines.
+
+`-talk` calls the real `B_ASSESSTALK` routine for the first inserted NPC and then
+`B_LOGENTRY`; the resulting `LOG_ADDENTRY` side effect is visible in the log:
+
+```
+Script NPC interaction: talked to 'City Guard'; journal 'You speak with City Guard.'.
+```
+
+The objects are data-only: no world nodes, bodies, collision or AI queue yet. Visible
+script-spawned NPCs need the visual/AI layer; item/world bindings beyond instance storage are
+also still open. Build/tests pass (192 tests). Details in
+[Specifications/daedalus.md](Documentation/Specifications/daedalus.md).
+
+**Done when:** a scripted NPC interaction fires its Daedalus side effects. — Done at the
+script-object/event scope via `-talk`; the journal entry is the observable script side effect.
 
 ### G3. Dialogs
 Dialog choice tree, NPC/player lines, voice hooks, and dialog camera.

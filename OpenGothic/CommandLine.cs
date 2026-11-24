@@ -68,6 +68,12 @@ public class CommandLine
 	public bool NoScripts { get; private set; }
 
 	/// <summary>
+	/// Run one diagnostic Daedalus NPC interaction after boot: call B_ASSESSTALK for the first
+	/// script-inserted NPC and let the script add a journal entry.
+	/// </summary>
+	public bool Talk { get; private set; }
+
+	/// <summary>
 	/// Whether the game should start with the playable capsule. Explicit <see cref="Walk"/> or
 	/// <see cref="ThirdPerson"/> wins; otherwise a plain launch walks, while a diagnostic launch
 	/// (a spawned/composed/attached model, a camera override, a screenshot, a vob query or the
@@ -301,6 +307,9 @@ public class CommandLine
 					break;
 				case "-noscripts":
 					result.NoScripts = true;
+					break;
+				case "-talk":
+					result.Talk = true;
 					break;
 
 				default:
@@ -653,7 +662,7 @@ public class CommandLine
 
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
-		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] [-interact[:<count>]] [-noscripts] " +
+		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] [-interact[:<count>]] [-noscripts] [-talk] " +
 		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
 		"[-player:<x,y,z>] [-yaw:<degrees>] [-walktest:<seconds>] [-vobstats] [-vobfind:<x,y,z>] [-vobradius:<n>] [-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 

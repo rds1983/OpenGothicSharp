@@ -62,6 +62,7 @@ default chosen elsewhere.
 | `-walkmode` | Start with walk mode on, the diagnostic equivalent of the in-game Shift toggle. |
 | `-interact[:<count>]` | Resolve the focus target `count` times (default 1), two seconds apart, as if E had been pressed. |
 | `-noscripts` | Skip loading and booting the Daedalus scripts. |
+| `-talk` | After boot, run one diagnostic NPC interaction: `B_ASSESSTALK` for the first script NPC, then `B_LOGENTRY`. |
 | `-player:<x,y,z>` | Start the walking capsule at a world position instead of the placeholder plaza; the player drops to the ground below the point. |
 | `-yaw:<degrees>` | Set the walking player's facing yaw. Needed to aim a diagnostic walk reliably, because `-lookat:` measures from the camera's own position. Mouse look is disabled while `-yaw` or `-walktest` is active so the direction stays fixed. |
 | `-walktest:<seconds>` | Hold forward for a diagnostic run and log the final feet position; a negative value holds backward. Useful for reproducing a stuck spot. |
@@ -704,9 +705,18 @@ install) and `Ou.dat` (20,826 cutscene blocks), then calls `startup_global`,
 one default handler that logs each name once and returns the VM default, so startup completes
 without unimplemented-call crashes. The VM and cutscene library stay alive for G2/G3.
 
-The external stubs mean no NPCs/items are inserted yet; G2 supplies the real world bindings.
-`-noscripts` skips the load for diagnostics. Details in
+The G1 external stubs for visual/AI/inventory routines are still in place; G2 adds the
+script-object layer described below. `-noscripts` skips the load for diagnostics. Details in
 [Specifications/daedalus.md](Specifications/daedalus.md).
+
+G2 binds the script object layer: `WLD_INSERTNPC` and `WLD_INSERTITEM` initialize script
+objects (406 NPCs and 55 items in the tested NotR startup), `HLP_GETNPC` returns them, and
+`PC_HERO` is bound as the script hero. Each binding owns a detached `NpcVob` for the runtime
+name/guild/level/HP, so those values are not duplicated in the binding. `LOG_ADDENTRY` stores
+journal lines. `-talk` calls the real `B_ASSESSTALK` routine for the first inserted NPC and
+then `B_LOGENTRY`; the resulting journal line proves the Daedalus side effect reached the
+engine. These are data-only script objects — no world nodes or bodies yet; visible script NPCs
+and the AI/visual setup remain.
 
 ### Sky, fog and lighting
 

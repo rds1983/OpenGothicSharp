@@ -1,4 +1,4 @@
-# Daedalus script boot (G1)
+# Daedalus scripts (G1/G2)
 
 The compiled scripts live outside the VDF archives:
 
@@ -41,11 +41,29 @@ bindings. The newworld boot reaches ten distinct routines:
 Because these are stubs, no NPCs or items are inserted yet and video/attitude/routine data is
 not applied.
 
+## Script objects and events (G2)
+
+`WLD_INSERTNPC` and `WLD_INSERTITEM` are bound to real script-object storage. On the tested
+NotR startup they initialize **406 NPCs** and **55 items** (some inserted symbols repeat), while
+`PC_HERO` is initialized as the script hero and `HLP_GETNPC` returns the instance for an
+inserted symbol. Each NPC binding stores only its `NpcInstance`, detached `NpcVob` and
+spawnpoint; name, guild, level and HP live on the `NpcVob`. `MDL_SETVISUAL*`, inventory and AI
+routines still use the default handler.
+
+The objects are **data-only**: there is no world node, body or collision yet. Visible NPCs
+and movement depend on the AI/visual pipeline (`F2`/`G2` continuation).
+
+`LOG_ADDENTRY` is bound to the journal list. The `-talk` diagnostic calls the real
+`B_ASSESSTALK` script routine for the first inserted NPC, then `B_LOGENTRY`; the resulting
+`LOG_ADDENTRY` line is the observable Daedalus side effect:
+
+```
+Script NPC interaction: talked to 'City Guard'; journal 'You speak with City Guard.'.
+```
+
 ## Scope
 
-- The VM and cutscene library stay alive for G2/G3.
-- No script objects are bound to world entities, no globals are mutated, and no event
-  pipeline exists yet.
+- Script objects are data-only: no world node, body, collision or AI queue yet.
 - `-noscripts` skips loading and booting for diagnostics.
 
 **Done when:** startup scripts run without unimplemented-call crashes. The four entry points
