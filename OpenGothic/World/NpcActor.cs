@@ -44,6 +44,41 @@ public sealed class NpcActor
 	/// <summary>Whether the current routine's action has been started.</summary>
 	public bool RoutineStateStarted { get; set; }
 
+	/// <summary>Reference body-state flags: standing excludes sitting and adds free hands.</summary>
+	public const int BodyStateStand = (1 << 15) | (1 << 16);
+
+	/// <summary>Reference <c>BS_SIT</c> (11) with free hands.</summary>
+	public const int BodyStateSit = 11 | (1 << 16);
+
+	/// <summary>Reference <c>BS_LIE</c>.</summary>
+	public const int BodyStateLie = 12;
+
+	/// <summary>Body state reported to <c>NPC_GetBodyState</c>; standing until a state changes it.</summary>
+	public int BodyState { get; set; } = BodyStateStand;
+
+	/// <summary>Walk-mode bits from <c>AI_SetWalkMode</c>, with the weapon bit stripped.</summary>
+	public int WalkMode { get; set; }
+
+	/// <summary>Script-driven destination (<c>AI_GotoWP</c>) while it is active.</summary>
+	public Vector3 AiDestination { get; set; }
+
+	public bool HasAiMove { get; set; }
+
+	/// <summary>Perception sampling interval requested by <c>NPC_SetPercTime</c>, in seconds.</summary>
+	public float PerceptionSeconds { get; set; } = 0.4f;
+
+	/// <summary>Mob scheme the body is using (e.g. <c>CHAIR</c>), or empty when standing.</summary>
+	public string MobScheme { get; set; } = string.Empty;
+
+	/// <summary>State requested by <c>AI_UseMob</c>, or -1 when not using a mob.</summary>
+	public int MobState { get; set; } = -1;
+
+	/// <summary>Clip played when the mob was entered, reversed to stand up again.</summary>
+	public string MobClip { get; set; } = string.Empty;
+
+	/// <summary>AI time before which an ended routine state is not restarted, in seconds.</summary>
+	public double NextRoutineStateAt { get; set; }
+
 	public NpcVisual Visual { get; }
 
 	public Vector3 Position { get; private set; }
@@ -131,6 +166,30 @@ public sealed class NpcActor
 	public void SetMovingClip(bool moving)
 	{
 		SetClip(moving ? MoveClip : IdleClip);
+	}
+
+	/// <summary>Plays a clip by name for a script state; false when the body lacks it.</summary>
+	public bool PlayClip(string name)
+	{
+		var animation = Node?.AnimationData;
+		if (animation == null || string.IsNullOrEmpty(name))
+		{
+			return false;
+		}
+
+		return animation.Play(name);
+	}
+
+	/// <summary>Plays a clip backwards, e.g. the sit transition to stand up again.</summary>
+	public bool PlayClipReverse(string name)
+	{
+		var animation = Node?.AnimationData;
+		if (animation == null || string.IsNullOrEmpty(name))
+		{
+			return false;
+		}
+
+		return animation.Play(name, blend: true, reverse: true);
 	}
 
 	private void SetClip(string name)

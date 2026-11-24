@@ -123,6 +123,44 @@ overlap until F2 routines move them.
   `ZS_GOTOBED` -> `ZS_SLEEP` after reaching `NW_CITY_BED_MATTEO`, and returns to
   `ZS_STAND_ARMSCROSSED` when the 08:00 routine starts.
 
+## Script AI queries and actions (F3.2, in progress)
+
+`-aitrace` logs every external a running `ZS_*` state calls. The set below was read out of the
+shipped scripts with it instead of guessed.
+
+- **Queries implemented:** `NPC_GetNearestWP`, `NPC_GetDistToWP`, `NPC_GetDistToNpc`,
+  `NPC_GetBodyState` (`BS_STAND` = interruptable + free hands), `NPC_GetStateTime`,
+  `NPC_IsOnFP`, `WLD_IsMobAvailable`, `WLD_IsFPAvailable`, `NPC_SetPercTime`,
+  `NPC_PercEnable`, `HLP_IsValidNpc`, `HLP_Strcmp`, `NPC_GetLookAtTarget`.
+  `NPC_HasItems` returns 0 until NPC inventories exist (I3).
+- **Actions implemented:** `AI_GotoWP` (walks via `NpcWalker`, the same transform/bounds/grid/
+  capsule update the routine walker uses), `AI_AlignToWP`, `AI_Standup`/`AI_StandupQuick`,
+  `AI_PlayAni`, `AI_SetWalkMode` (weapon bit stripped), `AI_RemoveWeapon` (no-op until combat).
+  Script movement pauses while the routine walker owns the body and is cancelled when the
+  state ends.
+- **Mobs:** ZenKitCS does not expose an `oCMobInter`'s scheme, so `WLD_IsMobAvailable` and
+  `AI_UseMob` match the scheme against the vob visual name prefix: `CHAIR_NW_NORMAL_01.ASC` is
+  a `CHAIR`, `BEDHIGH_PSI.ASC` a `BEDHIGH`. With that, the scripts call
+  `AI_UseMob(self, "CHAIR", 1)` to sit and `AI_UseMob(self, "CHAIR", -1)` to release.
+- **Sitting works:** the human set's `S_CHAIR_S0` is a one-frame placeholder that looks
+  standing; the seated pose is `S_CHAIR_S1`. State 1 therefore plays the `T_CHAIR_S0_2_S1`
+  transition (the same shape for `BENCH`), which ends in the seated idle. Verified: Rupert
+  sits on his chair at `NW_CITY_SHOP02_SIT`.
+- **Sleeping works:** the shipped data stores beds as `oCMobDoor`, so the mob search accepts
+  doors as well as `Bed`/`Interactive` vobs (the scheme prefix keeps real doors out). With
+  that, `WLD_IsMobAvailable(self, "BEDHIGH")` is true at the bed and the scripts call
+  `AI_UseMob(self, "BEDHIGH", 1)`; the body plays `T_BEDHIGH_FRONT_S0_2_S1` (or `_BACK_`, or
+  `T_STAND_2_SLEEPGROUND`) and lies down. Verified: Matteo lies at `NW_CITY_BED_MATTEO`.
+- **Release:** the human set has no `..._2_STAND` clip, so the entry transition is played
+  backwards (`T_CHAIR_S0_2_S1` reversed) to stand up; verified for chairs, beds and stoves.
+  When no clip was stored the body falls back to the idle clip.
+- **Placement is still the waypoint:** the body lies/sits where the routine point is, not on
+  the mattress or seat; the reference uses the mob's own use point and orientation.
+- The routine callback restarts when a state ends on its own (the reference's
+  `Npc::tickRoutine`), guarded to once a second and only when the actor is already at its
+  routine point, so a sleep state returning `LOOP_END` at dawn re-enters `ZS_GOTOBED` instead
+  of leaving the NPC stateless until the next routine change.
+
 ## Deferred
 
 AI, routines' action callbacks, movement collision avoidance, combat and armour attachments

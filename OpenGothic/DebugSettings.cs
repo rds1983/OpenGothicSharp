@@ -36,4 +36,10 @@ public static class DebugSettings
 	/// self-check is requested. Defaults to false.
 	/// </summary>
 	public static bool CollisionEnabled { get; set; }
+
+	/// <summary>
+	/// Log every external called from a running AI state, naming the state. Used to discover
+	/// which AI actions a shipped <c>ZS_*</c> state needs. Defaults to false.
+	/// </summary>
+	public static bool AiTrace { get; set; }
 }

@@ -65,6 +65,7 @@ default chosen elsewhere.
 | `-talk` | Run a diagnostic conversation with the first script NPC to completion, logging every line and choice. |
 | `-talkui` | Open the interactive dialog panel at boot with the first script NPC. |
 | `-npc:<instance>` | Script instance to use for `-talk`/`-talkui` (e.g. `VLK_425_REGIS`); defaults to the first inserted NPC. |
+| `-aitrace` | Log every external called from a running AI state, prefixed with the state name; used to discover a `ZS_*` state's required actions. |
 | `-time:<hour>` | Start the game clock at this hour (0–24) for daily routines; default 10:00. |
 | `-timescale:<game-min/sec>` | Game minutes per real second for the clock; default 1, `0` freezes it. |
 | `-player:<x,y,z>` | Start the walking capsule at a world position instead of the placeholder plaza; the player drops to the ground below the point. |

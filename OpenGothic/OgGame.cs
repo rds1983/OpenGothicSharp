@@ -335,9 +335,8 @@ public class OgGame : Game
 				{
 					_npcActors = NpcSpawner.Spawn(_scripts, _assets, GraphicsDevice, _world,
 						_physics, _clock.Hour);
-					_ai = new NpcAiSystem(_scripts, _npcActors);
-					_scripts.AiStartState = _ai.RequestStart;
-					_scripts.AiIsInState = _ai.IsInState;
+					_ai = new NpcAiSystem(_scripts, _npcActors, _world, _physics);
+					_scripts.AiSystem = _ai;
 					_routines = new NpcRoutineSystem(_world, _physics, _clock, _npcActors, _ai);
 				}
 				catch (Exception ex)

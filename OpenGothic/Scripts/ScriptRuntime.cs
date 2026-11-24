@@ -32,6 +32,7 @@ public sealed class ScriptRuntime
 
 	private DialogSession _session;
 	private bool _endRequested;
+	private string _traceState;
 
 	public DaedalusVm Vm { get; private set; }
 
@@ -71,13 +72,10 @@ public sealed class ScriptRuntime
 	public NpcVob RequestedDialogNpc { get; private set; }
 
 	/// <summary>
-	/// Handles <c>AI_StartState</c>; the AI system sets this once the actors exist. The call is
-	/// queued there because the VM must not be re-entered from inside a state function.
+	/// The AI system that owns actors, states and script actions. Set once the NPCs are placed;
+	/// the AI externals below forward to it.
 	/// </summary>
-	internal Action<NpcInstance, int, string> AiStartState { get; set; }
-
-	/// <summary>Handles <c>NPC_IsInState</c>; set together with <see cref="AiStartState"/>.</summary>
-	internal Func<NpcInstance, int, bool> AiIsInState { get; set; }
+	internal NpcAiSystem AiSystem { get; set; }
 
 	public void LoadAndBoot(string gothicFolder, string worldName)
 	{
@@ -184,10 +182,59 @@ public sealed class ScriptRuntime
 		Vm.RegisterExternal("ai_startstate",
 			(NpcInstance self, int function, int state, string waypoint) =>
 			{
-				AiStartState?.Invoke(self, function, waypoint);
+				AiSystem?.RequestStart(self, function, waypoint);
 			});
 		Vm.RegisterExternal("npc_isinstate", (NpcInstance npc, int stateFunction) =>
-			AiIsInState != null && AiIsInState(npc, stateFunction) ? 1 : 0);
+			AiSystem != null && AiSystem.IsInState(npc, stateFunction) ? 1 : 0);
+
+		// Queries and actions the shipped ZS_* states call; the set comes from -aitrace.
+		Vm.RegisterExternal("hlp_isvalidnpc", (NpcInstance npc) =>
+			AiSystem != null && AiSystem.IsValidNpc(npc) ? 1 : 0);
+		Vm.RegisterExternal("hlp_strcmp", (string a, string b) =>
+			string.Equals(a, b, StringComparison.Ordinal) ? 1 : 0);
+		Vm.RegisterExternal("npc_getnearestwp", (NpcInstance npc) =>
+			AiSystem?.NearestWaypoint(npc) ?? string.Empty);
+		Vm.RegisterExternal("npc_getdisttowp", (NpcInstance npc, string waypoint) =>
+			AiSystem?.DistanceToWaypoint(npc, waypoint) ?? int.MaxValue);
+		Vm.RegisterExternal("npc_getdisttonpc", (NpcInstance a, NpcInstance b) =>
+			AiSystem?.DistanceToNpc(a, b) ?? int.MaxValue);
+		Vm.RegisterExternal("npc_getbodystate", (NpcInstance npc) =>
+			AiSystem?.BodyState(npc) ?? NpcActor.BodyStateStand);
+		Vm.RegisterExternal("npc_getstatetime", (NpcInstance npc) =>
+			AiSystem?.StateSeconds(npc) ?? 0);
+		Vm.RegisterExternal("npc_isonfp", (NpcInstance npc, string freePoint) =>
+			AiSystem != null && AiSystem.IsOnFreePoint(npc, freePoint) ? 1 : 0);
+		Vm.RegisterExternal("npc_hasitems", (NpcInstance npc, int item) => 0);
+		Vm.RegisterExternal("npc_getlookattarget", (NpcInstance npc) => (NpcInstance)null);
+		Vm.RegisterExternal("npc_setperctime", (NpcInstance npc, float seconds) =>
+			AiSystem?.SetPerceptionTime(npc, seconds));
+		Vm.RegisterExternal("npc_percenable", (NpcInstance npc, int type, int function) => { });
+		Vm.RegisterExternal("wld_ismobavailable", (NpcInstance npc, string name) =>
+			AiSystem != null && AiSystem.IsMobAvailable(npc, name) ? 1 : 0);
+		Vm.RegisterExternal("wld_isfpavailable", (NpcInstance npc, string name) =>
+			AiSystem != null && AiSystem.IsFreePointAvailable(npc, name) ? 1 : 0);
+		Vm.RegisterExternal("ai_gotowp", (NpcInstance npc, string waypoint) =>
+			AiSystem?.RequestGoTo(npc, waypoint));
+		Vm.RegisterExternal("ai_aligntowp", (NpcInstance npc) => AiSystem?.AlignToWaypoint(npc));
+		Vm.RegisterExternal("ai_standup", (NpcInstance npc) => AiSystem?.StandUp(npc));
+		Vm.RegisterExternal("ai_standupquick", (NpcInstance npc) => AiSystem?.StandUp(npc));
+		Vm.RegisterExternal("ai_playani", (NpcInstance npc, string name) =>
+			AiSystem?.PlayAnimation(npc, name));
+		Vm.RegisterExternal("ai_playanibs", (NpcInstance npc, string name, int bodyState) =>
+			AiSystem?.PlayAnimationWithState(npc, name, bodyState));
+		Vm.RegisterExternal("npc_setstatetime", (NpcInstance npc, int seconds) =>
+			AiSystem?.SetStateSeconds(npc, seconds));
+		Vm.RegisterExternal("npc_isinplayersroom", (NpcInstance npc) => 0);
+		Vm.RegisterExternal("ai_setwalkmode", (NpcInstance npc, int mode) =>
+			AiSystem?.SetWalkMode(npc, mode));
+		Vm.RegisterExternal("ai_removeweapon", (NpcInstance npc) => { });
+		Vm.RegisterExternal("ai_usemob", (NpcInstance npc, string target, int state) =>
+		{
+			AiSystem?.UseMob(npc, target, state);
+			return 0;
+		});
+		Vm.RegisterExternal("ai_useitemtostate", (NpcInstance npc, int item, int state) =>
+			AiSystem?.UseItemToState(npc, item, state));
 
 		// Visual parameters are collected while the C_NPC constructor runs, before the
 		// binding exists; the spawner builds the model after boot.
@@ -476,11 +523,13 @@ public sealed class ScriptRuntime
 		var previousSelf = Vm.GlobalSelf;
 		var previousOther = Vm.GlobalOther;
 		var previousVictim = Vm.GlobalVictim;
+		var previousTrace = _traceState;
 		try
 		{
 			Vm.GlobalSelf = self;
 			Vm.GlobalOther = other;
 			Vm.GlobalVictim = victim;
+			_traceState = symbol.Name;
 
 			if (symbol.HasReturn)
 			{
@@ -500,6 +549,7 @@ public sealed class ScriptRuntime
 			Vm.GlobalSelf = previousSelf;
 			Vm.GlobalOther = previousOther;
 			Vm.GlobalVictim = previousVictim;
+			_traceState = previousTrace;
 		}
 	}
 
@@ -1059,6 +1109,11 @@ public sealed class ScriptRuntime
 	{
 		++UnboundCalls;
 		var name = symbol?.Name ?? "?";
+		if (DebugSettings.AiTrace && _traceState != null)
+		{
+			Log.Info($"AI trace: '{_traceState}' calls '{name}'.");
+		}
+
 		if (_unbound.Add(name))
 		{
 			Log.Info($"Daedalus external '{name}' has no implementation; using default return.");

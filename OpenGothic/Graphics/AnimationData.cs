@@ -79,7 +79,7 @@ public sealed class AnimationData
 	/// playing restarts it. Returns false when the model has no animations, no such name, or the
 	/// clip stores no channels.
 	/// </summary>
-	public bool Play(string name, bool blend = true)
+	public bool Play(string name, bool blend = true, bool reverse = false)
 	{
 		if (!TryGetClip(name, out var clip, out var info))
 		{
@@ -111,7 +111,7 @@ public sealed class AnimationData
 		_base.Clip = clip;
 		_base.Info = info;
 		_base.Start = _elapsed;
-		_base.Node = BuildNode(clip, info);
+		_base.Node = BuildNode(clip, info, reverse);
 
 		_layers.Sort((a, b) =>
 			a.Info.Layer != b.Info.Layer
@@ -458,12 +458,17 @@ public sealed class AnimationData
 	/// Builds the node a layer plays: a bare clip when it runs forward, and a one-layer blend
 	/// whose layer carries the reverse offset when it does not.
 	/// </summary>
-	private static AnimationTreeNode BuildNode(AnimationClip clip, ModelClipInfo info)
+	private static AnimationTreeNode BuildNode(AnimationClip clip, ModelClipInfo info, bool reverse = false)
 	{
 		var loop = info?.Loop ?? false;
 		var flags = loop ? AnimationFlags.Looped : AnimationFlags.None;
 
-		if (info?.Reverse != true)
+		if (info == null)
+		{
+			return new AnimationClipNode(clip, flags);
+		}
+
+		if (!reverse && !info.Reverse)
 		{
 			return new AnimationClipNode(clip, flags);
 		}

@@ -68,6 +68,12 @@ public class CommandLine
 	public bool NoScripts { get; private set; }
 
 	/// <summary>
+	/// Log every external call made from inside a running AI state. Diagnostic only: it names
+	/// the external, which is how a state's required AI actions are discovered from the data.
+	/// </summary>
+	public bool AiTrace { get; private set; }
+
+	/// <summary>
 	/// Run a complete diagnostic conversation with the first script NPC after boot, choosing
 	/// the first available entry until the script ends the dialog. Every line is logged.
 	/// </summary>
@@ -325,6 +331,10 @@ public class CommandLine
 					break;
 				case "-noscripts":
 					result.NoScripts = true;
+					break;
+
+				case "-aitrace":
+					result.AiTrace = true;
 					break;
 				case "-talk":
 					result.Talk = true;
@@ -679,6 +689,11 @@ public class CommandLine
 			DebugSettings.AnimationsEnabled = Animations.Value;
 		}
 
+		if (AiTrace)
+		{
+			DebugSettings.AiTrace = true;
+		}
+
 		if (Physics || StartWalking)
 		{
 			DebugSettings.CollisionEnabled = true;
@@ -724,7 +739,7 @@ public class CommandLine
 
 	private const string Usage =
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
-		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] [-interact[:<count>]] [-noscripts] [-talk] [-talkui] [-npc:<instance>] [-time:<hour>] [-timescale:<game-min/sec>] " +
+		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] [-walkmode] [-interact[:<count>]] [-noscripts] [-aitrace] [-talk] [-talkui] [-npc:<instance>] [-time:<hour>] [-timescale:<game-min/sec>] " +
 		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
 		"[-player:<x,y,z>] [-yaw:<degrees>] [-walktest:<seconds>] [-vobstats] [-vobfind:<x,y,z>] [-vobradius:<n>] [-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 

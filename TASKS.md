@@ -131,8 +131,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   collision/focus path, and completes the dialog camera/voice hook. F1.6 builds the 50
   non-human bodies lazily from their model scripts. F2 drives daily routines from a game
   clock, walks NPCs between grounded routine points, and is complete. Cut-out foliage
-  materials render with `AlphaTestEffect`. F3.1 (script AI states, chaining and routine
-  actions) is complete; F3.2 (AI queue) is next.
+  materials render with `AlphaTestEffect`. F3.1 (script AI states) and F3.2 (AI queries,
+  actions, sitting/sleeping) are complete; F3.3 (perception) is next.
 
 ---
 
@@ -751,24 +751,50 @@ walk) and ends on a routine change. Verified: Matteo runs `ZS_STAND_ARMSCROSSED`
 Done at the container scope: states run, chain and end on schedule. Their bodies still only
 stand because the actions they call (`AI_GotoWP`, `AI_UseMob`, `Mdl_PlayAni`, ...) are F3.2.
 
-#### F3.2 AI queue: movement and idle actions
-Port the queue actions the shipped scripts actually call: `AI_GotoWP`, `AI_GotoNpc`,
-`AI_GotoPos`, `AI_Wait`, `AI_Standup`, `AI_TurnToNpc`, `AI_TurnToSound`, `AI_PlayAni`,
-`AI_RemoveWeapon`/`AI_EquipWeapon` where trivial, plus the queue result the state loop reads
-(e.g. `AI_Wait` blocking until its timer expires).
-Walking reuses the F2 walker (direct targets until N1 exposes waynet edges).
+#### F3.2 AI queue: movement and idle actions — DONE
+Port the queue actions the shipped scripts actually call. The set below comes from
+`-aitrace` on the city states, not from guessing; walking reuses the F2 walker (direct
+targets until N1 exposes waynet edges).
 **Depends on F3.1.**
 **Done when:** a `ZS_*` state walks to a waypoint, waits there and returns control without
 unimplemented-external errors.
 
-**Carry-over from F3.1:**
-- A state that ends on its own (e.g. `ZS_SLEEP_LOOP` returning `LOOP_END` at 06:00) leaves
-  the NPC stateless until the next routine change. The reference restarts the routine callback
-  whenever no state is active (`Npc::tickRoutine`); do the same once the queue can drive the
-  walk.
-- Add a script-call trace switch (e.g. `-aitrace`) so the exact external calls of `ZS_SIT_*`,
-  `ZS_GOTOBED`, `ZS_SLEEP` and friends can be recorded from the shipped scripts; the action
-  set above is a guess until then.
+**Actions the states call** (observed): `AI_GotoWP`, `AI_AlignToWP`/`AI_AlignToFP`,
+`AI_Standup`, `AI_PlayAni`, `AI_PlayAnimBs`, `AI_UseMob` (bed/chair/bench), `AI_UseItemToState`
+(brooms), `AI_RemoveWeapon`, `AI_SetWalkMode`. `AI_GotoNpc`/`AI_GotoPos`/`AI_TurnTo*`/`AI_Wait`
+are not used by the traced routine states; add them when a state or perception path needs them.
+
+**Implemented:**
+- `-aitrace` (debug switch) logs every external a running state calls; the action list above
+  comes from it.
+- Queries: `NPC_GetNearestWP`, `NPC_GetDistToWP`, `NPC_GetDistToNpc`, `NPC_GetBodyState`,
+  `NPC_GetStateTime`, `NPC_IsOnFP`, `WLD_IsMobAvailable`, `WLD_IsFPAvailable`,
+  `NPC_SetPercTime`, `NPC_PercEnable`, `HLP_IsValidNpc`, `HLP_Strcmp`, `NPC_GetLookAtTarget`,
+  `NPC_SetStateTime`, `NPC_IsInPlayerRoom` (false until rooms exist). `NPC_HasItems` returns 0
+  until NPC inventories exist (I3).
+- Actions: `AI_GotoWP` (walk via the shared `NpcWalker`), `AI_AlignToWP`,
+  `AI_Standup`/`AI_StandupQuick`, `AI_PlayAni`, `AI_PlayAnimBs`, `AI_SetWalkMode`,
+  `AI_RemoveWeapon`.
+- Mobs: `WLD_IsMobAvailable`/`AI_UseMob` resolve the script scheme through the vob visual name
+  (`CHAIR_NW_NORMAL_01.ASC` is a `CHAIR`), because ZenKitCS does not expose the mob scheme.
+  Beds are stored as `oCMobDoor` here, so the search accepts doors too. Sitting plays
+  `T_<scheme>_S0_2_S1` (`S_CHAIR_S0` is a standing placeholder, `S_CHAIR_S1` is seated);
+  lying plays `T_BEDHIGH_FRONT_S0_2_S1`. Release plays the entry transition backwards, as the
+  human set has no `..._2_STAND` clip.
+- The routine callback restarts after a state ends on its own, guarded to once a second and
+  only when the actor is already on its routine point.
+- Verified: Rupert sits at `NW_CITY_SHOP02_SIT`, Matteo lies at `NW_CITY_BED_MATTEO`, and the
+  remaining unbound call during states is only `CreateInvItem` (inventory).
+
+Follow-up work moved to F3.6.
+
+**Observed per state:**
+- `ZS_GOTOBED`, `ZS_SIT_CHAIR`, `ZS_SWEEP_FP`, `ZS_GUARD_PASSAGE` call `AI_GotoWP` in their
+  entry; the loop then checks distance/body state/availability.
+- `ZS_STAND_WP`, `ZS_STAND_GUARDING`, `ZS_STAND_ARMSCROSSED` call `AI_AlignToWP`/`AI_PlayAni`
+  in the loop and play an animation in `_End`.
+- `ZS_SIT_CHAIR_END` calls `AI_UseMob`; `ZS_SWEEP_FP_END` calls `AI_UseItemToState`.
+- `ZS_GOTOBED` -> `ZS_SLEEP` hand-off plus `AI_UseMob(BEDHIGH, 1)` produce the lying pose.
 
 #### F3.3 Perception
 - `senses_range` from the instance, view cone, head/eye ray with occlusion against the
@@ -798,7 +824,17 @@ Carry-over from F2; the state machine should drive this, not the other way round
 **Depends on F3.2.**
 **Done when:** NPCs walk around obstacles and stand on house floors anywhere on the map.
 
-Order: F3.1 → F3.2 → F3.3 → F3.4 → F3.5.
+#### F3.6 Mob placement and item animations
+Follow-up from F3.2.
+- Place the body on the mob's use point and orientation instead of at the routine waypoint,
+  so a sitting NPC is on the seat and a sleeping one is on the mattress (the reference's
+  `Interactive::nearestPoint`/`setPos`).
+- `AI_UseItemToState` (brooms and similar) plays the item animations and body state instead of
+  logging; depends on NPC inventories (I3) for the item itself.
+**Depends on F3.2.**
+**Done when:** an NPC sits on the chair mesh and sweeps with the broom animation.
+
+Order: F3.1 → F3.2 → F3.3 → F3.4 → F3.5 → F3.6.
 
 ---
 

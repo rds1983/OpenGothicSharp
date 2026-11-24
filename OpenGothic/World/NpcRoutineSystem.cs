@@ -19,9 +19,9 @@ internal sealed class NpcRoutineSystem
 	private const int MaxLogs = 12;
 
 	private readonly WorldGrid _world;
-	private readonly PhysicsWorld _physics;
 	private readonly GameClock _clock;
 	private readonly List<NpcActor> _actors;
+	private readonly NpcWalker _walker;
 	private readonly NpcAiSystem _ai;
 	private readonly Func<string, bool> _hasWaypoint;
 	private int _assignLogs;
@@ -31,9 +31,9 @@ internal sealed class NpcRoutineSystem
 		List<NpcActor> actors, NpcAiSystem ai = null)
 	{
 		_world = world;
-		_physics = physics;
 		_clock = clock;
 		_actors = actors;
+		_walker = new NpcWalker(world, physics);
 		_ai = ai;
 		_hasWaypoint = world != null
 			? new Func<string, bool>(world.Waypoints.ContainsKey)
@@ -71,7 +71,7 @@ internal sealed class NpcRoutineSystem
 			{
 				Move(actor, dt);
 			}
-			else
+			else if (!actor.HasAiMove && actor.BodyState == NpcActor.BodyStateStand)
 			{
 				actor.SetMovingClip(false);
 			}
@@ -84,6 +84,7 @@ internal sealed class NpcRoutineSystem
 		actor.Routine = routine;
 		actor.RoutineChanged = changed;
 		actor.RoutineStateStarted = false;
+		actor.HasAiMove = false;
 		actor.Path.Clear();
 		actor.PathIndex = 0;
 
@@ -187,21 +188,6 @@ internal sealed class NpcRoutineSystem
 
 	private void UpdateWorld(NpcActor actor)
 	{
-		var vob = actor.Vob;
-		var oldBounds = vob.Bounds;
-
-		vob.World = Matrix.CreateScale(actor.Scale) *
-		            Matrix.CreateRotationY(-actor.Yaw) *
-		            Matrix.CreateTranslation(actor.Position);
-		vob.Local = vob.World;
-
-		var newBounds = actor.WorldBounds;
-		vob.Bounds = newBounds;
-		_world.UpdateVobBounds(vob, oldBounds, newBounds);
-
-		if (_physics != null && vob.PhysicsBody.HasValue)
-		{
-			_physics.SetNpcCapsulePosition(vob.PhysicsBody.Value, actor.Position);
-		}
+		_walker.Apply(actor);
 	}
 }

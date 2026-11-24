@@ -142,6 +142,13 @@ public class CommandLineTests
 	}
 
 	[Fact]
+	public void Parse_AiTrace_IsOffByDefaultAndReadAsAFlag()
+	{
+		Assert.False(CommandLine.Parse(new[] { "-g", @"C:\Gothic" }).AiTrace);
+		Assert.True(CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-aitrace" }).AiTrace);
+	}
+
+	[Fact]
 	public void Parse_TimeScaleAcceptsZero()
 	{
 		var result = CommandLine.Parse(new[] { "-timescale:0" });
