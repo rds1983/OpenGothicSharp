@@ -178,6 +178,13 @@ public class CommandLine
 	public float? WalkTestSeconds { get; private set; }
 
 	/// <summary>
+	/// Facing yaw in degrees for the walking player, or null to use the camera's yaw. This is
+	/// the reliable way to aim a diagnostic walk: <c>-lookat:</c> measures from the camera's
+	/// own position, which is not the player.
+	/// </summary>
+	public float? PlayerYaw { get; private set; }
+
+	/// <summary>
 	/// Yaw in degrees applied to the placed <see cref="SpawnModel"/> or composed model, or null
 	/// for none. A model faces away from the default camera, so 180 shows its front.
 	/// </summary>
@@ -446,16 +453,29 @@ public class CommandLine
 					{
 						result.PlayerPosition = result.ParseVector(arg.Substring("-player:".Length), arg);
 					}
+					else if (arg.StartsWith("-yaw:", StringComparison.OrdinalIgnoreCase))
+					{
+						var value = arg.Substring("-yaw:".Length);
+						if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var yaw))
+						{
+							result.PlayerYaw = yaw;
+						}
+						else
+						{
+							Log.Error($"Option '-yaw:' requires an angle in degrees, got '{value}'.");
+							result._invalid = true;
+						}
+					}
 					else if (arg.StartsWith("-walktest:", StringComparison.OrdinalIgnoreCase))
 					{
 						var value = arg.Substring("-walktest:".Length);
-						if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0f)
+						if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds != 0f)
 						{
 							result.WalkTestSeconds = seconds;
 						}
 						else
 						{
-							Log.Error($"Option '-walktest:' requires a positive duration, got '{value}'.");
+							Log.Error($"Option '-walktest:' requires a non-zero duration, got '{value}'.");
 							result._invalid = true;
 						}
 					}
@@ -565,7 +585,7 @@ public class CommandLine
 		"Usage: -g <path> [-game:<modfile.ini>] [-w <world.zen>] [-nomenu] [-devmode] [-nocull] [-nomodels] [-noanims] " +
 		"[-screenshot:<file.png>] [-screenshotframe:<n>] [-cam:<x,y,z>] [-lookat:<x,y,z>] [-wireframe] [-bounds] [-physics] [-walk] [-nowalk] [-thirdperson] " +
 		"[-model:<name>] [-compose:<skeleton>:<mesh>[,<mesh>...]] [-modeldist:<n>] [-modeloffset:<x,y,z>] [-modelrot:<degrees>] [-attach:<point>:<model>] [-anims:true|false] [-animdump:<script>] [-animclip:<clip>] " +
-		"[-player:<x,y,z>] [-walktest:<seconds>] [-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
+		"[-player:<x,y,z>] [-yaw:<degrees>] [-walktest:<seconds>] [-play:<clip>] [-overlay:<clip>] [-freeze] [-animtime:<seconds>]";
 
 	private Vector3? ParseVector(string value, string option)
 	{

@@ -120,7 +120,10 @@ internal static class Mathematics
 			m.M31, m.M32, m.M33, 0,
 			0, 0, 0, 1);
 
-		return result;
+		// ZenKit stores the vob rotation as columns; XNA transforms row vectors. Transpose,
+		// then mirror Z like every other position conversion.
+		result = Matrix.Transpose(result);
+		return LTR * result * LTR;
 	}
 
 	public static int Clamp(this int value, int min, int max)

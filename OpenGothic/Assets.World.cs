@@ -318,7 +318,7 @@ namespace OpenGothic
 				SceneNode node = null;
 
 				var asModel = vob.Visual as VisualModel;
-				if (asModel != null && DebugSettings.ModelsEnabled)
+				if (asModel != null && vob.ShowVisual && DebugSettings.ModelsEnabled)
 				{
 					// A vob's model name comes from the original authoring format, so only
 					// the stem is meaningful; GetModel resolves the actual file. A model that
@@ -352,7 +352,10 @@ namespace OpenGothic
 							var modelNode = new ModelNode
 							{
 								Instance = instance,
-								Transform = local
+								Transform = local,
+								// NPC collision is the dynamic capsule from milestone E, not the
+								// static bind-pose model.
+								Collision = vob.CdDynamic && vob.Type != VirtualObjectType.oCNpc
 							};
 
 							cell.Children.Add(modelNode);
@@ -363,7 +366,7 @@ namespace OpenGothic
 				}
 
 				var asMesh = vob.Visual as VisualMultiResolutionMesh;
-				if (asMesh != null)
+				if (asMesh != null && vob.ShowVisual)
 				{
 					// Instanced transforms stay in world space, so a multi-mesh does not take
 					// part in the node hierarchy; no mover uses one as a child today.
@@ -394,7 +397,7 @@ namespace OpenGothic
 							// Add instance
 							foreach (var mm in multiMeshes)
 							{
-								mm.InstancesTransforms.Add(world);
+								mm.AddInstance(world, vob.CdDynamic);
 							}
 						}
 						else
@@ -464,7 +467,8 @@ namespace OpenGothic
 									var meshNode = new MeshNode
 									{
 										Mesh = mm.Mesh,
-										Transform = transform
+										Transform = transform,
+										Collision = mm.InstancesCollision[k]
 									};
 
 									cell.Children.Add(meshNode);

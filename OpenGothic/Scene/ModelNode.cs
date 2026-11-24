@@ -11,6 +11,9 @@ public class ModelNode : SceneNode
 {
 	public DrModelInstance Instance { get; set; }
 
+	/// <summary>Whether the vob asks for collision; the reference uses its <c>cd_dynamic</c> flag.</summary>
+	public bool Collision { get; set; } = true;
+
 	/// <summary>
 	/// Models drawn on this model's bones — armour, weapons, accessories. Each is placed by the
 	/// bone's current transform, so it follows the pose without being a scene node of its own.

@@ -104,33 +104,66 @@ The world mesh and the vob collision tags are produced only when
 
 ## Character controller
 
-`CharacterController` is a kinematic capsule (`radius 30`, cylinder length `110`, so it is
-175 units tall) with its own gravity (`-981 cm/s²`). It does not use a dynamic body: each
-frame it sweeps the displacement against the static meshes and resolves the contact itself.
+`CharacterController` is a kinematic **ghost capsule** ported from OpenGothic's
+`NpcBody`/`NpcItem` movement. It is deliberately not a body and not full height:
 
-- **Grounding** is a downward ray from the capsule's bottom. A normal with `Y >= 0.55`
-  (about 57°) is walkable, and the controller keeps a 0.5-unit clearance while following it.
-  A gap up to 12 units is snapped downward; a rise is corrected only by the clearance so a
-  real step goes through the step path.
-- **Slide** is the projection of the remaining displacement onto the contact plane. Four
-  iterations cover a corner. A sweep that starts already touching is pulled back by a
-  0.5-unit skin so the next sweep is not a zero-time hit.
-- **Step-up** probes for a walkable surface up to 35 units high just past the capsule's front
-  when a near-vertical wall blocks a grounded body. The controller moves there only if the
-  capsule fits (a short upward sweep checks the ceiling). Sweeping the capsule upward does not
-  work for this: its lower sphere grazes the step's top corner, which is why the probe is a
-  ray.
-- **Overlap recovery** short-rays the four sides of the lower sphere and body; if a static
-  penetrates the capsule, it is pushed out along the shallowest exit. If nothing penetrates,
-  the controller steps back along the attempted movement by the 0.5-unit skin. The streaming
-  loader also defers a source whose bounds intersect the player capsule, so a prop cannot be
-  dropped around the player in the first place.
+- The capsule is `radius 30`, cylinder length `30`, so its total height is 90. Its centre sits
+  **150 units above the logical feet**, which puts the collidable volume at feet + 105..195 —
+  chest and head, not legs. The numbers follow the reference's `NpcBodyList::create`: for a
+  180 × 60 human bbox it computes `radius = min(h/2, min(w,d)) / 2 = 30`,
+  `ghostPadding = h/2 = 90`, `cHeight = h - 2r - ghostPadding = 30`, and
+  `groundOffset = h/2 + ghostPadding/2 + 15 = 150`. The 15-unit term is the reference's
+  "Khorinis port hack"; it keeps the capsule clear of small geometry.
+- Because the capsule floats above the ground, **low props and terrain bumps cannot catch it**.
+  A plank pile, a barrel or a 1-metre step is simply below the capsule; the player walks over
+  it. This is the reference's behaviour, not an oversight.
+- `Position` is the capsule centre; `FeetPosition` is the logical position used by scripts and
+  the camera.
+
+Each frame:
+
+1. **Movement** is a series of substeps no larger than the capsule radius (`NpcItem::tryMove`).
+   Every substep is a sweep, and a blocked substep **stops at the contact**. The remaining
+   displacement is dropped; it is **not projected along the surface**. That projection was the
+   source of the "backwards moves me sideways" report: a diagonal path into any surface was
+   turned into a strafe.
+2. **Forward-only bounce** ports `MoveAlgo::onMoveFailed`: when a *forward* move is blocked by
+   an oblique surface (`|dot(right, normal)| >= 0.4`), headings rotated by ±5..35° are tried
+   until one is clear. Backward and strafing moves never bounce, so S cannot become a strafe.
+3. **Ground** is a downward ray from the capsule centre +1 over 250 units. If the feet are
+   within 50 units of the hit (`dY <= stepHeight`, the reference's default guild value), the
+   feet snap onto it — up *or* down. That is also how steps work: the chest capsule passes over
+   the riser, then the ground ray lifts the feet. There is no separate step-assist.
+4. If the ground is farther than 50 units below, gravity applies and the downward displacement
+   is moved through the same substep test.
+
+**Overlap recovery** remains as a last resort: short rays on the capsule's four sides push it
+out along the shallowest exit, and the streaming loader defers a vob source whose bounds
+intersect the capsule.
+
+### Why the collision test is a sweep, not an overlap query
+
+The reference calls Bullet's `contactTest` on the capsule at each substep position: it asks
+"does the destination overlap anything?" BepuPhysics2 2.4 has **no public shape-overlap query**.
+Its narrow phase is internal to `Simulation.Timestep`, and `Simulation` exposes only `RayCast`
+and `Sweep`. The nearest equivalent is `Simulation.Sweep`:
+
+- a positive-time hit is a swept contact, which is stricter than a destination overlap and also
+  prevents tunnelling through thin geometry;
+- a zero-time hit means the capsule **starts** inside a collider; the controller reports the
+  move as failed and resolves that with the side-ray recovery.
+
+This is a deliberate divergence forced by the library, not a different movement model. With the
+0.5-unit skin the capsule keeps from every surface, a wall produces a positive-time hit, so the
+"stop, do not slide" behaviour matches the reference on screen.
 
 A plain launch (or `-walk`) drives the capsule from WASD and mouse look, streams collision
-around its position, and places a first-person or (F5 / `-thirdperson`) chase camera. The
-chase camera ray-casts backwards from the head so a wall does not cut through it. The start is
-a placeholder on the harbour plaza until the game session reads the scripted start point.
-Diagnostics keep the fixed camera; `-nowalk` forces it.
+around its position, and places a first-person or (F5 / `-thirdperson`) chase camera. The chase
+camera ray-casts backwards from the head so a wall does not cut through it. `-player:<x,y,z>`
+starts at a diagnostic eye position (the player is dropped to the ground below it),
+`-yaw:<degrees>` sets the facing without relying on the camera, and `-walktest:<seconds>` holds
+forward (negative: backward) and logs the final feet position. Diagnostics keep the fixed
+camera; `-nowalk` forces it.
 
 ## Self-checks
 
@@ -140,16 +173,16 @@ the harbour basin, so the plaza is the stable starting point):
 1. **Walk** — pick the most open of 16 directions, then walk 8 seconds. The capsule must stay
    grounded and near the surface, with no large per-step rise. The walk also calls
    `PhysicsWorld.Update`, so chunk/source streaming is exercised.
-2. **Step** — in a separate flat test world, walk into a 30-unit block; the capsule must end
-   up 30 units higher.
-3. **Wall** — in a flat test world, walk diagonally into a wall; the capsule must keep its
-   radius from the face and keep moving along it.
+2. **Step** — in a separate flat test world, walk over a 30-unit block; the chest capsule passes
+   above it and the ground ray must lift the feet by 30.
+3. **Wall** — in a flat test world, walk into a wall and then reverse. The capsule must hold its
+   radius from the face, back away, and show **zero sideways drift**.
 4. **Drop** — drop a dynamic capsule on the level and rest it on terrain. The nearest-wall
    probe is best-effort: the capsule may settle beside a narrow piece of geometry that the
    16-ray fan misses.
 
-A run on `newworld.zen` reports 2,390 units walked with 100% grounded, clearance 0.5..0.5 and
-maximum rise 0.32 while loading/unloading chunks and sources; the step climbed 30; the wall
-slide moved 382 units and held 30.4 from the face for a radius of 30; and the dropped capsule
-rested on terrain about 30 above it. All lines are in `log.txt`, so a regression is visible
-without a physics overlay.
+A run on `newworld.zen` reports 2,387 units walked with 100% grounded, clearance -0.01..0.01
+and maximum rise 0.32 while loading/unloading chunks and sources; the feet climbed 30 over the
+block; the wall test held 30.5 from the face, backed 98 units with 0 sideways drift; and the
+dropped capsule rested on terrain about 29 above it. All lines are in `log.txt`, so a
+regression is visible without a physics overlay.

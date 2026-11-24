@@ -9,35 +9,43 @@ using Num = System.Numerics;
 namespace OpenGothic.Physics;
 
 /// <summary>
-/// A kinematic capsule that walks the static world. Movement is swept and slid against the
-/// collision set rather than solved as a dynamic body: that keeps the pose upright and makes
-/// slopes, wall slide and step-up explicit instead of emerging from contact jitter.
+/// The player's kinematic capsule, ported from OpenGothic's NPC movement. The capsule is a
+/// non-solid "ghost" shape placed at chest height: the reference deliberately keeps it off the
+/// ground so small props and terrain bumps cannot trap the player's legs. Movement is a
+/// substepped series of position tests; a blocked step stops the move instead of projecting it
+/// sideways. Ground following is a downward ray plus a step-height snap, not a gravity sweep.
 /// </summary>
 /// <remarks>
-/// Positions are the capsule's centre, in the game's centimetre units. The capsule is always
-/// upright, so the bottom is <see cref="HalfHeight"/> below the centre.
+/// <see cref="Position"/> is the capsule's centre. It sits <see cref="CenterOffset"/> above the
+/// logical feet position, which is what the game, the camera and <c>-player:</c> all reason
+/// about. The capsule itself is only the chest/head volume, matching the reference's
+/// <c>HumShape</c> for a human-sized actor.
 /// </remarks>
 public sealed class CharacterController
 {
 	public const float DefaultRadius = 30f;
-	public const float DefaultLength = 110f;
+	public const float DefaultLength = 30f;
+
+	/// <summary>Distance from the logical feet to the centre of the collision capsule.</summary>
+	public const float CenterOffset = 150f;
 
 	private const float Gravity = -981f;
 	private const float WalkSpeed = 300f;
 	private const float GroundAcceleration = 3000f;
 	private const float AirAcceleration = 800f;
-	private const float StepHeight = 35f;
-	private const float SnapDistance = 12f;
+
+	/// <summary>Largest horizontal substep; the reference uses the capsule radius.</summary>
+	private const float StepSize = DefaultRadius;
+
+	/// <summary>Largest rise or drop treated as ground following instead of a fall.</summary>
+	private const float StepHeight = 50f;
+
+	/// <summary>OpenGothic's default guild step height is 50; keep the same value here.</summary>
 	private const float Skin = 0.5f;
+	private const float MinMove = 0.01f;
+	private const float TerminalVelocity = -4000f;
 
-	/// <summary>Gap kept between the capsule's bottom and the ground it stands on.</summary>
-	public const float GroundClearance = 0.5f;
-
-	/// <summary>Normal Y above which a surface counts as ground rather than a wall.</summary>
-	private const float MaxSlopeCos = 0.55f;
-
-	/// <summary>Normal Y below which a vertical obstacle is worth stepping over.</summary>
-	private const float WallNormalY = 0.7f;
+	private const float GroundProbeDistance = CenterOffset + 100f;
 
 	private readonly PhysicsWorld _world;
 	private readonly Capsule _shape;
@@ -48,40 +56,40 @@ public sealed class CharacterController
 		_shape = new Capsule(DefaultRadius, DefaultLength);
 	}
 
-	/// <summary>Capsule centre in world space.</summary>
+	/// <summary>Capsule centre in world space, <see cref="CenterOffset"/> above the feet.</summary>
 	public Vector3 Position;
 
 	public Vector3 Velocity;
 
+	/// <summary>Logical feet position, which is what scripts and the camera use.</summary>
+	public Vector3 FeetPosition => Position - Vector3.UnitY * CenterOffset;
+
 	public bool Grounded { get; private set; }
 
-	/// <summary>Number of successful steps, for the self-check log.</summary>
-	public int StepSuccesses { get; private set; }
-
-	/// <summary>Why the last step attempt failed, for the self-check log.</summary>
-	public StepFailure LastStepFailure { get; private set; }
-
-	public enum StepFailure
-	{
-		None,
-		NoGround,
-		TooSteep,
-		TooLow,
-		TooHigh,
-		NoHeadroom,
-	}
+	/// <summary>Normal of the surface that blocked the last <see cref="TryMove"/>.</summary>
+	public Vector3 LastHitNormal { get; private set; }
 
 	public float Radius => DefaultRadius;
 
 	public float Length => DefaultLength;
 
+	/// <summary>Half the capsule's total height, including both end spheres.</summary>
 	public float HalfHeight => Radius + Length * 0.5f;
+
+	public enum MoveResult
+	{
+		Fail,
+		Ok,
+		Skip,
+		Partial,
+	}
 
 	/// <summary>
 	/// Advances one frame. <paramref name="wishDirection"/> is a world-space horizontal
-	/// direction; its length is ignored.
+	/// direction; its length is ignored. <paramref name="facingDirection"/> is the direction
+	/// the player faces and is only used for the reference's forward-only wall bounce.
 	/// </summary>
-	public void Step(TimeSpan elapsed, Vector3 wishDirection)
+	public void Step(TimeSpan elapsed, Vector3 wishDirection, Vector3 facingDirection = default)
 	{
 		var dt = MathF.Min((float)elapsed.TotalSeconds, 0.05f);
 		if (dt <= 0f)
@@ -89,18 +97,14 @@ public sealed class CharacterController
 			return;
 		}
 
-		// A loaded static can land around the player; resolve that before doing any movement so
-		// the capsule does not need a key press to escape an overlap.
-		if (TryUnstick(Vector3.Zero))
+		// A streamed static or a spawn can leave the capsule inside geometry. The reference
+		// ignores collisions that were already present for the rest of the move; probing the
+		// sides is the closest equivalent Bepu allows and also covers geometry that appears
+		// without any input.
+		if (TryUnstick())
 		{
 			Log.Info($"Unstuck player at ({Position.X:0.#}, {Position.Y:0.#}, {Position.Z:0.#}).");
 		}
-
-		Grounded = ProbeGround(out _);
-
-		// A grounded body is pressed into the ground so slopes are followed without
-		// accumulating gravity every frame; otherwise gravity applies normally.
-		Velocity.Y = Grounded ? -2f : Velocity.Y + Gravity * dt;
 
 		var wish = wishDirection;
 		wish.Y = 0f;
@@ -113,233 +117,224 @@ public sealed class CharacterController
 		Velocity.X = MoveTowards(Velocity.X, wish.X * WalkSpeed, acceleration * dt);
 		Velocity.Z = MoveTowards(Velocity.Z, wish.Z * WalkSpeed, acceleration * dt);
 
-		// A grounded body moves horizontally and then follows the ground. Integrating gravity
-		// while grounded would project the downward step onto a slope and make the capsule
-		// creep downhill with no input; the snap below is what keeps it on the surface.
-		if (Grounded)
+		var horizontal = new Vector3(Velocity.X, 0f, Velocity.Z) * dt;
+		if (horizontal.LengthSquared() > 1e-8f && TryMove(horizontal) != MoveResult.Ok &&
+		    IsForward(horizontal, facingDirection))
 		{
-			Velocity.Y = 0f;
-			MoveWithSlide(new Vector3(Velocity.X, 0f, Velocity.Z) * dt);
-		}
-		else
-		{
-			Velocity.Y += Gravity * dt;
-			MoveWithSlide(Velocity * dt);
+			TryBounce(horizontal);
 		}
 
-		// Follow the ground after the horizontal move. Only snap downward: going up is what
-		// the step assist is for, and a ray should not teleport the capsule onto a ledge.
-		if (Grounded)
-		{
-			if (!ProbeGround(out var support))
-			{
-				Grounded = false;
-			}
-			else
-			{
-				var targetY = support.Position.Y + HalfHeight + GroundClearance;
-				var difference = targetY - Position.Y;
-
-				// Follow the ground down a slope, and correct the small sinking caused by the
-				// horizontal slide. A rise is limited to the clearance: a real step is the
-				// step assist's job.
-				if (difference <= GroundClearance + 1f && difference >= -SnapDistance)
-				{
-					Position.Y = targetY;
-					if (Velocity.Y < 0f)
-					{
-						Velocity.Y = 0f;
-					}
-				}
-				else if (difference < -SnapDistance)
-				{
-					Grounded = false;
-				}
-			}
-		}
-	}
-
-	private bool ProbeGround(out PhysicsRayHit hit)
-	{
-		var origin = Position - Vector3.UnitY * HalfHeight + Vector3.UnitY * 2f;
-		return _world.RayCast(origin, -Vector3.UnitY, SnapDistance + 5f, false, out hit) &&
-		       hit.Normal.Y >= MaxSlopeCos;
+		FollowGround(dt);
 	}
 
 	/// <summary>
-	/// Sweeps the frame's displacement, sliding along whatever it hits and trying a step when
-	/// a wall blocks a grounded body. Four iterations cover a corner without turning the frame
-	/// into a search.
+	/// Moves by <paramref name="delta"/> in substeps no larger than <see cref="StepSize"/>.
+	/// Each substep is a sweep; a blocked substep stops at the contact and the remaining
+	/// displacement is dropped. That is the reference's <c>NpcItem::tryMove</c> behavior and
+	/// is what keeps a wall from turning "backwards" into a sideways slide.
 	/// </summary>
-	private void MoveWithSlide(Vector3 delta)
+	public MoveResult TryMove(Vector3 delta)
 	{
-		var canStep = Grounded;
-
-		for (var iteration = 0; iteration < 6; ++iteration)
+		var length = delta.Length();
+		if (length < MinMove)
 		{
-			var length = delta.Length();
-			if (length < 1e-4f)
+			return MoveResult.Skip;
+		}
+
+		var start = Position;
+		var count = 1;
+		var horizontal = new Vector2(delta.X, delta.Z).Length();
+
+		if (horizontal > StepSize || MathF.Abs(delta.Y) > HalfHeight)
+		{
+			var countXZ = (int)MathF.Ceiling(horizontal / StepSize);
+			var countY = (int)MathF.Ceiling(MathF.Abs(delta.Y) / HalfHeight);
+			count = Math.Max(countXZ, countY);
+		}
+
+		for (var i = 1; i <= count; ++i)
+		{
+			var target = start + delta * (i / (float)count);
+			var step = target - Position;
+			if (step.LengthSquared() < 1e-10f)
 			{
-				return;
+				continue;
 			}
 
-			if (!Sweep(delta, out var t, out var normal))
+			if (!Sweep(step, out var t, out var normal))
 			{
-				Position += delta;
-				return;
+				Position = target;
+				continue;
 			}
 
 			if (t <= 0f)
 			{
-				// The shape starts inside something. A sweep cannot say which way is out, so
-				// resolve the overlap with short rays and retry instead of treating the hit as
-				// a ground contact and freezing the capsule.
-				if (!TryUnstick(delta))
-				{
-					return;
-				}
-
-				continue;
+				// The capsule starts inside a collider. Bepu has no public destination-overlap
+				// query, so the caller resolves it with TryUnstick on the next frame.
+				LastHitNormal = Vector3.UnitY;
+				return MoveResult.Fail;
 			}
 
-			// Stop just short of the surface; starting the next sweep exactly on it would
-			// report a zero-time hit every frame.
-			var safeT = MathF.Max(0f, t - Skin / length);
-			Position += delta * safeT;
+			// Stop just short of the surface. The step is not projected along the surface:
+			// that is the slide the reference avoids at the movement layer.
+			var safeT = MathF.Max(0f, t - Skin / step.Length());
+			Position += step * safeT;
+			LastHitNormal = normal;
 
-			if (normal.Y >= MaxSlopeCos && delta.Y <= 0f)
+			var moved = (Position - start).LengthSquared();
+			return moved > MinMove * MinMove ? MoveResult.Partial : MoveResult.Fail;
+		}
+
+		return MoveResult.Ok;
+	}
+
+	/// <summary>
+	/// Follows the ground with a downward ray from chest height, then snaps the feet onto it
+	/// within <see cref="StepHeight"/>. A step up is just a snap: the chest capsule passes
+	/// over anything below it, exactly like the reference's <c>HumShape</c>. Nothing below the
+	/// step height is a fall.
+	/// </summary>
+	private void FollowGround(float dt)
+	{
+		var feetY = Position.Y - CenterOffset;
+		var origin = new Vector3(Position.X, Position.Y + 1f, Position.Z);
+
+		if (_world.RayCast(origin, -Vector3.UnitY, GroundProbeDistance, false, out var hit) &&
+		    feetY - hit.Position.Y <= StepHeight)
+		{
+			var difference = feetY - hit.Position.Y;
+			if (MathF.Abs(difference) > 1e-3f)
 			{
-				Grounded = true;
-				Velocity.Y = 0f;
+				TryMove(new Vector3(0f, -difference, 0f));
 			}
 
-			if (canStep && normal.Y < WallNormalY && TryStep(delta * (1f - t)))
-			{
-				return;
-			}
+			Grounded = true;
+			Velocity.Y = 0f;
+			return;
+		}
 
-			var remaining = delta * (1f - t);
-			var into = Vector3.Dot(remaining, normal);
-			if (into < 0f)
-			{
-				remaining -= normal * into;
-			}
-
-			delta = remaining;
-			canStep = false;
+		Grounded = false;
+		Velocity.Y = MathF.Max(Velocity.Y + Gravity * dt, TerminalVelocity);
+		if (Velocity.Y * dt < 0f &&
+		    TryMove(new Vector3(0f, Velocity.Y * dt, 0f)) != MoveResult.Ok)
+		{
+			Grounded = true;
+			Velocity.Y = 0f;
 		}
 	}
 
 	/// <summary>
-	/// Pushes the capsule out of a static it overlaps. When a streaming load or a seam puts
-	/// geometry around the player, every sweep starts at zero time and the controller cannot
-	/// move; probing the four sides of the lower sphere finds the shallowest exit. If nothing
-	/// is actually penetrating, step back along the attempted movement and try again.
+	/// Port of the reference's <c>onMoveFailed</c> bounce: when a forward move is blocked by
+	/// an oblique surface, try headings rotated by up to 35 degrees before giving up. Backward
+	/// and strafing moves never bounce, so pressing S cannot turn into a strafe.
 	/// </summary>
-	private bool TryUnstick(Vector3 delta)
-	{
-		var lower = Position - Vector3.UnitY * (HalfHeight - Radius);
-
-		if (TryPush(lower, Vector3.UnitX) ||
-		    TryPush(lower, -Vector3.UnitX) ||
-		    TryPush(lower, Vector3.UnitZ) ||
-		    TryPush(lower, -Vector3.UnitZ) ||
-		    TryPush(Position, Vector3.UnitX) ||
-		    TryPush(Position, -Vector3.UnitX) ||
-		    TryPush(Position, Vector3.UnitZ) ||
-		    TryPush(Position, -Vector3.UnitZ))
-		{
-			Velocity = Vector3.Zero;
-			return true;
-		}
-
-		var length = delta.Length();
-		if (length > 1e-4f)
-		{
-			Position -= delta / length * Skin;
-			Velocity = Vector3.Zero;
-			return true;
-		}
-
-		return false;
-	}
-
-	private bool TryPush(Vector3 origin, Vector3 direction)
-	{
-		var reach = Radius + 1f;
-		if (!_world.RayCast(origin, direction, reach, false, out var hit) ||
-		    hit.Distance >= Radius - 0.01f)
-		{
-			return false;
-		}
-
-		Position -= direction * (Radius - hit.Distance + Skin);
-		return true;
-	}
-
-	/// <summary>
-	/// Tries to climb an obstacle by probing for a walkable surface within
-	/// <see cref="StepHeight"/> just past the capsule's front. Shape sweeps cannot do this
-	/// reliably: the lower sphere grazes the step's top corner on the way up.
-	/// </summary>
-	private bool TryStep(Vector3 horizontal)
+	private void TryBounce(Vector3 horizontal)
 	{
 		var direction = horizontal;
 		direction.Y = 0f;
-		if (direction.LengthSquared() < 1e-4f)
+		if (direction.LengthSquared() < 1e-6f)
 		{
-			return false;
+			return;
 		}
 
 		direction.Normalize();
-
-		var foot = Position - Vector3.UnitY * HalfHeight;
-		var probe = new Vector3(
-			foot.X + direction.X * (Radius + 4f),
-			foot.Y + StepHeight + 6f,
-			foot.Z + direction.Z * (Radius + 4f));
-
-		if (!_world.RayCast(probe, -Vector3.UnitY, StepHeight + 12f, false, out var hit))
+		var ortho = Vector3.Cross(direction, Vector3.UnitY);
+		if (MathF.Abs(Vector3.Dot(ortho, LastHitNormal)) < 0.4f)
 		{
-			LastStepFailure = StepFailure.NoGround;
-			return false;
-		}
-
-		if (hit.Normal.Y < MaxSlopeCos)
-		{
-			LastStepFailure = StepFailure.TooSteep;
-			return false;
-		}
-
-		var rise = hit.Position.Y - foot.Y;
-		if (rise < 2f)
-		{
-			LastStepFailure = StepFailure.TooLow;
-			return false;
-		}
-
-		if (rise > StepHeight)
-		{
-			LastStepFailure = StepFailure.TooHigh;
-			return false;
+			return;
 		}
 
 		var saved = Position;
-		Position = new Vector3(probe.X, hit.Position.Y + HalfHeight + GroundClearance, probe.Z);
-
-		// The capsule must fit above the step; a low ceiling is not a stair.
-		if (Sweep(Vector3.UnitY * (StepHeight + 5f), out _, out _))
+		for (var degrees = 5; degrees <= 35; degrees += 5)
 		{
-			Position = saved;
-			LastStepFailure = StepFailure.NoHeadroom;
+			for (var side = -1; side <= 1; side += 2)
+			{
+				Position = saved;
+				var radians = MathF.PI / 180f * degrees * side;
+				var rotated = RotateY(horizontal, radians);
+
+				if (TryMove(rotated) is MoveResult.Ok or MoveResult.Partial)
+				{
+					return;
+				}
+			}
+		}
+
+		Position = saved;
+	}
+
+	private static bool IsForward(Vector3 movement, Vector3 facing)
+	{
+		if (facing.LengthSquared() < 1e-6f)
+		{
 			return false;
 		}
 
-		LastStepFailure = StepFailure.None;
-		++StepSuccesses;
-		Grounded = true;
-		Velocity.Y = 0f;
+		facing.Y = 0f;
+		facing.Normalize();
+
+		movement.Y = 0f;
+		if (movement.LengthSquared() < 1e-6f)
+		{
+			return false;
+		}
+
+		movement.Normalize();
+		return Vector3.Dot(movement, facing) > 0.8f;
+	}
+
+	private static Vector3 RotateY(Vector3 value, float radians)
+	{
+		var cos = MathF.Cos(radians);
+		var sin = MathF.Sin(radians);
+		return new Vector3(
+			value.X * cos + value.Z * sin,
+			value.Y,
+			-value.X * sin + value.Z * cos);
+	}
+
+	/// <summary>
+	/// Pushes the capsule out of a static it overlaps. Probing the capsule's sides with short
+	/// rays finds the shallowest exit; the streaming loader also defers a source whose bounds
+	/// would enclose the capsule, so this is a last resort.
+	/// </summary>
+	private bool TryUnstick()
+	{
+		const float reach = DefaultRadius + 1f;
+
+		var bestPush = float.MaxValue;
+		var bestDirection = Vector3.Zero;
+
+		ConsiderPenetration(Position, Vector3.UnitX, reach, ref bestPush, ref bestDirection);
+		ConsiderPenetration(Position, -Vector3.UnitX, reach, ref bestPush, ref bestDirection);
+		ConsiderPenetration(Position, Vector3.UnitZ, reach, ref bestPush, ref bestDirection);
+		ConsiderPenetration(Position, -Vector3.UnitZ, reach, ref bestPush, ref bestDirection);
+
+		if (bestPush >= float.MaxValue)
+		{
+			return false;
+		}
+
+		Position += bestDirection * bestPush;
+		Velocity = Vector3.Zero;
 		return true;
+	}
+
+	private void ConsiderPenetration(Vector3 origin, Vector3 direction, float reach, ref float bestPush,
+		ref Vector3 bestDirection)
+	{
+		if (!_world.RayCast(origin, direction, reach, false, out var hit) ||
+		    hit.Distance >= DefaultRadius - 0.01f)
+		{
+			return;
+		}
+
+		var push = DefaultRadius - hit.Distance + Skin;
+		if (push < bestPush)
+		{
+			bestPush = push;
+			bestDirection = -direction;
+		}
 	}
 
 	/// <summary>

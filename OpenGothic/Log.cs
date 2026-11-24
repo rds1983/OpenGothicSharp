@@ -54,7 +54,18 @@ public static class Log
 		switch (level)
 		{
 			case LogLevel.Error:
-				Error($"[{category}] {message}");
+				// ZenKit 1.3 reports recoverable section-size mismatches as errors; the reference
+				// client logs the same messages at info/warning. Keep real errors visible.
+				if (message.Contains("bytes overflowed in section", StringComparison.OrdinalIgnoreCase) ||
+				    message.Contains("bytes remaining in section", StringComparison.OrdinalIgnoreCase))
+				{
+					Warning($"[{category}] {message}");
+				}
+				else
+				{
+					Error($"[{category}] {message}");
+				}
+
 				break;
 
 			case LogLevel.Warning:

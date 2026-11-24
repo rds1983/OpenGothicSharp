@@ -41,6 +41,15 @@ namespace OpenGothic
 	public record DrModelTag
 	{
 		/// <summary>
+		/// The hierarchy's root translation, in this engine's mirrored space. The reference
+		/// cancels X and Z for every model; props cancel Y too (<c>ObjVisual</c> disables Y
+		/// translation), while actor-like spawns keep the Y so the bind pose's feet reach the
+		/// origin. The full vector is kept so later placement code can reproduce the
+		/// reference's cancellation exactly.
+		/// </summary>
+		public Vector3 RootTranslation { get; init; }
+
+		/// <summary>
 		/// Ids of the clips whose poses are already part of the parts'
 		/// <see cref="DrMeshPartTag.CullBounds"/>. The bounds are stored per part, but the
 		/// question "has this clip been measured?" is per model, so the answer lives here.
@@ -67,6 +76,10 @@ namespace OpenGothic
 
 	public static class DigitalRiseModelTagExtensions
 	{
+		/// <summary>The model hierarchy's root translation in mirrored world space, or zero.</summary>
+		public static Vector3 GetRootTranslation(this DrModel model) =>
+			(model?.Tag as DrModelTag)?.RootTranslation ?? Vector3.Zero;
+
 		/// <summary>Playback parameters the model script stores for a clip, or null.</summary>
 		public static ModelClipInfo GetPlaybackInfo(this AnimationClip clip) =>
 			(clip?.Tag as AnimationClipTag)?.info;

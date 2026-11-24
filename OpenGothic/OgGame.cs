@@ -26,6 +26,9 @@ public class OgGame : Game
 	private float _mousePitch;
 	private bool _thirdPerson;
 	private float _walkTestSeconds;
+	private float _walkTestLogTimer;
+	private bool _mouseLook = true;
+	private bool _mouseNeedsCenter = true;
 	private Desktop _desktop;
 	private Hud _hud;
 	private KeyboardState _previousKeyboard;
@@ -134,8 +137,17 @@ public class OgGame : Game
 			+ Camera.Forward * (distance + offset.Z);
 		var transform = Matrix.CreateRotationY(MathHelper.ToRadians(yaw)) * Matrix.CreateTranslation(position);
 
+		// A diagnostic model is actor-like: the reference keeps the root translation's Y so
+		// the bind pose's feet reach the origin, and cancels X/Z for every model. World vobs
+		// ignore the root translation entirely.
+		var rootTranslation = model.GetRootTranslation();
+		if (rootTranslation.Y != 0f)
+		{
+			transform = Matrix.CreateTranslation(0f, rootTranslation.Y, 0f) * transform;
+		}
+
 		// One node type serves props and actors alike; a model with no clips simply never plays.
-		var node = new ModelNode { Instance = instance };
+		var node = new ModelNode { Instance = instance, Collision = false };
 		node.Transform = transform;
 
 		var hasClips = model.Animations != null && model.Animations.Count > 0;
@@ -349,7 +361,7 @@ public class OgGame : Game
 			{
 				_physics.RunWalkTest(center);
 				_physics.RunStepTest();
-				_physics.RunWallSlideTest();
+				_physics.RunWallTest();
 				_physics.RunCapsuleTest(center);
 			}
 		}
@@ -375,18 +387,24 @@ public class OgGame : Game
 
 		_controller = new CharacterController(_physics)
 		{
-			Position = ground.Position + Vector3.UnitY *
-				(CharacterController.DefaultRadius + CharacterController.DefaultLength * 0.5f +
-				 CharacterController.GroundClearance)
+			Position = ground.Position + Vector3.UnitY * CharacterController.CenterOffset
 		};
 
-		_mouseYaw = Camera.Yaw;
+		_mouseYaw = CommandLine.Instance.PlayerYaw.HasValue
+			? MathHelper.ToRadians(CommandLine.Instance.PlayerYaw.Value)
+			: Camera.Yaw;
 		_mousePitch = Camera.Pitch;
 		_thirdPerson = CommandLine.Instance.ThirdPerson;
 		_walkTestSeconds = CommandLine.Instance.WalkTestSeconds ?? 0f;
+		// A fixed start yaw, a synthetic walk or a capture is a diagnostic run; keep the pointer
+		// out of it so the result does not depend on where the OS cursor happened to be.
+		_mouseLook = !(CommandLine.Instance.PlayerYaw.HasValue ||
+		               CommandLine.Instance.WalkTestSeconds.HasValue ||
+		               CommandLine.Instance.ScreenshotPath != null);
+		_mouseNeedsCenter = true;
 		Mouse.SetPosition(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height / 2);
 
-		Log.Info($"Player spawned at ({_controller.Position.X:0.#}, {_controller.Position.Y:0.#}, {_controller.Position.Z:0.#}) on {ground.Kind}.");
+		Log.Info($"Player spawned at feet ({_controller.FeetPosition.X:0.#}, {_controller.FeetPosition.Y:0.#}, {_controller.FeetPosition.Z:0.#}) on {ground.Kind}.");
 	}
 
 	protected override void Update(GameTime gameTime)
@@ -442,15 +460,27 @@ public class OgGame : Game
 		var centerX = viewport.Width / 2;
 		var centerY = viewport.Height / 2;
 
-		if (IsActive)
+		if (IsActive && _mouseLook)
 		{
 			var mouse = Mouse.GetState();
 			var dx = mouse.X - centerX;
 			var dy = mouse.Y - centerY;
-			if (dx != 0 || dy != 0)
+
+			// The first read after centring can still report the old position, and a pointer
+			// that left the window reports a huge jump. Both would spin the view in one frame.
+			if (_mouseNeedsCenter)
+			{
+				_mouseNeedsCenter = false;
+				Mouse.SetPosition(centerX, centerY);
+			}
+			else if (MathF.Abs(dx) <= 100 && MathF.Abs(dy) <= 100 && (dx != 0 || dy != 0))
 			{
 				_mouseYaw += dx * 0.0025f;
 				_mousePitch = MathHelper.Clamp(_mousePitch - dy * 0.0025f, -1.4f, 1.4f);
+				Mouse.SetPosition(centerX, centerY);
+			}
+			else if (MathF.Abs(dx) > 100 || MathF.Abs(dy) > 100)
+			{
 				Mouse.SetPosition(centerX, centerY);
 			}
 		}
@@ -465,25 +495,42 @@ public class OgGame : Game
 		if (keyboard.IsKeyDown(Keys.A)) wish -= right;
 
 		var walkTestEnded = false;
-		if (_walkTestSeconds > 0f)
+		if (_walkTestSeconds != 0f)
 		{
-			wish += forward;
-			_walkTestSeconds -= (float)gameTime.ElapsedGameTime.TotalSeconds;
-			walkTestEnded = _walkTestSeconds <= 0f;
+			var testDirection = MathF.Sign(_walkTestSeconds);
+			wish += forward * testDirection;
+			_walkTestSeconds -= (float)gameTime.ElapsedGameTime.TotalSeconds * testDirection;
+			walkTestEnded = testDirection > 0f ? _walkTestSeconds <= 0f : _walkTestSeconds >= 0f;
+			if (walkTestEnded)
+			{
+				_walkTestSeconds = 0f;
+			}
 		}
 
-		_controller.Step(gameTime.ElapsedGameTime, wish);
+		_controller.Step(gameTime.ElapsedGameTime, wish, forward);
 		_physics.Update(_controller.Position);
+
+		if (_walkTestSeconds != 0f)
+		{
+			_walkTestLogTimer -= (float)gameTime.ElapsedGameTime.TotalSeconds;
+			if (_walkTestLogTimer <= 0f)
+			{
+				_walkTestLogTimer = 0.25f;
+				Log.Info(
+					$"Walk test: yaw {MathHelper.ToDegrees(_mouseYaw):0.#}, wish ({wish.X:0.##}, {wish.Z:0.##}), " +
+					$"feet ({_controller.FeetPosition.X:0.#}, {_controller.FeetPosition.Y:0.#}, {_controller.FeetPosition.Z:0.#}).");
+			}
+		}
 
 		if (walkTestEnded)
 		{
-			Log.Info($"Walk test ended at ({_controller.Position.X:0.#}, {_controller.Position.Y:0.#}, {_controller.Position.Z:0.#}).");
+			Log.Info($"Walk test ended at feet ({_controller.FeetPosition.X:0.#}, {_controller.FeetPosition.Y:0.#}, {_controller.FeetPosition.Z:0.#}).");
 		}
 
 		Camera.Yaw = _mouseYaw;
 		Camera.Pitch = _mousePitch;
 
-		var feet = _controller.Position - Vector3.UnitY * _controller.HalfHeight;
+		var feet = _controller.FeetPosition;
 
 		if (!_thirdPerson)
 		{

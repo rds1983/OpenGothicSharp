@@ -58,10 +58,17 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   grouped by material friction with water as a contact-free sensor. It streams: the level mesh
   is split into 2000-unit chunks and the vobs are collected as sources, with a 3000-unit
   neighbourhood loaded around the player and refreshed every 256 units. `-physics` also runs
-  the walk, step, wall-slide and capsule checks.
-- A kinematic character controller walks the terrain with gravity, ground snap, slope slide and
-  a 35-unit step assist. A plain launch starts it in first person: WASD, mouse look, F5 for the
-  chase camera (`-thirdperson`), `-nowalk` for the old static diagnostic camera.
+  the walk, step, wall and capsule checks.
+- A kinematic character controller walks the terrain. It is the reference's chest-height ghost
+  capsule: substepped movement that stops at a blocked step (no projection/slide), a downward
+  ground ray with a 50-unit step snap, and a forward-only wall bounce. A plain launch starts it
+  in first person: WASD, mouse look, F5 for the chase camera (`-thirdperson`), `-nowalk` for the
+  old static diagnostic camera.
+- Vob placement follows `ObjVisual`: `L * transpose(R) * L` rotation conversion, `show_visual`
+  and `cd_dynamic` gates, raw model bounds for props (their hierarchy root translation is
+  cancelled, so the bookstand sits on the floor), and the root translation kept on
+  `DrModelTag` for actor-like spawns.
+- ZenKit is pinned to `1.3.0-cs.1`, matching the parser version the reference C++ client uses.
 - Models skip submeshes whose material has no texture; the shipped data uses those as hidden
   placeholder faces (`REPAIR_PLANK`'s `ZM_REP_HIDDEN` was a white triangle on screen).
 - No audio or scripting yet.
@@ -432,8 +439,8 @@ keep the fixed camera, and `-nowalk` forces it back.
 Collision streams: the level mesh is bucketed into 2000-unit chunks while it is read, the
 static vobs are collected once as sources (one per mesh/instance, one per model with rigid
 parts), and `PhysicsWorld.Update` reloads a 3000-unit neighbourhood after the player moves 256
-units, with a 500-unit unload margin. A loaded set for the harbour is 16 chunks and ~394
-sources: 9.7k terrain + 33k vob source triangles, 478 static bodies. Walking is the default,
+units, with a 500-unit unload margin. A loaded set for the harbour is 16 chunks and 304 vob
+sources: 9.7k terrain + 30.2k vob source triangles, 385 static bodies. Walking is the default,
 so the CPU triangles are built for any launch that is not a diagnostic.
 
 The HUD controls list was regenerated with the movement keys. A no-texture model submesh is
@@ -442,10 +449,30 @@ hidden faces, and `REPAIR_PLANK`'s `ZM_REP_HIDDEN` had been a visible white tria
 harbour.
 
 **Done when:** the developer can walk around a level with mouse and keyboard. — The developer
-walked from the harbour into the city and confirmed. The self-checks still pass (walk 2,390
-units with 100% grounding, 30-unit step, 382-unit wall slide, capsule rest/wall), and the
-standard model captures are unchanged. Details in
+walked from the harbour into the city and confirmed. The self-checks still pass (walk 2,387
+units with 100% grounding, 30-unit step, capsule rest/wall), and the standard model captures
+are unchanged. Details in
 [Specifications/gothic-collision-format.md](Documentation/Specifications/gothic-collision-format.md).
+
+The controller was then revised to follow the reference's movement model after two "stuck"
+reports (a wall at the harbour and a plank pile): the collision shape is now the reference's
+chest-height ghost capsule instead of a full-height capsule, movement is substepped and stops
+at the first blocked substep instead of projecting the remainder along the surface, and ground
+following is a downward ray with a 50-unit step snap. A blocked backward move therefore stops
+instead of becoming a side step. `-yaw:<degrees>` was added so a diagnostic walk can be aimed
+without `-lookat:` measuring from the camera. BepuPhysics2 2.4 has no public shape-overlap
+query, so the Bullet `contactTest` of the reference is approximated with a sweep; the difference
+is documented in the specification.
+
+Vob placement was then checked against `Try/OpenGothic` as well. The rotation now uses the
+reference's handedness conversion (`L * transpose(R) * L`); `show_visual` gates both rendering
+and collision, and `cd_dynamic` gates vob collision. A prop model uses its raw bounds and the
+vob transform, because the reference cancels the model hierarchy's root translation for props
+(`ObjVisual::setYTranslationEnable(false)`); this is why the harbour bookstand had been hovering
+`133.6` units above its floor and now sits on it. The root translation is kept on `DrModelTag`
+for actor-like spawns, which apply its Y. ZenKit was upgraded from `0.1.13` to `1.3.0-cs.1`,
+matching the reference's ZenKit 1.3 parser; only two enum casts were required. Details in
+[Specifications/zen-vob-transform.md](Documentation/Specifications/zen-vob-transform.md).
 
 ---
 

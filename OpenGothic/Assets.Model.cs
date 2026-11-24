@@ -301,13 +301,6 @@ partial class Assets
 			var bone = new DrModelBone(node.Name, mesh);
 			bone.DefaultPose = new SrtTransform(node.Transform.ToXna());
 
-			// The root offset lifts the model so its lowest point sits on the origin: an
-			// actor's bind pose is authored around the hips, with the feet below y = 0.
-			if (i == 0)
-			{
-				bone.DefaultPose.Translation += zkHierarchy.RootTranslation.ToXna();
-			}
-
 			bones[i] = bone;
 			parents[i] = node.ParentIndex;
 			boneIndexByName.TryAdd(node.Name, i);
@@ -419,6 +412,7 @@ partial class Assets
 		}
 
 		var result = new DrModel(root);
+		result.Tag = new DrModelTag { RootTranslation = zkHierarchy.RootTranslation.ToXna() };
 
 		// Now that the parts exist, give each skinned mesh its skin. The GPU is handed
 		// inverseBind * boneWorld, so this must be the inverse of the pose the mesh was

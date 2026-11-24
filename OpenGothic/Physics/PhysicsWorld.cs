@@ -259,7 +259,8 @@ public sealed class PhysicsWorld : IDisposable
 	/// <summary>Whether a source's box intersects the capsule the player occupies.</summary>
 	private static bool OverlapsPlayer(BoundingBox bounds, Vector3 center)
 	{
-		var half = new Vector3(CapsuleRadius, CapsuleRadius + CapsuleLength * 0.5f, CapsuleRadius);
+		var halfHeight = CharacterController.DefaultRadius + CharacterController.DefaultLength * 0.5f;
+		var half = new Vector3(CharacterController.DefaultRadius, halfHeight, CharacterController.DefaultRadius);
 		return bounds.Intersects(new BoundingBox(center - half, center + half));
 	}
 
@@ -281,19 +282,30 @@ public sealed class PhysicsWorld : IDisposable
 				switch (node)
 				{
 					case MeshNode mesh:
-						AddPartSource(mesh.Mesh, mesh.WorldTransform);
+						if (mesh.Collision)
+						{
+							AddPartSource(mesh.Mesh, mesh.WorldTransform);
+						}
+
 						break;
 
 					case InstancedMeshNode instanced:
-						foreach (var transform in instanced.InstancesTransforms)
+						for (var i = 0; i < instanced.InstancesTransforms.Count; ++i)
 						{
-							AddPartSource(instanced.Mesh, transform);
+							if (instanced.InstancesCollision[i])
+							{
+								AddPartSource(instanced.Mesh, instanced.InstancesTransforms[i]);
+							}
 						}
 
 						break;
 
 					case ModelNode model:
-						AddModelSource(model);
+						if (model.Collision)
+						{
+							AddModelSource(model);
+						}
+
 						break;
 				}
 			}
@@ -587,7 +599,7 @@ public sealed class PhysicsWorld : IDisposable
 
 		var controller = new CharacterController(this)
 		{
-			Position = ground.Position + Vector3.UnitY * (CharacterController.DefaultRadius + CharacterController.DefaultLength * 0.5f + CharacterController.GroundClearance)
+			Position = ground.Position + Vector3.UnitY * CharacterController.CenterOffset
 		};
 
 		// Walk toward the most open direction rather than into the nearest building. A fixed
@@ -632,10 +644,10 @@ public sealed class PhysicsWorld : IDisposable
 			maxRise = MathF.Max(maxRise, MathF.Abs(position.Y - previous.Y));
 			previous = position;
 
-			var bottom = position - Vector3.UnitY * controller.HalfHeight;
-			if (RayCast(bottom + Vector3.UnitY * 2f, -Vector3.UnitY, 100f, false, out var support))
+			var feet = position - Vector3.UnitY * CharacterController.CenterOffset;
+			if (RayCast(feet + Vector3.UnitY * 2f, -Vector3.UnitY, 100f, false, out var support))
 			{
-				var clearance = bottom.Y - support.Position.Y;
+				var clearance = feet.Y - support.Position.Y;
 				minClearance = MathF.Min(minClearance, clearance);
 				maxClearance = MathF.Max(maxClearance, clearance);
 				if (clearance < -2f)
@@ -666,9 +678,8 @@ public sealed class PhysicsWorld : IDisposable
 	}
 
 	/// <summary>
-	/// Verifies the step assist on a flat, controlled floor: the world's terrain is too uneven
-	/// to place deterministic test geometry on. The capsule walks into a 30-unit block and
-	/// must end up on its top instead of stalling at the face.
+	/// Walks over a 30-unit block on a flat floor. The chest capsule is above the block, so
+	/// this is a ground-ray snap rather than a step assist: the feet rise to the block's top.
 	/// </summary>
 	public void RunStepTest()
 	{
@@ -682,30 +693,31 @@ public sealed class PhysicsWorld : IDisposable
 
 		var controller = new CharacterController(world)
 		{
-			Position = new Vector3(0f, CharacterController.DefaultRadius + CharacterController.DefaultLength * 0.5f + CharacterController.GroundClearance, -100f)
+			Position = new Vector3(0f, CharacterController.CenterOffset, -100f)
 		};
 
-		var before = controller.Position.Y;
+		var before = controller.FeetPosition.Y;
 		var maxY = before;
 		for (var i = 0; i < 120; ++i)
 		{
 			controller.Step(TimeSpan.FromSeconds(1f / 60f), Vector3.UnitZ);
-			maxY = MathF.Max(maxY, controller.Position.Y);
+			maxY = MathF.Max(maxY, controller.FeetPosition.Y);
 		}
 
 		var climbed = maxY - before;
-		var stepped = controller.StepSuccesses > 0 && climbed >= 25f && climbed <= 40f;
+		var stepped = controller.Grounded && climbed >= 25f && climbed <= 40f;
 
 		Log.Info(
-			$"Physics step: walked into a 30-unit block, climbed {climbed:0.#} → " +
-			$"{(stepped ? "steps" : $"FAILED ({controller.LastStepFailure})")}.");
+			$"Physics step: walked over a 30-unit block, feet climbed {climbed:0.#} → " +
+			$"{(stepped ? "steps" : "FAILED")}.");
 	}
 
 	/// <summary>
-	/// Walks diagonally into a wall on a flat floor. The controller must keep its distance
-	/// from the wall and keep moving along it; that is the slide response D2 calls for.
+	/// Walks into a wall, then reverses. The reference stops at a blocked substep instead of
+	/// projecting the move along the surface, so the capsule must not drift sideways when it
+	/// backs away — the bug reported at the harbour wall.
 	/// </summary>
-	public void RunWallSlideTest()
+	public void RunWallTest()
 	{
 		using var world = new PhysicsWorld();
 		world.AddStaticBox(new Vector3(0f, -50f, 0f), new Vector3(2000f, 100f, 2000f),
@@ -715,26 +727,32 @@ public sealed class PhysicsWorld : IDisposable
 
 		var controller = new CharacterController(world)
 		{
-			Position = new Vector3(-100f, CharacterController.DefaultRadius + CharacterController.DefaultLength * 0.5f + CharacterController.GroundClearance, -100f)
+			Position = new Vector3(-100f, CharacterController.CenterOffset, -200f)
 		};
 
 		var start = controller.Position;
-		var direction = new Vector3(1f, 0f, 1f);
-		direction.Normalize();
-
 		for (var i = 0; i < 120; ++i)
 		{
-			controller.Step(TimeSpan.FromSeconds(1f / 60f), direction);
+			controller.Step(TimeSpan.FromSeconds(1f / 60f), Vector3.UnitZ);
 		}
 
-		var slid = controller.Position.X - start.X;
-		var wallGap = -10f - controller.Position.Z; // the near face is at z = -10
-		var slides = slid > 200f && wallGap >= CharacterController.DefaultRadius - 2f;
+		var wallGap = -10f - controller.FeetPosition.Z; // the near face is at z = -10
+		var stopped = wallGap >= CharacterController.DefaultRadius - 2f &&
+		              wallGap <= CharacterController.DefaultRadius + 3f;
+
+		for (var i = 0; i < 60; ++i)
+		{
+			controller.Step(TimeSpan.FromSeconds(1f / 60f), -Vector3.UnitZ);
+		}
+
+		var backed = controller.FeetPosition.Z - start.Z < -60f;
+		var sideways = MathF.Abs(controller.Position.X - start.X);
+		var passes = stopped && backed && sideways < 1f;
 
 		Log.Info(
-			$"Physics wall: slanted walk into a wall, slid {slid:0} units along it, " +
-			$"held {wallGap:0.#} from the face (radius {CharacterController.DefaultRadius:0}) → " +
-			$"{(slides ? "slides" : "FAILED")}.");
+			$"Physics wall: held {wallGap:0.#} from the face (radius {CharacterController.DefaultRadius:0}), " +
+			$"backed {start.Z - controller.FeetPosition.Z:0.#} units with {sideways:0.##} sideways drift → " +
+			$"{(passes ? "stops without sliding" : "FAILED")}.");
 	}
 
 	/// <summary>

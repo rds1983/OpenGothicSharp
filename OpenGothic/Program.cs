@@ -42,7 +42,7 @@ internal static class Program
 			Log.Info($"Camera: {commandLine.CameraPosition?.ToString() ?? "(default)"}, look at: {commandLine.LookAtTarget?.ToString() ?? "(default)"}");
 			Log.Info($"Wireframe: {commandLine.Wireframe?.ToString() ?? "(off)"}, bounds: {commandLine.Bounds?.ToString() ?? "(off)"}, physics: {commandLine.Physics}, walk: {commandLine.StartWalking} (flag {commandLine.Walk}, no-walk {commandLine.NoWalk}), third person: {commandLine.ThirdPerson}");
 			Log.Info($"Spawn model: {commandLine.SpawnModel ?? "(none)"}, distance: {commandLine.SpawnDistance?.ToString() ?? "(default)"}, offset: {commandLine.SpawnOffset?.ToString() ?? "(none)"}, yaw: {commandLine.SpawnYaw?.ToString() ?? "(none)"}");
-			Log.Info($"Player start: {commandLine.PlayerPosition?.ToString() ?? "(default plaza)"}");
+			Log.Info($"Player start: {commandLine.PlayerPosition?.ToString() ?? "(default plaza)"}, yaw: {commandLine.PlayerYaw?.ToString() ?? "(camera)"}");
 			Log.Info($"Walk test: {commandLine.WalkTestSeconds?.ToString() ?? "(off)"}");
 			Log.Info($"Compose: {commandLine.ComposedSkeleton ?? "(none)"} <- {(commandLine.ComposedMeshes == null ? "(none)" : string.Join(",", commandLine.ComposedMeshes))}");
 			Log.Info($"Attach: {commandLine.AttachPoint ?? "(none)"} <- {commandLine.AttachVisual ?? "(none)"}");

@@ -528,6 +528,14 @@ public class CommandLineTests
 	}
 
 	[Fact]
+	public void Parse_PlayerYaw_ReadsDegrees()
+	{
+		var result = CommandLine.Parse(new[] { "-yaw:90" });
+
+		Assert.Equal(90f, result.PlayerYaw);
+	}
+
+	[Fact]
 	public void Parse_InvalidSpawnYaw_IsRejected()
 	{
 		var result = CommandLine.Parse(new[] { "-g", @"C:\Gothic", "-modelrot:sideways" });

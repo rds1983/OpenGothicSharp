@@ -45,6 +45,80 @@ A vob with children but no visual of its own still needs a node for the children
 Multi-resolution mesh vobs are recorded as world-space instance matrices, so they do not take
 part in the hierarchy; no mover uses one as a child.
 
+## Rotation and the right-handed world
+
+The vob transform is `rotation * translation`, but the rotation needs the same one-time
+left-to-right-handed conversion as positions. ZenKit exposes the rotation as a column-major
+`Mat3`; the reference passes its columns straight to a column-vector transform. XNA transforms
+row vectors, so `Mathematics.ToXna(Matrix3x3)` transposes it and mirrors Z:
+
+```
+R_xna = L * transpose(R_zenkit) * L        L = diag(1, 1, -1)
+```
+
+Position becomes `(x, y, -z)`. This is exactly the same conversion as `Matrix4x4.ToXna`, and it
+is a no-op for a pure yaw (the common case), so yaw-only props were already correct; objects
+with pitch or roll, such as leaning stones, need the transpose and were previously oriented
+wrong.
+
+## Visibility and collision flags
+
+The reference's `ObjVisual::setVisual` uses two vob flags:
+
+- `show_visual` — when false, the visual is not added to the scene at all. A node is still
+  created when the vob has children, so the children keep their composed world transform.
+- `cd_dynamic` — the vob collides with the player only when this is set (together with
+  `show_visual`). The reference does not create a physics mesh for a hidden or non-dynamic
+  vob, so the player can walk through decorative geometry and invisible markers.
+
+`Assets.World.cs` follows both rules: it gates the model/mesh branches on `ShowVisual`, sets
+`ModelNode.Collision` and each `InstancedMeshNode` instance's collision from `CdDynamic`, and
+`PhysicsWorld.CollectSources` honours those flags. This dropped the harbour's collectable vob
+sources from 13.6k to 8.8k while keeping the walkable set, matching the reference.
+
+`VisualMesh` vobs in `newworld.zen` are the 16 `NEWWORLD_PART_*.3DS` level-composition roots at
+the origin, already represented by the merged level mesh. `VisualMorphMesh` (14 fish/skate),
+`VisualParticleEffect` (666) and `VisualDecal` (1405) are not rendered yet; they are effects or
+animated morphs, not static placement.
+
+## Model root translation
+
+A `.MDL`/`.MDH` hierarchy carries a `root_translation` (and the root node carries a local
+transform). For a human actor it lifts the bind pose so its feet reach the vob origin: the mesh
+is authored around the hips. `Skeleton` adds that translation to the root node in the
+reference.
+
+For a **vob prop** the reference deliberately removes it again:
+`ObjVisual::setVisual` calls `MdlVisual::setYTranslationEnable(false)`, which sets
+`Pose::NoTranslation`. `Pose::mkBaseTranslation` then subtracts the root node's X/Y/Z, so the
+prop's raw model bounds sit exactly on the vob position. An actor keeps the translation because
+it is driven through `MdlVisual` directly.
+
+Our model loader stores the hierarchy root translation on the model's `DrModelTag`; the raw mesh
+stays raw. The reference cancels X and Z for every model, and props cancel Y too.
+`Assets.World.cs` uses the vob transform directly for props, which matches the reference's
+`NoTranslation` result:
+
+```
+prop geometry = vobWorld * rawModelBounds
+```
+
+Actor-like callers (the diagnostic `-model`/`-compose` spawns, and later NPCs) add the stored
+Y in model space:
+
+```
+actor world = Translate(0, rootTranslationY, 0) * vobWorld
+```
+
+X/Z stay on the tag for later placement work that has to reproduce the reference's
+cancellation exactly; they are not applied today.
+
+That is why the harbour bookstand's vob at `y = -53.4` renders with its base at the floor
+(`y ≈ -187`) instead of `133.6` units above it. Its raw collision triangles use the same vob
+transform, so the visual and collision stay together. NPC models will add the translation at
+their spawn; their collision is the dynamic capsule from milestone E rather than the static
+bind-pose mesh.
+
 ## Open questions
 
 - A moving parent invalidates the child's load-time cell assignment and registered bounds.

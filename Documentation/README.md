@@ -60,7 +60,8 @@ default chosen elsewhere.
 | `-nowalk` | Keep the fixed diagnostic camera even for a plain launch. |
 | `-thirdperson` | Start walking in the chase camera instead of first person. |
 | `-player:<x,y,z>` | Start the walking capsule at a world position instead of the placeholder plaza; the player drops to the ground below the point. |
-| `-walktest:<seconds>` | Hold forward for a diagnostic run and log the final position. Useful for reproducing a stuck spot. |
+| `-yaw:<degrees>` | Set the walking player's facing yaw. Needed to aim a diagnostic walk reliably, because `-lookat:` measures from the camera's own position. Mouse look is disabled while `-yaw` or `-walktest` is active so the direction stays fixed. |
+| `-walktest:<seconds>` | Hold forward for a diagnostic run and log the final feet position; a negative value holds backward. Useful for reproducing a stuck spot. |
 | `-cam:<x,y,z>` | Override the camera position. |
 | `-lookat:<x,y,z>` | Point the camera at a world position (implies yaw and pitch). |
 | `-model:<name>` | Spawn a model directly in front of the camera, with or without an extension. Reaches models no world vob uses. |
@@ -115,7 +116,10 @@ in `Main` so even a fatal exception is recorded first. `log.txt` is gitignored.
 
 `ZenKit` ships native libraries and injects a `RuntimeIdentifier` per platform, so the
 project declares `RuntimeIdentifiers` for its supported platforms to keep restore and
-build targets in sync.
+build targets in sync. The package is pinned to `1.3.0-cs.1`, matching the ZenKit 1.3 parser
+the reference C++ client uses. ZenKit 1.3 classifies recoverable section-size mismatches
+(`bytes overflowed/remaining in section`) as errors; `Log` downgrades those to warnings because
+the reference logs the same messages at info/warning level, while keeping real errors visible.
 
 ## Testing
 
@@ -388,14 +392,20 @@ including why the root translation goes on the root bone's default pose rather t
 bind matrices — are in
 [Specifications/gothic-model-format.md](Specifications/gothic-model-format.md).
 
-`Assets.World.cs` creates a `ModelNode` for every `VisualModel` vob and registers the
+`Assets.World.cs` creates a `ModelNode` for every visible `VisualModel` vob and an
+`InstancedMeshNode` for every visible `VisualMultiResolutionMesh` vob, and registers the
 instance's world bounds in the owning grid cell so debug bounds and the existing cell culling
 still apply. A vob's transform in the file is already in world space, so the loader derives the
 node's local transform against its parent and records the parent link; `SceneNode.WorldTransform`
 composes the chain and caches it until the node or an ancestor moves. That keeps every static
 vob exactly where the file puts it (the 1,870 parented vobs of `newnorld.zen` recompose within
-0.0125 units) while letting a parent that moves carry its children. `-nomodels` skips this so a
-frame can be compared against the same world without model geometry. Details in
+0.0125 units) while letting a parent that moves carry its children. The rotation is converted
+with the same Z mirror as positions (`L * transpose(R) * L`), which matters for pitched/rolled
+props; a vob's `show_visual` and `cd_dynamic` flags gate rendering and collision exactly as in
+the reference. Prop models use the raw mesh bounds and the vob transform, matching the
+reference's `ObjVisual::setYTranslationEnable(false)`; actor-like spawns add only the hierarchy
+root translation's Y so the bind pose's feet reach the origin. `-nomodels` skips this so a frame
+can be compared against the same world without model geometry. Details in
 [Specifications/zen-vob-transform.md](Specifications/zen-vob-transform.md).
 
 Model parts are **texture-driven the same way as static meshes**: the material comes from
@@ -537,8 +547,9 @@ sources for the harbour, 9.7k terrain + 33k vob source triangles in 478 static b
 margin. The initial load is well under a second; a streaming step is a few milliseconds.
 
 The startup self-checks cover the pieces D2 needs: a capsule dropped on the plaza (D1), a
-capsule that walks the terrain, a capsule that steps onto a 30-unit block, and one that walks
-diagonally into a wall and slides along it. Each prints a single line to `log.txt`.
+capsule that walks the terrain, a capsule that walks over a 30-unit block, and one that walks
+into a wall, backs away from it and must not drift sideways. Each prints a single line to
+`log.txt`.
 
 A plain launch starts a playable first-person capsule at a placeholder point on the harbour
 plaza (until the game session supplies the scripted start point). **WASD** moves, the
@@ -548,26 +559,36 @@ the static camera used by captures; `-nowalk` forces it back.
 
 ### Character controller
 
-`OpenGothic/Physics/CharacterController.cs` is a kinematic capsule. Rather than throwing a
-dynamic body at the solver and hoping it stays upright, it sweeps the frame's displacement
-against the static meshes and slides the remainder along the contact plane. That makes the
-three behaviours explicit:
+`OpenGothic/Physics/CharacterController.cs` ports OpenGothic's NPC movement rather than using a
+dynamic body. The capsule is a **chest-height ghost**: radius 30, cylinder length 30, centred
+150 units above the feet, so it collides from feet + 105 to feet + 195. That is the reference's
+`HumShape` for a 180 × 60 human and is deliberate — the legs have no collider, so barrels,
+plank piles and terrain bumps below the chest cannot trap the player. `Position` is the capsule
+centre; `FeetPosition` is the logical position used by the camera and scripts.
 
-- **Grounding** is a short downward ray from the capsule's bottom. A walkable normal (above
-  ~57°) keeps a 0.5-unit clearance and lets the controller follow a slope; a gap up to 12
-  units is snapped, so a downhill step does not become a hop.
-- **Step-up** probes for a walkable surface within 35 units just past the capsule's front
-  when a sweep is blocked by a near-vertical wall. The capsule is placed on the surface only
-  if it fits; a low ceiling aborts the step. Shape sweeps cannot do this reliably because
-  the capsule's lower sphere grazes the step's top corner.
-- **Wall slide** is the normal projection of whatever displacement remains after a hit. A
-  diagonal walk into a wall keeps its distance from the face and keeps moving along it.
+- **Movement** is substepped at no more than the capsule radius (the reference's
+  `NpcItem::tryMove`). Each substep is a sweep; a blocked substep stops at the contact and the
+  remainder is **dropped**, not projected. Projecting the remainder was what turned a blocked
+  backward move into a sideways slide.
+- **Forward-only bounce** ports `MoveAlgo::onMoveFailed`: an oblique hit while moving forward
+  retries headings rotated by ±5..35°. Backward and strafing moves never bounce.
+- **Grounding** is a downward ray from the capsule centre +1 over 250 units. If the feet are
+  within 50 units of the hit, they snap onto it — up for a step, down for a drop. Steps work
+  because the chest capsule passes over the riser; there is no separate step-assist. Farther
+  drops fall under gravity.
 - **Overlap recovery** probes the capsule's sides with short rays and pushes out of a static
   that was loaded around it; the streaming loader also defers a source whose bounds would
-  enclose the capsule. Without this, every sweep would start at zero time and the player would
-  be stuck until a key press, or forever.
+  enclose the capsule.
 
-The controller is driven by `-walk`; the self-checks drive it directly.
+BepuPhysics2 2.4 has no public shape-overlap query, so the reference's Bullet `contactTest` at
+each substep destination cannot be reproduced literally: `Simulation` exposes only `RayCast`
+and `Sweep`. The controller uses a sweep, which is stricter (it also prevents tunnelling), and
+treats a zero-time hit as "started inside something" and resolves it with the side-ray
+recovery. With the 0.5-unit skin a wall produces a positive-time hit, so the on-screen result
+matches: the player stops instead of sliding.
+
+The controller is driven by `-walk`; the self-checks drive it directly. `-yaw`, `-player` and
+`-walktest` reproduce a specific spot and direction.
 
 The format details and measurements are in
 [Specifications/gothic-collision-format.md](Specifications/gothic-collision-format.md).
