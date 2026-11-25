@@ -73,7 +73,12 @@ public class OgGame : Game
 
 	public OgGame()
 	{
-		_graphics = new GraphicsDeviceManager(this);
+		_graphics = new GraphicsDeviceManager(this)
+		{
+			PreferredBackBufferWidth = 1900,
+			PreferredBackBufferHeight = 1200
+		};
+
 		IsMouseVisible = true;
 		Window.Title = $"OpenGothicSharp {OG.Version}";
 	}
