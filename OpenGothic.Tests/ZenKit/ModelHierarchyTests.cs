@@ -29,6 +29,8 @@ public class ModelHierarchyTests
 		Assert.Equal(10f, hierarchy.Nodes[1].Transform.M41);
 		Assert.Equal(20f, hierarchy.Nodes[1].Transform.M42);
 		Assert.Equal(30f, hierarchy.Nodes[1].Transform.M43);
+		Assert.Equal(1, hierarchy.FindNode("child"));
+		Assert.Equal(-1, hierarchy.FindNode("missing"));
 
 		Assert.Equal(new Vector3(-1, -2, -3), hierarchy.BoundingBox.Min);
 		Assert.Equal(new Vector3(1, 2, 3), hierarchy.BoundingBox.Max);

@@ -38,40 +38,6 @@ public partial class Assets
 		return parse(node.OpenRead());
 	}
 
-	/// <summary>
-	/// Parses a record with one of the native ZenKitCS readers that the managed port has not
-	/// replaced yet. The bytes are pinned for the duration of the parse: ZenKitCS keeps a
-	/// pointer into the array and does not pin it itself.
-	/// </summary>
-	private static T LoadNativeRecord<T>(VfsNode node, Func<global::ZenKit.Read, T> parse)
-	{
-		var data = node.ReadAllBytes();
-		var handle = System.Runtime.InteropServices.GCHandle.Alloc(
-			data, System.Runtime.InteropServices.GCHandleType.Pinned);
-		try
-		{
-			return parse(new global::ZenKit.Read(data));
-		}
-		finally
-		{
-			handle.Free();
-		}
-	}
-
-	/// <summary>
-	/// Keeps a native owner alive for the rest of the process. ZenKit getters such as
-	/// <c>Model.Hierarchy</c> and <c>Model.Mesh</c> return borrowed handles: the child wrapper
-	/// does not own its native object and becomes invalid when the parent is finalized. These
-	/// owners are the parent models behind such handles used beyond their parser call.
-	/// </summary>
-	private static readonly List<object> NativeOwners = new List<object>();
-
-	private static T KeepNativeOwner<T>(T owner) where T : class
-	{
-		NativeOwners.Add(owner);
-		return owner;
-	}
-
 	public string Folder { get; }
 
 	public string[] Keys { get; }
@@ -159,55 +125,6 @@ public partial class Assets
 	/// and a DXT1 texture with an opaque material colour is solid. There is no scan of the
 	/// alpha channel - the texture format is the only texture input.
 	/// </summary>
-	internal static bool IsAlphaTested(global::ZenKit.AlphaFunction alpha, global::ZenKit.MaterialGroup group,
-		byte colorAlpha, bool hasTexture, bool dxt1)
-	{
-		switch (alpha)
-		{
-			case global::ZenKit.AlphaFunction.Blend:
-			case global::ZenKit.AlphaFunction.Add:
-			case global::ZenKit.AlphaFunction.Subtract:
-			case global::ZenKit.AlphaFunction.Multiply:
-			case global::ZenKit.AlphaFunction.MultiplyAlt:
-				return false;
-		}
-
-		if (group == global::ZenKit.MaterialGroup.Water)
-		{
-			return false;
-		}
-
-		if (dxt1 && colorAlpha == 255)
-		{
-			return false;
-		}
-
-		// Without a texture the reference draws a solid colour: it is cut out only when that
-		// colour itself is not opaque.
-		if (!hasTexture)
-		{
-			return colorAlpha != 255;
-		}
-
-		return true;
-	}
-
-	/// <summary>Applies <see cref="IsAlphaTested(global::ZenKit.AlphaFunction, global::ZenKit.MaterialGroup, byte, bool, bool)"/>
-	/// to a ZEN material; its texture must already be loaded so its format is known.</summary>
-	internal bool IsAlphaTested(global::ZenKit.IMaterial material)
-	{
-		if (material == null)
-		{
-			return false;
-		}
-
-		var hasTexture = !string.IsNullOrEmpty(material.Texture);
-		var dxt1 = hasTexture && _dxt1Textures.Contains(material.Texture);
-
-		return IsAlphaTested(material.AlphaFunction, material.Group, material.Color.A, hasTexture, dxt1);
-	}
-
-	/// <summary>The managed-material counterpart of the native overload above.</summary>
 	internal static bool IsAlphaTested(AlphaFunction alpha, MaterialGroup group, byte colorAlpha,
 		bool hasTexture, bool dxt1)
 	{

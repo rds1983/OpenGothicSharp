@@ -7,7 +7,7 @@ using OpenGothic.Utility;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using ZenKit;
+using OpenGothic.ZenKit;
 
 namespace OpenGothic;
 
@@ -54,10 +54,10 @@ partial class Assets
 
 			var stem = Path.GetFileNameWithoutExtension(name);
 
-			IModelScript script;
+			ModelScript script;
 			try
 			{
-				script = LoadNativeRecord(GetLastRecord(name).Node, r => new ModelScript(r));
+				script = LoadRecord(GetLastRecord(name).Node, r => ModelScript.Load(r));
 			}
 			catch (Exception ex)
 			{
@@ -119,7 +119,7 @@ partial class Assets
 	/// hierarchy, not the target model's, and the model may lack nodes this one has (the nine
 	/// <c>ZS_*</c> attach nodes, for instance).
 	/// </summary>
-	private IModelHierarchy LoadScriptSkeleton(IModelScript script, string scriptStem)
+	private ModelHierarchy LoadScriptSkeleton(ModelScript script, string scriptStem)
 	{
 		// The script's own skeleton name does not always have a hierarchy file: HUMANS names
 		// HUM_BODY_NAKED0, which ships only a .MDM. Fall back to the script's own stem, which
@@ -145,10 +145,10 @@ partial class Assets
 
 			try
 			{
-				return LoadNativeRecord(GetLastRecord(candidate).Node, r =>
+				return LoadRecord(GetLastRecord(candidate).Node, r =>
 					candidate.EndsWith(".MDL", StringComparison.OrdinalIgnoreCase)
-						? KeepNativeOwner(new global::ZenKit.Model(r)).Hierarchy
-						: new ModelHierarchy(r));
+						? OpenGothic.ZenKit.Model.Load(r).Hierarchy
+						: ModelHierarchy.Load(r));
 			}
 			catch (Exception ex)
 			{
@@ -196,7 +196,7 @@ partial class Assets
 	}
 
 	/// <summary>Whether the clip is a one-shot that must not cycle, from the script.</summary>
-	private static bool IsOneShot(IAnimation entry)
+	private static bool IsOneShot(Animation entry)
 	{
 		// A clip with an interaction window is a one-shot even when it names itself: the
 		// shipped attack animations name themselves in Next but must be interruptible at the
@@ -217,8 +217,8 @@ partial class Assets
 	/// shipped data encodes looping by naming the clip itself in <c>Next</c>; every other case
 	/// is a transition.
 	/// </summary>
-	private static ModelClipInfo MakeClipInfo(IAnimation entry, float fps, int frameCount,
-		Dictionary<string, IAnimation> scriptByName, ISet<string> scriptClipNames)
+	private static ModelClipInfo MakeClipInfo(Animation entry, float fps, int frameCount,
+		Dictionary<string, Animation> scriptByName, ISet<string> scriptClipNames)
 	{
 		var oneShot = IsOneShot(entry);
 
@@ -253,7 +253,7 @@ partial class Assets
 		{
 			Name = entry.Name,
 			Next = entry.Next,
-			Layer = entry.Layer,
+			Layer = (int)entry.Layer,
 			Flags = entry.Flags,
 			BlendIn = entry.BlendIn,
 			BlendOut = entry.BlendOut,
@@ -274,7 +274,7 @@ partial class Assets
 	/// names; direction, next, layer and blend times come from the alias itself, because the
 	/// script uses those to expose the same motion under a different name.
 	/// </summary>
-	private static ModelClipInfo MakeAliasInfo(IAnimationAlias alias, string targetName,
+	private static ModelClipInfo MakeAliasInfo(AnimationAlias alias, string targetName,
 		ModelClipInfo target, ISet<string> scriptClipNames, ISet<string> aliasNames)
 	{
 		// An alias's Next addresses the script's names, which include the other aliases — a
@@ -298,7 +298,7 @@ partial class Assets
 		{
 			Name = alias.Name,
 			Next = alias.Next,
-			Layer = alias.Layer,
+			Layer = (int)alias.Layer,
 			Flags = alias.Flags,
 			BlendIn = alias.BlendIn,
 			BlendOut = alias.BlendOut,
@@ -326,7 +326,7 @@ partial class Assets
 			scriptName = scriptStem + ".MDS";
 		}
 
-		var script = LoadNativeRecord(GetLastRecord(scriptName).Node, r => new ModelScript(r));
+		var script = LoadRecord(GetLastRecord(scriptName).Node, r => ModelScript.Load(r));
 		var skeleton = LoadScriptSkeleton(script, scriptStem);
 
 		var result = new ModelAnimationSet(scriptStem, script.SkeletonName, skeleton?.Nodes.Count ?? 0, boneNames);
@@ -355,7 +355,7 @@ partial class Assets
 
 		// Next is resolved against the script's own clip list, so build it before any clip is
 		// converted: a clip can name a clip the loop has not reached yet.
-		var scriptByName = new Dictionary<string, IAnimation>(StringComparer.OrdinalIgnoreCase);
+		var scriptByName = new Dictionary<string, Animation>(StringComparer.OrdinalIgnoreCase);
 		var scriptClipNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var entry in script.Animations)
 		{
@@ -376,7 +376,7 @@ partial class Assets
 			ModelAnimation man;
 			try
 			{
-				man = LoadNativeRecord(GetLastRecord(manName).Node, r => new ModelAnimation(r));
+				man = LoadRecord(GetLastRecord(manName).Node, r => ModelAnimation.Load(r));
 			}
 			catch (Exception ex)
 			{
@@ -395,7 +395,7 @@ partial class Assets
 			}
 
 			var nodeCount = man.NodeIndices.Count;
-			var frameCount = man.FrameCount;
+			var frameCount = (int)man.FrameCount;
 			var samples = man.Samples;
 
 			var info = MakeClipInfo(entry, fps, frameCount, scriptByName, scriptClipNames);
@@ -426,7 +426,7 @@ partial class Assets
 
 				for (var slot = 0; slot < nodeCount; ++slot)
 				{
-					var nodeIndex = man.NodeIndices[slot];
+					var nodeIndex = (int)man.NodeIndices[slot];
 
 					// A channel addressing a node the model has no bone for has nothing to move.
 					// That is expected rather than broken: the human skeleton has nine ZS_* attach
@@ -580,7 +580,7 @@ partial class Assets
 			return;
 		}
 
-		var script = LoadNativeRecord(GetLastRecord(record).Node, r => new ModelScript(r));
+		var script = LoadRecord(GetLastRecord(record).Node, r => ModelScript.Load(r));
 		var skeleton = LoadScriptSkeleton(script, scriptStem);
 
 		Log.Info($"Animation dump for script '{scriptStem}':");
@@ -601,7 +601,7 @@ partial class Assets
 				continue;
 			}
 
-			var man = LoadNativeRecord(GetLastRecord(manName).Node, r => new ModelAnimation(r));
+			var man = LoadRecord(GetLastRecord(manName).Node, r => ModelAnimation.Load(r));
 			var fps = man.Fps > 0f ? man.Fps : entry.Fps;
 			var duration = fps > 0f ? man.FrameCount / fps : 0f;
 
@@ -624,7 +624,7 @@ partial class Assets
 		}
 
 		var clipManName = scriptStem + "-" + clipEntry.Name + ".MAN";
-		var data = LoadNativeRecord(GetLastRecord(clipManName).Node, r => new ModelAnimation(r));
+		var data = LoadRecord(GetLastRecord(clipManName).Node, r => ModelAnimation.Load(r));
 		var nodeCount = data.NodeIndices.Count;
 
 		Log.Info($"  first frame of '{clipEntry.Name}' ({nodeCount} channels):");
@@ -633,7 +633,7 @@ partial class Assets
 		{
 			var nodeIndex = data.NodeIndices[slot];
 			var name = skeleton != null && nodeIndex >= 0 && nodeIndex < skeleton.Nodes.Count
-				? skeleton.Nodes[nodeIndex].Name
+				? skeleton.Nodes[(int)nodeIndex].Name
 				: "<unknown>";
 
 			var sample = data.Samples[slot];

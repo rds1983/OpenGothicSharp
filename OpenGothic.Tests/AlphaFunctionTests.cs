@@ -1,5 +1,5 @@
+using OpenGothic.ZenKit;
 using Xunit;
-using ZenKit;
 
 namespace OpenGothic.Tests;
 

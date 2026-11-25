@@ -141,7 +141,7 @@ public sealed class ModelClipInfo
 	public string Name { get; init; }
 	public string Next { get; init; }
 	public int Layer { get; init; }
-	public global::ZenKit.AnimationFlags Flags { get; init; }
+	public OpenGothic.ZenKit.AnimationFlags Flags { get; init; }
 	public float BlendIn { get; init; }
 	public float BlendOut { get; init; }
 	public float Speed { get; init; }

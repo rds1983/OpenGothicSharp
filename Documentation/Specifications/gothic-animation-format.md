@@ -271,6 +271,22 @@ property of the data, not of the interpolation. The fix is the closing wrap key 
 above (last interval interpolates back to frame 0) plus blend-in on clip changes; a hardcoded
 seam cross-fade would paper over authored poses and is deliberately not used.
 
+## Managed reader
+
+`OpenGothic/ZenKit/Model/ModelScript.cs` reads the binary `.MSB` model script: skeleton name,
+registered meshes, animations, aliases, blends, combinations, disabled clips and event tags
+(including the `DEF_WINDOW` combo window that makes an attack a one-shot).
+`ModelAnimation.cs` reads the `.MAN` clip: header, node indices and frame-major samples, with
+the fixed-point quaternion/position encoding converted here. `MorphMesh.cs` reads `.MMB`
+geometry, morph positions and morph animations. `Assets.Animation` builds the DigitalRiseModel
+clips from these managed objects.
+
+The managed readers match ZenKitCS on the reference install for `HUMANS.MSB` and its first
+`.MAN` clip (every animation field, event tag, node index, sample position and quaternion),
+and for `FLAG_MESH.MMB` (geometry, morph positions and animation samples). The resulting
+animation-set audit is unchanged: e.g. `SHEEP` still reports 15 clips / 9 aliases / 10,943
+keyframes and `ORC_TORCH` 23 clips / 12 aliases / 21,500 keyframes.
+
 ## Edge cases and open questions
 
 - Whether a script may drive models with genuinely different bone names beyond the

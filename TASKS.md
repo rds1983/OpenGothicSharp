@@ -134,9 +134,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   materials render with `AlphaTestEffect`. F3.1 (script AI states), F3.2 (AI queries/actions,
   sitting and sleeping), F3.3 (engine perception), F3.4 (process policies), F3.5 (movement
   parity) and F3.6 (mob placement) are complete. **Milestone N is underway: N1 (managed
-  IO/VFS/textures) and N2 (world, waynet and vobs) are done; N3a (model geometry) is done.**
-  N3b (managed animations) is next. The port lives in `OpenGothic/ZenKit/`; N4 Daedalus VM,
-  N5 animated `ZS_POS` seat alignment and N6 (remove ZenKitCS) follow. After N, resume
+  IO/VFS/textures), N2 (world, waynet and vobs) and N3 (models and animation) are done.**
+  N4 (managed Daedalus VM) is next. The port lives in `OpenGothic/ZenKit/`; N5 animated
+  `ZS_POS` seat alignment and N6 (remove ZenKitCS) follow. After N, resume
   Milestone G at G4; F3.7 (visible perception reaction) still needs K1/H1.
 
 ---
@@ -963,21 +963,23 @@ waynet and the full vob tree; mob schemes come from the visual name prefix, like
 them, so draw calls and triangles are unchanged. Format notes:
 `Specifications/zen-world-format.md`.
 
-### N3. Model and animation readers
+### N3. Model and animation readers — DONE
 Port MDL/MDM/MDH/MDS/MRM/MMB/MAN: skeletons, skin weights, animations and their `Next`/alias
 data, morph meshes and model attach points (`ZS_POS*`).
-**Done when:** human and monster bodies and animations load through the managed readers,
-including the model that currently hits `std::bad_alloc`.
-**Uses N1:** model records load through `Read`; the hierarchy must expose the `ZS_POS*` nodes
-and their animated transforms for N5.
-**Split:** (a) hierarchy, MRM, MDL/MDM/MDB geometry and materials; (b) MAN/MDS animations,
-aliases and `Next` chains; (c) morph meshes and `ZS_POS*` attach nodes.
+
 **N3a — DONE:** `ZenKit/Model` reads model hierarchies (MDH and the MDL hierarchy), MRM
 positions/normals/submeshes/wedges/triangles/materials, soft-skin weights and nodes (MDM) and
 MDL attachments. `Assets.Model` builds `DrModel`/`DrMesh` from these objects; the native model
-geometry path is gone. Verified against ZenKitCS on representative skeletons, bodies, armour
-and props, and the player avatar renders and runs. N3b (managed `.MSB`/`.MAN` animation) is
-next; N3c covers morph meshes and `ZS_POS` attach nodes.
+geometry path is gone.
+**N3b — DONE:** `ModelScript` reads binary `.MSB` scripts (animations, aliases, combinations,
+event tags) and `ModelAnimation` reads `.MAN` clips (node indices and fixed-point samples).
+`Assets.Animation` builds clips from them.
+**N3c — DONE:** `MorphMesh` reads `.MMB` geometry/morph data, and `ModelHierarchy.FindNode`
+exposes attach nodes by name for N5.
+Verified against ZenKitCS on representative skeletons, bodies, armour, props, `HUMANS.MSB` +
+its first `.MAN`, and `FLAG_MESH.MMB`; the animation-set audit is unchanged and the player
+avatar renders and runs with managed meshes and clips. Animated `ZS_POS` evaluation remains
+N5.
 
 ### N4. Daedalus reader and VM
 Port the DAT reader, symbol/instance storage, the VM and the external-call ABI, removing the

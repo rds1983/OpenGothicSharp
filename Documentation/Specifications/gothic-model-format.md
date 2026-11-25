@@ -203,9 +203,10 @@ part, so this is a per-part update rather than a change to the draw path.
 
 `OpenGothic/ZenKit/Model/` now owns the geometry readers: `ModelHierarchy` (MDH and the
 hierarchy at the start of an MDL), `MultiResolutionMesh` (MRM, including its binary material
-archive), `SoftSkinMesh`, `ModelMesh` (MDM/MDL body meshes and named attachments) and `Model`
-(MDL). `Assets.Model` builds `DrModel`/`DrMesh` from these managed objects; only the model
-script, `.MAN` clips and morph meshes still go through ZenKitCS until N3b/N3c.
+archive), `SoftSkinMesh`, `ModelMesh` (MDM/MDL body meshes and named attachments), `Model`
+(MDL), `ModelScript` (MSB), `ModelAnimation` (MAN) and `MorphMesh` (MMB). `Assets.Model` and
+`Assets.Animation` build `DrModel`/`DrMesh` and their clips from these managed objects; no
+native model, animation or morph reader remains.
 
 The managed readers match ZenKitCS on the reference install for `ARMOR_BAU_L.MDM`,
 `ARMOR_BDT_H.MDL`, a standalone MRM and a mixed set of skeletons: positions, normals,

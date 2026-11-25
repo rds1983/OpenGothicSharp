@@ -23,8 +23,4 @@ public static class PhysicsMaterials
 		MaterialGroup.Snow => 0.2f,
 		_ => DefaultFriction,
 	};
-
-	/// <summary>Bridge for native model materials until the managed model reader lands (N3).</summary>
-	public static float GetFriction(global::ZenKit.MaterialGroup group) =>
-		GetFriction((MaterialGroup)(byte)group);
 }

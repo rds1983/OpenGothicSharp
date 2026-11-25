@@ -37,6 +37,20 @@ public sealed class ModelHierarchy
 
 	public string SourcePath { get; internal set; } = string.Empty;
 
+	/// <summary>Index of the first node with this name, or -1.</summary>
+	public int FindNode(string name)
+	{
+		for (var i = 0; i < Nodes.Count; ++i)
+		{
+			if (string.Equals(Nodes[i].Name, name, StringComparison.OrdinalIgnoreCase))
+			{
+				return i;
+			}
+		}
+
+		return -1;
+	}
+
 	public static ModelHierarchy Load(Read reader)
 	{
 		var hierarchy = new ModelHierarchy();
