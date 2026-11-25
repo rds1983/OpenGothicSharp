@@ -133,6 +133,11 @@ the reference C++ client uses. ZenKit 1.3 classifies recoverable section-size mi
 (`bytes overflowed/remaining in section`) as errors; `Log` downgrades those to warnings because
 the reference logs the same messages at info/warning level, while keeping real errors visible.
 
+**ZenKitCS is a stopgap.** Milestone N replaces it with a managed port in
+`OpenGothic/ZenKit/` (namespace `OpenGothic.ZenKit`, one folder per format family). The native
+package cannot expose waynet edges, MDL animations or `ZS_POS` attach points, and it fails on
+one shipped monster model; N1–N6 remove those limitations and the package itself.
+
 ## Testing
 
 Unit tests live in `OpenGothic.Tests` (xunit). Run them with:
