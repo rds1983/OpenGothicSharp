@@ -135,9 +135,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   sitting and sleeping), F3.3 (engine perception), F3.4 (process policies), F3.5 (movement
   parity) and F3.6 (mob placement) are complete. **Milestone N is underway: N1 (managed
   IO/VFS/textures), N2 (world, waynet and vobs) and N3 (models and animation) are done.**
-  N4 (managed Daedalus VM) is next. The port lives in `OpenGothic/ZenKit/`; N5 animated
-  `ZS_POS` seat alignment and N6 (remove ZenKitCS) follow. After N, resume
-  Milestone G at G4; F3.7 (visible perception reaction) still needs K1/H1.
+  N4 is underway: N4a (DAT reader) is done; N4b (managed VM) is next. The port lives
+  in `OpenGothic/ZenKit/`; N5 animated `ZS_POS` seat alignment and N6 (remove ZenKitCS) follow.
+  After N, resume Milestone G at G4; F3.7 (visible perception reaction) still needs K1/H1.
 
 ---
 
@@ -985,6 +985,11 @@ N5.
 Port the DAT reader, symbol/instance storage, the VM and the external-call ABI, removing the
 native handle/finalizer workarounds.
 **Done when:** startup, script objects and dialogs pass from the managed VM.
+**Split:** (a) DAT symbol/instruction reader; (b) VM stack, calls and external ABI; (c) typed
+instance bindings for NPC/item/info and the cutscene/output-unit data.
+**N4a — DONE:** `ZenKit/Script/DaedalusScript.cs` reads the symbol table, address map and instruction
+text, including the string-parent heuristic. It matches ZenKitCS for all 74,648 symbols and
+decoded non-external function instructions. N4b (VM) is next.
 **Uses N1:** DAT records load through `VfsNode.OpenRead()`.
 
 ### N5. Mob attach points and seat alignment

@@ -12,6 +12,20 @@ cutscene library used for dialogs; it is loaded with ZenKit `CutsceneLibrary` an
 the text of every `AI_Output` line. In the tested NotR installation the game script has
 **74,649 symbols** and the cutscene library **20,826 blocks**.
 
+## Managed DAT reader (N4a)
+
+`OpenGothic/ZenKit/Script/DaedalusScript.cs` reads `GOTHIC.DAT` directly: the symbol table
+(name, type, flags, count, parent, address, class size, member offset, source position and the
+inline int/float/string values), the address map and the instruction text. `InstructionAt`
+decodes every opcode operand the VM needs. The parser mirrors the reference's string-parent
+heuristic; function addresses in the text are relative to the text section (external function
+addresses are not code addresses).
+
+On the tested installation the managed symbol table matches ZenKitCS for the whole file
+(74,648 symbols; a VM adds the temporary string symbol), including names, types, flags,
+parents, addresses, values and decoded instructions for non-external functions. The VM itself
+and the typed instance bindings still use ZenKitCS until N4b.
+
 ## Boot
 
 `OpenGothic/Scripts/ScriptRuntime.cs` builds a `ZenKit.Daedalus.DaedalusVm` and follows the

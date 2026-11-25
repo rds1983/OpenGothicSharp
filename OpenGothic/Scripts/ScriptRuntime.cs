@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using Microsoft.Xna.Framework;
 using OpenGothic.Vobs;
-using OpenGothic.ZenKit;
 using ZenKit;
 using ZenKit.Daedalus;
+using Matrix3x3 = OpenGothic.ZenKit.Matrix3x3;
+using NpcObject = OpenGothic.ZenKit.NpcObject;
+using VirtualObjectType = OpenGothic.ZenKit.VirtualObjectType;
 
 namespace OpenGothic.Scripts;
 

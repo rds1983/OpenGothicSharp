@@ -42,9 +42,9 @@ and comment-only lines; inline comments count as code.
 
 | Area | C# files | Size | Physical lines | Code | Comments | Blank |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| All source | 119 | 673.1 KiB | 24,785 | 18,720 | 2,051 | 4,014 |
-| `OpenGothic/` | 88 | 578.0 KiB | 20,929 | 15,563 | 2,025 | 3,341 |
-| `OpenGothic.Tests/` | 31 | 95.0 KiB | 3,856 | 3,157 | 26 | 673 |
+| All source | 121 | 686.0 KiB | 25,357 | 19,210 | 2,056 | 4,091 |
+| `OpenGothic/` | 89 | 589.1 KiB | 21,431 | 15,994 | 2,030 | 3,407 |
+| `OpenGothic.Tests/` | 32 | 96.9 KiB | 3,926 | 3,216 | 26 | 684 |
 
 Main project by folder:
 
@@ -53,11 +53,11 @@ Main project by folder:
 | `(root)` | 20 | 5,959 | 4,379 | 174.6 KiB |
 | `Graphics` | 16 | 2,217 | 1,427 | 66.1 KiB |
 | `Physics` | 4 | 1,691 | 1,243 | 49.0 KiB |
-| `Scripts` | 3 | 1,475 | 1,189 | 39.0 KiB |
+| `Scripts` | 3 | 1,477 | 1,191 | 39.1 KiB |
 | `World` | 14 | 3,304 | 2,402 | 95.0 KiB |
 | `Utility` | 4 | 496 | 358 | 14.9 KiB |
 | `UI` | 9 | 631 | 514 | 15.7 KiB |
-| `ZenKit` | 18 | 5,156 | 4,051 | 123.7 KiB |
+| `ZenKit` | 19 | 5,656 | 4,480 | 134.6 KiB |
 
 The totals include four Myra-generated `*.Generated.cs` UI files: 293 physical lines,
 245 code lines, 8.0 KiB.

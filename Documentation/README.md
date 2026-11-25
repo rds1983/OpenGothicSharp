@@ -175,6 +175,12 @@ samples. Format notes:
 [Specifications/gothic-model-format.md](Specifications/gothic-model-format.md) and
 [Specifications/gothic-animation-format.md](Specifications/gothic-animation-format.md).
 
+**N4a is in place.** `OpenGothic/ZenKit/Script/DaedalusScript.cs` reads the `GOTHIC.DAT`
+symbol table and instruction text: types, flags, values, parents, addresses, class/member
+layout and decoded instructions. The managed symbol table matches ZenKitCS on the reference
+install for the whole file. The VM and typed instance bindings still use ZenKitCS until N4b.
+Format note: [Specifications/daedalus.md](Specifications/daedalus.md).
+
 ## Testing
 
 Unit tests live in `OpenGothic.Tests` (xunit). Run them with:
