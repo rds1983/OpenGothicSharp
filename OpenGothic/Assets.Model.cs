@@ -216,6 +216,189 @@ partial class Assets
 		return mesh;
 	}
 
+	/// <summary>Builds a static multi-resolution mesh from the managed MRM reader.</summary>
+	private DrMesh CreateMesh(GraphicsDevice device, OpenGothic.ZenKit.MultiResolutionMesh zkMesh)
+	{
+		var mesh = new DrMesh();
+		foreach (var submesh in zkMesh.SubMeshes)
+		{
+			var meshPart = CreatePart(device, null, zkMesh, submesh, null, null, null, null);
+			if (meshPart != null)
+			{
+				mesh.MeshParts.Add(meshPart);
+			}
+		}
+
+		return mesh;
+	}
+
+	/// <summary>Builds a skinned multi-resolution mesh from the managed soft-skin reader.</summary>
+	private DrMesh CreateMesh(GraphicsDevice device, OpenGothic.ZenKit.SoftSkinMesh zkSkinnedMesh,
+		OpenGothic.ZenKit.MultiResolutionMesh zkMesh, Matrix[] bindTransforms, Matrix[] restTransforms,
+		int[] nodeToBone, Dictionary<int, int> skinMap)
+	{
+		var mesh = new DrMesh();
+		foreach (var submesh in zkMesh.SubMeshes)
+		{
+			var meshPart = CreatePart(device, zkSkinnedMesh, zkMesh, submesh, bindTransforms, restTransforms,
+				nodeToBone, skinMap);
+			if (meshPart != null)
+			{
+				mesh.MeshParts.Add(meshPart);
+			}
+		}
+
+		return mesh;
+	}
+
+	private DrMeshPart CreatePart(GraphicsDevice device, OpenGothic.ZenKit.SoftSkinMesh zkSkinnedMesh,
+		OpenGothic.ZenKit.MultiResolutionMesh zkMesh, OpenGothic.ZenKit.MultiResolutionSubMesh zkSubMesh,
+		Matrix[] bindTransforms, Matrix[] restTransforms, int[] nodeToBone, Dictionary<int, int> skinMap)
+	{
+		var zkMaterial = zkSubMesh.Material;
+		if (zkMaterial == null || string.IsNullOrEmpty(zkMaterial.Texture))
+		{
+			return null;
+		}
+
+		var texture = GetTexture(device, zkMaterial.Texture);
+		if (texture == null)
+		{
+			return null;
+		}
+
+		IMeshBuilder meshBuilder;
+		MeshBuilderS skinnedBuilder = null;
+		if (zkSkinnedMesh == null)
+		{
+			var mb = new MeshBuilderPNT();
+			for (var i = 0; i < zkSubMesh.Wedges.Count; ++i)
+			{
+				var wedge = zkSubMesh.Wedges[i];
+				var position = zkMesh.Positions[wedge.Index];
+				mb.AddVertex(new VertexPositionNormalTexture(position.ToXna(), wedge.Normal.ToXna(),
+					wedge.Texture.ToXna()));
+			}
+
+			meshBuilder = mb;
+		}
+		else
+		{
+			skinnedBuilder = CreateSkinnedBuilder(zkSkinnedMesh, zkSubMesh, bindTransforms, restTransforms,
+				nodeToBone, skinMap);
+			meshBuilder = skinnedBuilder;
+		}
+
+		for (var i = 0; i < zkSubMesh.Triangles.Count; ++i)
+		{
+			var triangle = zkSubMesh.Triangles[i];
+			meshBuilder.AddIndex(triangle.Wedge0);
+			meshBuilder.AddIndex(triangle.Wedge1);
+			meshBuilder.AddIndex(triangle.Wedge2);
+		}
+
+		var material = new Graphics.Material
+		{
+			DiffuseColor = Color.White,
+			DiffuseTexture = texture,
+			SourceTexture = zkMaterial.Texture,
+			AlphaTest = IsAlphaTested(zkMaterial)
+		};
+
+		var result = meshBuilder.CreateMeshPart(device, true);
+		if (skinnedBuilder?.RestBounds is BoundingBox rest)
+		{
+			result.BoundingBox = rest;
+		}
+
+		var friction = 0f;
+		var sensor = false;
+		if (DebugSettings.CollisionEnabled && zkSkinnedMesh == null && !zkMaterial.DisableCollision)
+		{
+			friction = Physics.PhysicsMaterials.GetFriction(zkMaterial.Group);
+			sensor = zkMaterial.Group == OpenGothic.ZenKit.MaterialGroup.Water;
+		}
+
+		result.Tag = new DrMeshPartTag(material)
+		{
+			Friction = friction,
+			Sensor = sensor,
+			Collision = friction > 0f ? new CollisionMesh(meshBuilder.CreateCollisionTriangles()) : null
+		};
+
+		return result;
+	}
+
+	/// <summary>Builds the skinned vertices of one managed MRM submesh.</summary>
+	private static MeshBuilderS CreateSkinnedBuilder(OpenGothic.ZenKit.SoftSkinMesh zkSkinnedMesh,
+		OpenGothic.ZenKit.MultiResolutionSubMesh zkSubMesh, Matrix[] bindTransforms, Matrix[] restTransforms,
+		int[] nodeToBone, Dictionary<int, int> skinMap)
+	{
+		var mb = new MeshBuilderS();
+		var wedges = zkSubMesh.Wedges;
+		var zkWeights = zkSkinnedMesh.Weights;
+
+		for (var i = 0; i < wedges.Count; ++i)
+		{
+			var wedge = wedges[i];
+			var weight = zkWeights[wedge.Index];
+			var count = Math.Min(weight.Count, 4);
+
+			var position = Vector3.Zero;
+			var blendIndices = Vector4.Zero;
+			var blendWeights = Vector4.Zero;
+
+			for (var j = 0; j < count; ++j)
+			{
+				var item = weight[j];
+				var boneIndex = nodeToBone[item.NodeIndex];
+
+				if (j == 0)
+				{
+					position = Vector3.Transform(item.Position.ToXna(), bindTransforms[item.NodeIndex]);
+
+					var rest = Vector3.Transform(item.Position.ToXna(), restTransforms[boneIndex]);
+					var vertexBounds = new BoundingBox(rest, rest);
+					mb.RestBounds = mb.RestBounds.HasValue
+						? BoundingBox.CreateMerged(mb.RestBounds.Value, vertexBounds)
+						: vertexBounds;
+				}
+
+				switch (j)
+				{
+					case 0:
+						blendIndices.X = skinMap[boneIndex];
+						blendWeights.X = item.Weight;
+						break;
+					case 1:
+						blendIndices.Y = skinMap[boneIndex];
+						blendWeights.Y = item.Weight;
+						break;
+					case 2:
+						blendIndices.Z = skinMap[boneIndex];
+						blendWeights.Z = item.Weight;
+						break;
+					default:
+						blendIndices.W = skinMap[boneIndex];
+						blendWeights.W = item.Weight;
+						break;
+				}
+			}
+
+			var sum = blendWeights.X + blendWeights.Y + blendWeights.Z + blendWeights.W;
+			if (sum > 0f && !sum.EpsilonEquals(1f))
+			{
+				blendWeights /= sum;
+			}
+
+			var vertex = new VertexSkinned(position, wedge.Normal.ToXna(), wedge.Texture.ToXna(),
+				new Byte4(blendIndices), blendWeights);
+			mb.AddVertex(vertex);
+		}
+
+		return mb;
+	}
+
 	/// <summary>
 	/// A skinned mesh plus the merged bones it deforms across, in blend-index order, and the
 	/// node each joint was authored as in its own hierarchy.
@@ -243,21 +426,15 @@ partial class Assets
 	private sealed class ModelMeshSource
 	{
 		public string Name { get; }
-		public IModelMesh Mesh { get; }
-		public IModelHierarchy Hierarchy { get; }
+		public OpenGothic.ZenKit.ModelMesh Mesh { get; }
+		public OpenGothic.ZenKit.ModelHierarchy Hierarchy { get; }
 
-		/// <summary>
-		/// The native model that owns <see cref="Mesh"/> and <see cref="Hierarchy"/>. Both are
-		/// borrowed ZenKit handles, so the owner must outlive every read of them.
-		/// </summary>
-		public object Owner { get; }
-
-		public ModelMeshSource(string name, IModelMesh mesh, IModelHierarchy hierarchy, object owner = null)
+		public ModelMeshSource(string name, OpenGothic.ZenKit.ModelMesh mesh,
+			OpenGothic.ZenKit.ModelHierarchy hierarchy)
 		{
 			Name = name;
 			Mesh = mesh;
 			Hierarchy = hierarchy;
-			Owner = owner;
 		}
 	}
 
@@ -277,7 +454,7 @@ partial class Assets
 	/// the other exactly as an animation would carry it.
 	/// </para>
 	/// </summary>
-	private DrModel LoadModel(GraphicsDevice device, IModelHierarchy zkHierarchy, IReadOnlyList<ModelMeshSource> sources)
+	private DrModel LoadModel(GraphicsDevice device, OpenGothic.ZenKit.ModelHierarchy zkHierarchy, IReadOnlyList<ModelMeshSource> sources)
 	{
 		// Static meshes are named after the hierarchy node they belong to.
 		var staticMeshes = new Dictionary<string, DrMesh>(StringComparer.OrdinalIgnoreCase);
@@ -285,7 +462,7 @@ partial class Assets
 		{
 			foreach (var pair in source.Mesh.Attachments)
 			{
-				staticMeshes[pair.Key] = CreateMesh(device, null, pair.Value);
+				staticMeshes[pair.Key] = CreateMesh(device, pair.Value);
 			}
 		}
 
@@ -490,7 +667,7 @@ partial class Assets
 	}
 
 	/// <summary>Absolute bind transforms of a hierarchy, in its own node order.</summary>
-	private static Matrix[] ComputeBindTransforms(IModelHierarchy hierarchy)
+	private static Matrix[] ComputeBindTransforms(OpenGothic.ZenKit.ModelHierarchy hierarchy)
 	{
 		var nodes = hierarchy.Nodes;
 		var result = new Matrix[nodes.Count];
@@ -541,20 +718,18 @@ partial class Assets
 	{
 		var hierarchyName = Path.GetFileNameWithoutExtension(hierarchyStem).ToUpper();
 
-		IModelHierarchy hierarchy;
-		object hierarchyOwner = null;
+		OpenGothic.ZenKit.ModelHierarchy hierarchy;
 		var mdlName = hierarchyName + ".MDL";
 		var mdhName = hierarchyName + ".MDH";
 
 		if (_allRecords.ContainsKey(mdlName))
 		{
-			var mdl = LoadNativeRecord(GetLastRecord(mdlName).Node, r => new global::ZenKit.Model(r));
+			var mdl = LoadRecord(GetLastRecord(mdlName).Node, r => OpenGothic.ZenKit.Model.Load(r));
 			hierarchy = mdl.Hierarchy;
-			hierarchyOwner = mdl;
 		}
 		else if (_allRecords.ContainsKey(mdhName))
 		{
-			hierarchy = LoadNativeRecord(GetLastRecord(mdhName).Node, r => new ModelHierarchy(r));
+			hierarchy = LoadRecord(GetLastRecord(mdhName).Node, r => OpenGothic.ZenKit.ModelHierarchy.Load(r));
 		}
 		else
 		{
@@ -571,7 +746,6 @@ partial class Assets
 
 		var model = LoadModel(device, hierarchy, sources);
 		AttachAnimationsQuietly(model, hierarchyName);
-		GC.KeepAlive(hierarchyOwner);
 
 		return model;
 	}
@@ -588,27 +762,28 @@ partial class Assets
 		var mdlName = stem + ".MDL";
 		if (preferMdl && _allRecords.ContainsKey(mdlName))
 		{
-			var mdl = LoadNativeRecord(GetLastRecord(mdlName).Node, r => new global::ZenKit.Model(r));
-			return new ModelMeshSource(stem, mdl.Mesh, mdl.Hierarchy, mdl);
+			var mdl = LoadRecord(GetLastRecord(mdlName).Node, r => OpenGothic.ZenKit.Model.Load(r));
+			return new ModelMeshSource(stem, mdl.Mesh, mdl.Hierarchy);
 		}
 
 		var mdmName = stem + ".MDM";
 		if (_allRecords.ContainsKey(mdmName))
 		{
 			var mdhName = stem + ".MDH";
-			IModelHierarchy hierarchy = _allRecords.ContainsKey(mdhName)
-				? LoadNativeRecord(GetLastRecord(mdhName).Node, r => new ModelHierarchy(r))
+			OpenGothic.ZenKit.ModelHierarchy hierarchy = _allRecords.ContainsKey(mdhName)
+				? LoadRecord(GetLastRecord(mdhName).Node, r => OpenGothic.ZenKit.ModelHierarchy.Load(r))
 				: null;
 
-			return new ModelMeshSource(stem, LoadNativeRecord(GetLastRecord(mdmName).Node, r => new global::ZenKit.ModelMesh(r)), hierarchy);
+			return new ModelMeshSource(stem,
+				LoadRecord(GetLastRecord(mdmName).Node, r => OpenGothic.ZenKit.ModelMesh.Load(r)), hierarchy);
 		}
 
 		// An actor mesh is normally a bare .MDM, but accept a self-contained .MDL when no
 		// mesh file exists.
 		if (_allRecords.ContainsKey(mdlName))
 		{
-			var mdl = LoadNativeRecord(GetLastRecord(mdlName).Node, r => new global::ZenKit.Model(r));
-			return new ModelMeshSource(stem, mdl.Mesh, mdl.Hierarchy, mdl);
+			var mdl = LoadRecord(GetLastRecord(mdlName).Node, r => OpenGothic.ZenKit.Model.Load(r));
+			return new ModelMeshSource(stem, mdl.Mesh, mdl.Hierarchy);
 		}
 
 		throw new InvalidOperationException($"Model '{stem}' has neither a .MDL nor a .MDM.");
@@ -634,9 +809,9 @@ partial class Assets
 	private DrMesh LoadMultiMesh(GraphicsDevice device, string name)
 	{
 		var record = GetLastRecord(name);
-		var zkMesh = LoadNativeRecord(record.Node, r => new MultiResolutionMesh(r));
+		var zkMesh = LoadRecord(record.Node, r => OpenGothic.ZenKit.MultiResolutionMesh.Load(r));
 
-		return CreateMesh(device, null, zkMesh);
+		return CreateMesh(device, zkMesh);
 	}
 
 	private DrMesh LoadMorphMesh(GraphicsDevice device, string name)

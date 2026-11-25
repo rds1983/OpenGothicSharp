@@ -199,6 +199,20 @@ be used as-is. Animation is what breaks it: a swinging limb leaves the bind-pose
 whatever plays a clip has to grow the box to cover the whole clip. The box lives on the mesh
 part, so this is a per-part update rather than a change to the draw path.
 
+## Managed reader
+
+`OpenGothic/ZenKit/Model/` now owns the geometry readers: `ModelHierarchy` (MDH and the
+hierarchy at the start of an MDL), `MultiResolutionMesh` (MRM, including its binary material
+archive), `SoftSkinMesh`, `ModelMesh` (MDM/MDL body meshes and named attachments) and `Model`
+(MDL). `Assets.Model` builds `DrModel`/`DrMesh` from these managed objects; only the model
+script, `.MAN` clips and morph meshes still go through ZenKitCS until N3b/N3c.
+
+The managed readers match ZenKitCS on the reference install for `ARMOR_BAU_L.MDM`,
+`ARMOR_BDT_H.MDL`, a standalone MRM and a mixed set of skeletons: positions, normals,
+submesh triangles/wedges, materials, weights, nodes, wedge normals and attachments. The
+verification frame draws the same geometry as the native path, and the player avatar renders
+and runs with managed body/armour meshes.
+
 ## Edge cases and open questions
 
 - Weight counts per vertex are 1–3 in the shipped data; the format's upper bound is not

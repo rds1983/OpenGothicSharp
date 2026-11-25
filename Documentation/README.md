@@ -163,6 +163,15 @@ visual name prefix, like the reference's `ProtoMesh::setupScheme`
 (`BENCH_3_OC.ASC` -> `BENCH`). Format notes:
 [Specifications/zen-world-format.md](Specifications/zen-world-format.md).
 
+**N3a is in place.** `OpenGothic/ZenKit/Model/` reads model hierarchies (`.MDH` and the
+hierarchy in an `.MDL`), multi-resolution meshes (`.MRM`), soft-skin bodies (`.MDM`) and
+self-contained models (`.MDL`), including the embedded binary material archive. `Assets.Model`
+now builds `DrModel`/`DrMesh` from these managed objects; the model script, `.MAN` animation
+clips and morph meshes are still on ZenKitCS until N3b/N3c. The managed parsers match
+ZenKitCS on the reference install for representative skeletons, bodies, armour and props, and
+the player avatar renders and runs with the managed body/armour meshes. Format note:
+[Specifications/gothic-model-format.md](Specifications/gothic-model-format.md).
+
 ## Testing
 
 Unit tests live in `OpenGothic.Tests` (xunit). Run them with:
