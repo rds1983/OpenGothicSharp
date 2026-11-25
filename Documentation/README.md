@@ -553,13 +553,17 @@ full-body locomotion, layer 2 is upper-body combat overrides (`T_MOVE_2_FISTMOVE
 Attacks (`S_1HATTACK`, РІР‚В¦) are layer 1 and full body, so they do reset the legs by design.
 
 `AnimationData.PlayLayer(name)` runs a clip on top of the base at the layer its script gives
-it. All active clips are layers of one `AnimationBlendNode`, ordered by that layer value, and
-each layer's `BoneFilter` keeps only the bones no higher layer drives РІР‚вЂќ so a higher layer wins
-on exactly the bones it animates and everything else keeps the pose below. A per-layer
-`TimeOffset` turns the controller's single clock into each clip's own time, which is what lets
-a walk keep looping while a gesture starts mid-stride. A layered change snaps rather than
-fading РІР‚вЂќ the reference ramps a new layer in over its blend time, which is the one piece not
-ported yet. `-overlay:<clip>` exercises it from the command line.
+it. `PlayAtScriptLayer(name)` is the script-entry rule: a clip on the base clip's layer
+replaces the base, anything else is added as an overlay, which is how `Pose::startAnim`
+resolves `AI_PlayAni`/`AI_PlayAnimBs`. All active clips are layers of one
+`AnimationBlendNode`, ordered by that layer value, and each layer's `BoneFilter` keeps only the
+bones no higher layer drives, so a higher layer wins on exactly the bones it animates and
+everything else keeps the pose below. A per-layer `TimeOffset` turns the controller's single
+clock into each clip's own time, which is what lets a walk keep looping while a gesture starts
+mid-stride. A finished one-shot overlay is removed again, like `Pose::processLayers` dropping a
+sequence with no next. A layered change snaps rather than fading; the reference ramps a new
+layer in over its blend time, which is the one piece not ported yet. `-overlay:<clip>` exercises
+it from the command line.
 
 The playback rules come from the script, not from guesswork:
 

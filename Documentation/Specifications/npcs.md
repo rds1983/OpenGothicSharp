@@ -176,6 +176,14 @@ shipped scripts with it instead of guessed.
   right height. Verified against the reference at the harbour bench: Jack reaches Gothic
   `(-243.2, 169.4)` against the reference's `(-243.3, 168.2)`, and chairs and beds follow the
   same path.
+- **Seated gestures stay seated:** the sit states periodically call `AI_PlayAnimBs` with
+  `R_CHAIR_RANDOM_*` while keeping `BS_SIT`, and those clips are authored on script layer 2.
+  `AI_PlayAni`/`AI_PlayAnimBs` therefore play at the clip's script layer: a layer-2 gesture is
+  an overlay over the seated base (`S_BENCH_S1`), not a replacement, and it is removed when it
+  finishes. Replacing the base with the layer-2 clip had stood the body on the bench because
+  the clip does not animate the seated root. Verified against the reference: `S_BENCH_S1`
+  stays the base while `R_CHAIR_RANDOM_3`/`_4` play on layer 2; our Jack stays seated through
+  the same window.
 - **Idempotence:** `AI_UseMob` does nothing while the NPC already uses that mob at the same
   state, like the reference's `currentInteract->stateId()==act.i0` early-out. Work states call
   it every loop; without this the mob was released and re-entered every tick, teleporting the

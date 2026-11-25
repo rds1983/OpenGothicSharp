@@ -65,6 +65,20 @@ public sealed class AnimationData
 	/// <summary>Name of the base clip, or null when idle.</summary>
 	public string CurrentClip => _base?.Clip.Name;
 
+	/// <summary>Whether a clip is active on any layer, base included.</summary>
+	public bool IsPlaying(string name)
+	{
+		foreach (var layer in _layers)
+		{
+			if (string.Equals(layer.Clip.Name, name, StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	/// <summary>
 	/// Raw root translation of the base clip at its current time, before blending. The reference
 	/// measures mob root motion from the sequence itself (<c>Sequence::speed</c>), not from the
@@ -223,6 +237,27 @@ public sealed class AnimationData
 	}
 
 	/// <summary>
+	/// Plays a clip at the layer its script declares, like the reference's <c>Pose::startAnim</c>:
+	/// a clip on the base clip's layer replaces the base, a clip on another layer runs as an
+	/// overlay and leaves every bone it does not animate to the layers below. Script animation
+	/// calls (<c>AI_PlayAni</c>) use this so an upper-body gesture does not stand a seated NPC up.
+	/// </summary>
+	public bool PlayAtScriptLayer(string name)
+	{
+		if (!TryGetClip(name, out var clip, out var info))
+		{
+			return false;
+		}
+
+		if (_base == null || info.Layer == _base.Info.Layer)
+		{
+			return Play(name);
+		}
+
+		return PlayLayer(name);
+	}
+
+	/// <summary>
 	/// Runs a clip on top of the base at the layer the script gives it, replacing whatever
 	/// occupies that layer. An upper-body clip leaves every bone it does not animate to the
 	/// layers below.
@@ -330,6 +365,7 @@ public sealed class AnimationData
 
 		_elapsed += seconds;
 		Align();
+		RemoveFinishedLayers();
 
 		if (_base == null || _base.Info.Loop || _endHandled)
 		{
@@ -353,6 +389,38 @@ public sealed class AnimationData
 			// is a rare event, unlike the per-frame sampling around it.
 			Log.Info($"Animation '{_base.Clip.Name}' finished; continuing with '{next}'.");
 			Play(next);
+		}
+	}
+
+	/// <summary>
+	/// Drops overlay clips that ran once, like the reference's <c>Pose::processLayers</c> removing
+	/// a finished sequence with no next. The base clip's own hand-over is handled by
+	/// <see cref="Update"/>.
+	/// </summary>
+	private void RemoveFinishedLayers()
+	{
+		var removed = false;
+		for (var i = _layers.Count - 1; i >= 0; --i)
+		{
+			var layer = _layers[i];
+			if (ReferenceEquals(layer, _base) || layer.Info.Loop || layer.Info.PlaybackNext != null)
+			{
+				continue;
+			}
+
+			var duration = layer.Info.Duration.TotalSeconds;
+			if (duration <= 0 || _elapsed - layer.Start < duration)
+			{
+				continue;
+			}
+
+			_layers.RemoveAt(i);
+			removed = true;
+		}
+
+		if (removed)
+		{
+			Rebuild(0f);
 		}
 	}
 

@@ -626,7 +626,7 @@ internal sealed class NpcAiSystem
 			return;
 		}
 
-		if (!actor.PlayClip(name) && _reported.Add("anim:" + name))
+		if (!actor.PlayScriptClip(name) && _reported.Add("anim:" + name))
 		{
 			Log.Warning($"NPC '{actor.Vob.Name}' has no clip '{name}'.");
 		}

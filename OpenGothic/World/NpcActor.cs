@@ -292,6 +292,22 @@ public sealed class NpcActor
 		return animation.Play(name);
 	}
 
+	/// <summary>
+	/// Plays a script animation at the layer its clip declares, like the reference's
+	/// <c>AI_PlayAni</c> through <c>Pose::startAnim</c>. A layer-2 gesture runs over the base
+	/// clip instead of replacing it.
+	/// </summary>
+	public bool PlayScriptClip(string name)
+	{
+		var animation = Node?.AnimationData;
+		if (animation == null || string.IsNullOrEmpty(name))
+		{
+			return false;
+		}
+
+		return animation.PlayAtScriptLayer(name);
+	}
+
 	/// <summary>Plays a clip backwards, e.g. the sit transition to stand up again.</summary>
 	public bool PlayClipReverse(string name)
 	{

@@ -53,6 +53,79 @@ public class AnimationDataTests
 		new AnimationChannelKeyframe(TimeSpan.FromSeconds(time),
 			new SrtTransform(new Vector3(0f, y, z), Quaternion.Identity, Vector3.One));
 
+	private static AnimationData CreateLayeredPlayback()
+	{
+		var model = new DrModel(new DrModelBone("BIP01"));
+		var clips = new Dictionary<string, AnimationClip>(StringComparer.OrdinalIgnoreCase)
+		{
+			["BASE"] = LayeredClip("BASE", layer: 1, loop: true, duration: 0.3f,
+				new[] { Key(0f, 10f, 0f), Key(0.1f, 20f, 2f), Key(0.2f, 30f, 4f), Key(0.3f, 10f, 0f) }),
+			["OTHER"] = LayeredClip("OTHER", layer: 1, loop: true, duration: 0.2f,
+				new[] { Key(0f, 40f, 0f), Key(0.2f, 40f, 0f) }),
+			["OVERLAY"] = LayeredClip("OVERLAY", layer: 2, loop: false, duration: 0.2f,
+				new[] { Key(0f, 50f, 0f), Key(0.2f, 60f, 0f) })
+		};
+		model.Animations = clips;
+
+		var data = new AnimationData(new DrModelInstance(model));
+		Assert.True(data.Play("BASE", blend: false));
+		return data;
+	}
+
+	private static AnimationClip LayeredClip(string name, int layer, bool loop, float duration,
+		AnimationChannelKeyframe[] keys)
+	{
+		var info = new ModelClipInfo
+		{
+			Name = name,
+			Next = loop ? name : string.Empty,
+			FrameCount = keys.Length,
+			Fps = keys.Length / duration,
+			Loop = loop,
+			Layer = layer
+		};
+
+		return new AnimationClip(name, TimeSpan.FromSeconds(duration),
+			new[] { new AnimationChannel(0, keys) })
+		{
+			Tag = new AnimationClipTag(info)
+		};
+	}
+
+	[Fact]
+	public void PlayAtScriptLayer_KeepsTheBaseForAHigherLayer()
+	{
+		var data = CreateLayeredPlayback();
+
+		Assert.True(data.PlayAtScriptLayer("OVERLAY"));
+		Assert.Equal("BASE", data.CurrentClip);
+		Assert.True(data.IsPlaying("OVERLAY"));
+
+		Assert.True(data.TryGetBaseRootTranslation(0, out var root));
+		Assert.Equal(10f, root.Y, 3);
+	}
+
+	[Fact]
+	public void PlayAtScriptLayer_ReplacesASameLayerClip()
+	{
+		var data = CreateLayeredPlayback();
+
+		Assert.True(data.PlayAtScriptLayer("OTHER"));
+		Assert.Equal("OTHER", data.CurrentClip);
+	}
+
+	[Fact]
+	public void FinishedOverlay_IsRemovedAfterItsDuration()
+	{
+		var data = CreateLayeredPlayback();
+		Assert.True(data.PlayAtScriptLayer("OVERLAY"));
+
+		data.Update(TimeSpan.FromSeconds(0.25));
+
+		Assert.False(data.IsPlaying("OVERLAY"));
+		Assert.Equal("BASE", data.CurrentClip);
+	}
+
 	[Fact]
 	public void BaseRootTranslation_InterpolatesTheRootChannel()
 	{

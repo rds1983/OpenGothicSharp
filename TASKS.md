@@ -114,7 +114,7 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
 - No audio yet; scripting is live in G1вЂ“G3.
 - UI exists: Myra `Desktop` rooted at a `Hud` panel with four independently anchored blocks
   вЂ” an always-visible `Controls` list (bottom-right), an `InventoryPanel` (bottom-left), and a
-  toggleable `DebugOverlay` (top-left, F1) showing FPS, camera position, draw-call and triangle
+  toggleable `DebugOverlay` (top-left, F1) showing FPS, elapsed time, camera position/yaw, draw-call and triangle
   counts, the active debug views and the focused vob. Layouts are `.xmmp` exported with
   `myra-export`; all UI lives in `OpenGothic/UI/`.
 - Debug views: F2 toggles wireframe, F3 toggles bounding boxes; independent of F1 and off by
@@ -379,8 +379,8 @@ clip as the base changes 17,103 px across the whole model (y 0вЂ“240); captu
 overlay are pixel-identical to before the task.
 
 Known gaps: a layered change snaps, where the reference ramps a new layer in over its blend
-time; a one-shot overlay holds its last frame until `StopLayer`/`Stop`, which the game's
-overlay lifecycle (F1) will drive.
+time. `AnimationData.Update` now drops a finished one-shot overlay with no `PlaybackNext`, like
+`Pose::processLayers`, so the script-side gesture lifecycle no longer waits for F1.
 
 ### C8. Composed model вЂ” DONE
 An actor is not one file: the body (`HUM_BODY_NAKED0.MDM`) and its armour (`ARMOR_*.MDL`) share
