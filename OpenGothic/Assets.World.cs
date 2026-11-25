@@ -24,14 +24,14 @@ namespace OpenGothic
 
 		private class MaterialInfo
 		{
-			public ZenKit.Material Material { get; }
+			public OpenGothic.ZenKit.Material Material { get; }
 
-			public MaterialInfo(ZenKit.Material material)
+			public MaterialInfo(OpenGothic.ZenKit.Material material)
 			{
 				Material = material ?? throw new ArgumentNullException(nameof(material));
 			}
 
-			public bool EqualsTo(ZenKit.Material material)
+			public bool EqualsTo(OpenGothic.ZenKit.Material material)
 			{
 				return Material.Texture == material.Texture;
 			}

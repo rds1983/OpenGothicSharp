@@ -62,10 +62,9 @@ without breaking one, stop and ask the developer.
 ## Technology and conventions
 
 - **Stack:** C# / .NET 8, MonoGame, DigitalRiseModel (models/animation), Myra (UI),
-  BepuPhysics2 (physics), ZenKit (VDF/ZEN/MDL/DAT reading). The **ZenKitCS native package is a
-  stopgap**: Milestone N ports it to managed C# in `OpenGothic/ZenKit/` (namespace
-  `OpenGothic.ZenKit`), which is the long-term reader — put new format work there when it
-  lands, not into the native wrapper.
+  BepuPhysics2 (physics), and the managed ZenKit port in `OpenGothic/ZenKit/` (namespace
+  `OpenGothic.ZenKit`) for VDF/ZEN/MDL/DAT reading. The C++ ZenKit source is the format
+  reference; the native ZenKitCS package is no longer used.
 - **Rendering:** stock MonoGame effects (`BasicEffect`, `SkinnedEffect`, …) until gameplay
   is polished. Do not build a custom shader system early.
 - **UI:** Myra, usability first. Parity comes later.

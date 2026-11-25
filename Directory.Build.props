@@ -7,14 +7,10 @@
     <Description>Insane attempt to rewrite Gothic in C#</Description>
     <RootNamespace>OpenGothic</RootNamespace>
     <MonoGameTargetFramework>net8.0</MonoGameTargetFramework>
-    <!-- ZenKit ships an AMD64 assembly. Build an x64 process so the reference is not a
-         mixed-architecture mismatch (MSB3270) and no 32-bit host is possible. -->
-    <PlatformTarget>x64</PlatformTarget>
     <Version>0.1.0</Version>
     <BepuPhysicsVersion>2.4.0</BepuPhysicsVersion>
     <MonoGameVersion>3.8.6.1</MonoGameVersion>
     <DigitalRiseModelVersion>0.7.8</DigitalRiseModelVersion>
     <MyraVersion>1.6.8</MyraVersion>
-    <ZenKitVersion>1.3.0-cs.1</ZenKitVersion>
   </PropertyGroup>
 </Project>

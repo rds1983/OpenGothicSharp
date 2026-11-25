@@ -9,8 +9,7 @@
 - **DigitalRiseModel** — models, skeletons, animations
 - **Myra** — UI
 - **BepuPhysics2** — physics and collision
-- **ZenKit** — VDF/ZEN/MDL/DAT file formats; the native package is being replaced by the
-  managed port in `OpenGothic/ZenKit/`
+- **ZenKit port** - managed VDF/ZEN/MDL/DAT readers in `OpenGothic/ZenKit/`; no native package
 
 ## Requirements
 
@@ -42,15 +41,15 @@ and comment-only lines; inline comments count as code.
 
 | Area | C# files | Size | Physical lines | Code | Comments | Blank |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| All source | 126 | 755.7 KiB | 28,429 | 21,795 | 2,085 | 4,549 |
-| `OpenGothic/` | 92 | 650.6 KiB | 24,182 | 18,296 | 2,059 | 3,827 |
+| All source | 126 | 754.8 KiB | 28,393 | 21,767 | 2,083 | 4,543 |
+| `OpenGothic/` | 92 | 649.6 KiB | 24,146 | 18,268 | 2,057 | 3,821 |
 | `OpenGothic.Tests/` | 34 | 105.2 KiB | 4,247 | 3,499 | 26 | 722 |
 
 Main project by folder:
 
 | Folder | Files | Physical lines | Code | Size |
 | --- | ---: | ---: | ---: | ---: |
-| `(root)` | 20 | 5,959 | 4,379 | 174.6 KiB |
+| `(root)` | 20 | 5,923 | 4,351 | 173.7 KiB |
 | `Graphics` | 16 | 2,217 | 1,427 | 66.1 KiB |
 | `Physics` | 4 | 1,698 | 1,249 | 49.3 KiB |
 | `Scripts` | 3 | 1,479 | 1,193 | 39.3 KiB |
@@ -72,7 +71,7 @@ The totals include four Myra-generated `*.Generated.cs` UI files: 293 physical l
 
 - [OpenGothic](https://github.com/Try/OpenGothic) — the C++ project this is a port of
 - [MonoGame](http://www.monogame.net/)
-- [ZenKitCS](https://github.com/GothicKit/ZenKitCS)
+- [ZenKit](https://github.com/GothicKit/ZenKit) - the C++ format reader this managed port follows
 - [DigitalRiseModel](https://github.com/rds1983/DigitalRiseModel)
 - [Myra](https://github.com/rds1983/Myra)
 - [BepuPhysics2](https://github.com/bepu/bepuphysics2)

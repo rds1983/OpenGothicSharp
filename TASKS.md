@@ -133,12 +133,11 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   clock, walks NPCs between grounded routine points, and is complete. Cut-out foliage
   materials render with `AlphaTestEffect`. F3.1 (script AI states), F3.2 (AI queries/actions,
   sitting and sleeping), F3.3 (engine perception), F3.4 (process policies), F3.5 (movement
-  parity) and F3.6 (mob placement) are complete. **Milestone N is underway: N1 (managed
-  IO/VFS/textures), N2 (world, waynet and vobs) and N3 (models and animation) are done.**
-  N4 is underway: N4a (DAT reader), N4b (managed VM and typed instances) and N4c
-  (cutscene/output units) are done; N5 (animated `ZS_POS` seat alignment) is also done.
-  The port lives in `OpenGothic/ZenKit/`; N6 (remove ZenKitCS) is next.
-  After N, resume Milestone G at G4; F3.7 (visible perception reaction) still needs K1/H1.
+  parity) and F3.6 (mob placement) are complete. **Milestone N is complete: N1 (managed IO/VFS/textures), N2 (world, waynet and
+  vobs), N3 (models and animation), N4 (Daedalus), N5 (animated `ZS_POS` seating) and
+  N6 (remove ZenKitCS) are done.** The port lives in `OpenGothic/ZenKit/`; the native
+  package is gone.
+  Milestone G is now current at G4; F3.7 (visible perception reaction) still needs K1/H1.
 
 ---
 
@@ -912,7 +911,7 @@ Order: F3.1 в†’ F3.2 в†’ F3.3 в†’ F3.4 в†’ F3.5 в†’ F3.
 
 ---
 
-## Milestone N вЂ” Managed ZenKit port (CURRENT)
+## Milestone N - Managed ZenKit port (DONE)
 
 Replace the native **ZenKitCS** bindings with a C# port of ZenKit, using the ZenKit source as
 the format/behavior reference (MIT; never inspect the original game executables). The port
@@ -1003,7 +1002,7 @@ to typed blocks and messages through the shared `ZenArchive` reader. It matches 
 all 20,826 blocks, including names, text, audio names and message types; nested block chains
 are followed. A hermetic fixture covers the root count, nested blocks and lookup. The ASCII
 `.lsc` export is not read because the game loads `Ou.dat`. N5 (animated `ZS_POS` seating)
-is next.
+is done.
 **Uses N1:** DAT records load through `VfsNode.OpenRead()`.
 
 ### N5. Mob attach points and seat alignment - DONE
@@ -1022,17 +1021,20 @@ carries the body onto the furniture; `InteractiveVob` prepares `S_S0` for every 
 Attach points are claimed per NPC, and the chosen front/back bed node selects the matching clip.
 The seat-surface ray and the 66-unit pelvis offset are gone. Verified in-game on benches, chairs
 (`ZS_POS0_DIST`) and double beds (front/back sides), with 309 tests passing.
-### N6. Remove ZenKitCS
-Switch the remaining logger bridge and every consumer to `OpenGothic.ZenKit/`, delete the
-package reference and the native runtime files, and verify the full test suite and a game run.
-**Done when:** no ZenKitCS package namespace remains and the client runs from the managed port
-only.
-**Includes:** moving the logger bridge into the managed port and deleting the ZenKitCS package
-reference.
+### N6. Remove ZenKitCS - DONE
+The managed readers are the only ZenKit implementation in the client; the native package and
+the logger bridge are gone.
+
+**Implemented:** removed the `ZenKit` package reference, `ZenKitVersion` and the ZenKit-only
+x64 platform pin, deleted the
+`ZenKit.Logger` bridge from `Log.cs`, pointed the remaining `Assets.World` material types at
+`OpenGothic.ZenKit` directly, and updated the stack/README notes. A clean rebuild contains no
+`ZenKit*.dll` in either output directory. The game boots 406 script NPCs, loads the cutscene
+library and runs a dialog with no errors; 309 tests pass.
 
 ---
 
-## Milestone G вЂ” Daedalus scripting (game logic)
+## Milestone G - Daedalus scripting (game logic) (CURRENT)
 
 ### G1. Daedalus VM вЂ” DONE
 Integrate ZenKit `DaedalusScript`/`DaedalusVm`; load `Gothic.dat`/`OU`, register
@@ -1095,7 +1097,7 @@ audio hook.
 data/UI scope: City Guard, Pablo and Vatras conversations complete through the script
 engine; `-talk` and `-talkui` exercise it. Camera/voice are F1.5/J1.
 
-### G4. Quests & journal
+### G4. Quests & journal (CURRENT)
 Quest log, chapter state, and the document/mission log the scripts drive.
 **Done when:** a quest can be started, progressed, and shown in the journal.
 

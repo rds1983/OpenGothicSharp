@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using ZenKit;
 
 namespace OpenGothic;
 
@@ -8,7 +7,6 @@ public static class Log
 {
 	private static readonly object Sync = new object();
 	private static StreamWriter _file;
-	private static Logger.Callback _zenKitCallback;
 
 	public static string FileName { get; private set; }
 
@@ -26,9 +24,6 @@ public static class Log
 			_file = null;
 			Console.Error.WriteLine($"Unable to open log file '{FileName}': {ex.Message}");
 		}
-
-		_zenKitCallback = OnZenKitLog;
-		Logger.Set(LogLevel.Info, _zenKitCallback);
 	}
 
 	public static void Shutdown()
@@ -46,37 +41,6 @@ public static class Log
 	public static void Warning(string message) => Write("WARN", message, true);
 
 	public static void Error(string message) => Write("ERROR", message, true);
-
-	private static void OnZenKitLog(LogLevel level, string name, string message)
-	{
-		var category = string.IsNullOrEmpty(name) ? "zenkit" : $"zenkit:{name}";
-
-		switch (level)
-		{
-			case LogLevel.Error:
-				// ZenKit 1.3 reports recoverable section-size mismatches as errors; the reference
-				// client logs the same messages at info/warning. Keep real errors visible.
-				if (message.Contains("bytes overflowed in section", StringComparison.OrdinalIgnoreCase) ||
-				    message.Contains("bytes remaining in section", StringComparison.OrdinalIgnoreCase))
-				{
-					Warning($"[{category}] {message}");
-				}
-				else
-				{
-					Error($"[{category}] {message}");
-				}
-
-				break;
-
-			case LogLevel.Warning:
-				Warning($"[{category}] {message}");
-				break;
-
-			default:
-				Info($"[{category}] {message}");
-				break;
-		}
-	}
 
 	private static void Write(string level, string message, bool isError)
 	{

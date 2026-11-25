@@ -120,30 +120,22 @@ The user `Gothic.ini` is written to the working directory at runtime and is giti
 ### Logging
 
 `Log` (`OpenGothic/Log.cs`) is the single logging entry point and exposes `Log.Info`,
-`Log.Warning`, and `Log.Error`. `Log.Initialize()` runs before anything else and routes
-`ZenKit.Logger` messages under a `zenkit:<name>` category. Each line is written to the
-console (errors to stderr) and to `log.txt` in the working directory, timestamped and
-level-tagged. `Log.Shutdown()` flushes and closes the file; it is called from a `finally`
-in `Main` so even a fatal exception is recorded first. `log.txt` is gitignored.
+`Log.Warning`, and `Log.Error`. `Log.Initialize()` runs before anything else. Each line is
+written to the console (errors to stderr) and to `log.txt` in the working directory, timestamped
+and level-tagged. `Log.Shutdown()` flushes and closes the file; it is called from a `finally` in
+`Main` so even a fatal exception is recorded first. `log.txt` is gitignored. The managed
+readers call `Log` directly; there is no native logger bridge.
 
-`ZenKit` ships native libraries and injects a `RuntimeIdentifier` per platform, so the
-project declares `RuntimeIdentifiers` for its supported platforms to keep restore and
-build targets in sync. The package is pinned to `1.3.0-cs.1`, matching the ZenKit 1.3 parser
-the reference C++ client uses. ZenKit 1.3 classifies recoverable section-size mismatches
-(`bytes overflowed/remaining in section`) as errors; `Log` downgrades those to warnings because
-the reference logs the same messages at info/warning level, while keeping real errors visible.
-
-**ZenKitCS is a stopgap.** Milestone N replaces it with a managed port in
-`OpenGothic/ZenKit/` (namespace `OpenGothic.ZenKit`, one folder per format family). The native
-package cannot expose waynet edges, MDL animations or `ZS_POS` attach points, and it fails on
-one shipped monster model; N1–N6 remove those limitations and the package itself.
+**The native ZenKitCS package has been removed.** Milestone N replaced it with the managed
+port in `OpenGothic/ZenKit/` (namespace `OpenGothic.ZenKit`, one folder per format family).
+N1-N6 are complete; the client runs from the managed port only.
 
 **N1 is in place.** `OpenGothic/ZenKit/IO/` owns `Read`, the VDF `Vfs`/`VfsNode` and the
 overwrite rules; `OpenGothic/ZenKit/Material/` owns the ZTEX `Texture` reader and the
 DXT1/3/5 decoder. `Assets` now enumerates records and loads every texture through the managed
 readers. VDFs are mounted with `MemoryMappedFile`, so the 2.4 GiB of shipped archives are not
-copied into managed arrays. World, model and script parsers still go through ZenKitCS
-(`LoadNativeRecord`, which pins the record bytes for the native call) until N2–N4. The format
+copied into managed arrays. World, model and script parsers initially went through ZenKitCS (`LoadNativeRecord`)
+until N2-N4; all of them are managed now. The format
 details are in [Specifications/vdf-format.md](Specifications/vdf-format.md) and
 [Specifications/texture-format.md](Specifications/texture-format.md).
 
@@ -183,8 +175,11 @@ managed stack, call frames, globals, temporary strings and external ABI.
 views over per-class member storage. The managed VM matches ZenKitCS on the reference install
 for the whole symbol table and for the 5,228 startup external calls, and the managed cutscene
 library matches it for all 20,826 `Ou.dat` blocks. `ScriptRuntime`, `NpcBinding`,
-`Dialog`, `NpcActor` and `NpcAiSystem` use only the managed port; the `Log` bridge is the
-remaining native ZenKit dependency until N6.
+`Dialog`, `NpcActor` and `NpcAiSystem` use only the managed port; no native ZenKit dependency remains.
+
+**N5 and N6 are in place.** NPCs use the authored `ZS_POS*` attach nodes, and the native
+ZenKitCS logger bridge and package reference are gone; the game runs from `OpenGothic.ZenKit`
+only.
 Format note: [Specifications/daedalus.md](Specifications/daedalus.md).
 
 ## Testing
