@@ -138,6 +138,21 @@ the reference logs the same messages at info/warning level, while keeping real e
 package cannot expose waynet edges, MDL animations or `ZS_POS` attach points, and it fails on
 one shipped monster model; N1–N6 remove those limitations and the package itself.
 
+**N1 is in place.** `OpenGothic/ZenKit/IO/` owns `Read`, the VDF `Vfs`/`VfsNode` and the
+overwrite rules; `OpenGothic/ZenKit/Material/` owns the ZTEX `Texture` reader and the
+DXT1/3/5 decoder. `Assets` now enumerates records and loads every texture through the managed
+readers. VDFs are mounted with `MemoryMappedFile`, so the 2.4 GiB of shipped archives are not
+copied into managed arrays. World, model and script parsers still go through ZenKitCS
+(`LoadNativeRecord`, which pins the record bytes for the native call) until N2–N4. The format
+details are in [Specifications/vdf-format.md](Specifications/vdf-format.md) and
+[Specifications/texture-format.md](Specifications/texture-format.md).
+
+On the reference install all 21 shipped VDFs produce exactly the same record paths as
+ZenKitCS, and all 2,543 textures in `Textures.vdf` match its metadata and raw mipmaps; sampled
+RGBA decodes match as well. Startup reports 31,205 records under 30,998 unique names. The app
+renders `NEWWORLD.ZEN` with the managed paths (2,461 draw calls, 429k triangles in the
+verification frame).
+
 ## Testing
 
 Unit tests live in `OpenGothic.Tests` (xunit). Run them with:

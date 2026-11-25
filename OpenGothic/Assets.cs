@@ -1,10 +1,10 @@
-﻿using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Graphics;
 using OpenGothic.Utility;
+using OpenGothic.ZenKit;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using ZenKit;
 
 namespace OpenGothic;
 
@@ -25,28 +25,36 @@ public partial class Assets
 		}
 	}
 
-	private readonly Dictionary<string, List<RecordInfo>> _allRecords = new Dictionary<string, List<RecordInfo>>();
+	private readonly Dictionary<string, List<RecordInfo>> _allRecords =
+		new Dictionary<string, List<RecordInfo>>(StringComparer.OrdinalIgnoreCase);
 	private readonly Dictionary<string, object> _cache = new Dictionary<string, object>();
 
 	/// <summary>Textures whose stored format is DXT1, by every name they were asked for.</summary>
 	private readonly HashSet<string> _dxt1Textures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-	/// <summary>
-	/// Parses a VFS record while guaranteeing its <see cref="Read"/> stays alive. ZenKit's
-	/// managed wrapper has a finalizer and no <c>Dispose</c>: without this the finalizer can
-	/// free the native read handle while a parser is still reading it, which shows up as
-	/// random out-of-range node indices in otherwise valid models.
-	/// </summary>
+	/// <summary>Parses a record with one of the managed ZenKit readers.</summary>
 	private static T LoadRecord<T>(VfsNode node, Func<Read, T> parse)
 	{
-		var read = node.Buffer;
+		return parse(node.OpenRead());
+	}
+
+	/// <summary>
+	/// Parses a record with one of the native ZenKitCS readers that the managed port has not
+	/// replaced yet. The bytes are pinned for the duration of the parse: ZenKitCS keeps a
+	/// pointer into the array and does not pin it itself.
+	/// </summary>
+	private static T LoadNativeRecord<T>(VfsNode node, Func<global::ZenKit.Read, T> parse)
+	{
+		var data = node.ReadAllBytes();
+		var handle = System.Runtime.InteropServices.GCHandle.Alloc(
+			data, System.Runtime.InteropServices.GCHandleType.Pinned);
 		try
 		{
-			return parse(read);
+			return parse(new global::ZenKit.Read(data));
 		}
 		finally
 		{
-			GC.KeepAlive(read);
+			handle.Free();
 		}
 	}
 
@@ -86,11 +94,10 @@ public partial class Assets
 	{
 		if (vfsRoot.Name.Contains("."))
 		{
-			List<RecordInfo> existingRecords;
-			if (!_allRecords.TryGetValue(vfsRoot.Name, out existingRecords))
+			if (!_allRecords.TryGetValue(vfsRoot.Name, out var existingRecords))
 			{
 				existingRecords = new List<RecordInfo>();
-				_allRecords[vfsRoot.Name.ToUpper()] = existingRecords;
+				_allRecords[vfsRoot.Name] = existingRecords;
 			}
 			else
 			{
@@ -124,6 +131,9 @@ public partial class Assets
 
 			AddRecordsRecursively(vfsName, vfs, vfs.Root);
 		}
+
+		var recordCount = _allRecords.Values.Sum(records => records.Count);
+		Log.Info($"Loaded {recordCount} records ({_allRecords.Count} unique names) from {vdfs.Length} VDF archives.");
 	}
 
 	private T Get<T>(GraphicsDevice device, string name, Func<GraphicsDevice, string, T> loader) where T : class
@@ -149,20 +159,20 @@ public partial class Assets
 	/// and a DXT1 texture with an opaque material colour is solid. There is no scan of the
 	/// alpha channel - the texture format is the only texture input.
 	/// </summary>
-	internal static bool IsAlphaTested(ZenKit.AlphaFunction alpha, ZenKit.MaterialGroup group,
+	internal static bool IsAlphaTested(global::ZenKit.AlphaFunction alpha, global::ZenKit.MaterialGroup group,
 		byte colorAlpha, bool hasTexture, bool dxt1)
 	{
 		switch (alpha)
 		{
-			case ZenKit.AlphaFunction.Blend:
-			case ZenKit.AlphaFunction.Add:
-			case ZenKit.AlphaFunction.Subtract:
-			case ZenKit.AlphaFunction.Multiply:
-			case ZenKit.AlphaFunction.MultiplyAlt:
+			case global::ZenKit.AlphaFunction.Blend:
+			case global::ZenKit.AlphaFunction.Add:
+			case global::ZenKit.AlphaFunction.Subtract:
+			case global::ZenKit.AlphaFunction.Multiply:
+			case global::ZenKit.AlphaFunction.MultiplyAlt:
 				return false;
 		}
 
-		if (group == ZenKit.MaterialGroup.Water)
+		if (group == global::ZenKit.MaterialGroup.Water)
 		{
 			return false;
 		}
@@ -182,9 +192,9 @@ public partial class Assets
 		return true;
 	}
 
-	/// <summary>Applies <see cref="IsAlphaTested(ZenKit.AlphaFunction, ZenKit.MaterialGroup, byte, bool, bool)"/>
+	/// <summary>Applies <see cref="IsAlphaTested(global::ZenKit.AlphaFunction, global::ZenKit.MaterialGroup, byte, bool, bool)"/>
 	/// to a ZEN material; its texture must already be loaded so its format is known.</summary>
-	internal bool IsAlphaTested(ZenKit.IMaterial material)
+	internal bool IsAlphaTested(global::ZenKit.IMaterial material)
 	{
 		if (material == null)
 		{
@@ -210,29 +220,25 @@ public partial class Assets
 	public bool TryGetBytes(string name, out byte[] data)
 	{
 		data = null;
-		if (string.IsNullOrEmpty(name) || !_allRecords.TryGetValue(name.ToUpperInvariant(), out var records) ||
+		if (string.IsNullOrEmpty(name) || !_allRecords.TryGetValue(name, out var records) ||
 		    records.Count == 0)
 		{
 			return false;
 		}
 
-		data = LoadRecord(records[records.Count - 1].Node, r => r.Bytes);
+		data = records[records.Count - 1].Node.ReadAllBytes();
 		return data != null && data.Length > 0;
 	}
 
 	private RecordInfo GetLastRecord(string name)
 	{
-		var records = _allRecords[name.ToUpper()];
-
-		return records[records.Count - 1];
+		return _allRecords[name][^1];
 	}
 
 	private Texture2D LoadTexture(GraphicsDevice device, string name)
 	{
-		List<RecordInfo> records;
-
 		name = name.ToUpper();
-		if (!_allRecords.TryGetValue(name, out records))
+		if (!_allRecords.TryGetValue(name, out var records))
 		{
 			// Add '-C' and .TEX ext
 			var newName = Path.GetFileNameWithoutExtension(name);
@@ -247,19 +253,19 @@ public partial class Assets
 
 		var record = records[records.Count - 1];
 
-		var texture = LoadRecord(record.Node, r => new ZenKit.Texture(r));
+		var texture = LoadRecord(record.Node, r => new OpenGothic.ZenKit.Texture(r));
 		var mipmapCount = texture.MipmapCount;
 
 		// Compressed formats upload directly; everything else (including palettized
-		// formats) is decoded to RGBA by ZenKit.
+		// formats) is decoded to RGBA by the managed texture reader.
 		if (texture.Format.IsCompressed())
 		{
 			var result = new Texture2D(device, texture.Width, texture.Height, mipmapCount > 1, texture.Format.ToXNA());
 
-			var allMipmapsRaw = texture.AllMipmapsRaw;
 			for (var i = 0; i < mipmapCount; ++i)
 			{
-				result.SetData(i, null, allMipmapsRaw[i], 0, allMipmapsRaw[i].Length);
+				var data = texture.GetMipmapRaw(i);
+				result.SetData(i, null, data, 0, data.Length);
 			}
 
 			MarkDxt1(name, record.Name, texture.Format);
@@ -269,10 +275,10 @@ public partial class Assets
 		{
 			var result = new Texture2D(device, texture.Width, texture.Height, mipmapCount > 1, SurfaceFormat.Color);
 
-			var allMipmapsRgba = texture.AllMipmapsRgba;
 			for (var i = 0; i < mipmapCount; ++i)
 			{
-				result.SetData(i, null, allMipmapsRgba[i], 0, allMipmapsRgba[i].Length);
+				var data = texture.GetMipmapRgba(i);
+				result.SetData(i, null, data, 0, data.Length);
 			}
 
 			MarkDxt1(name, record.Name, texture.Format);
@@ -284,9 +290,9 @@ public partial class Assets
 	/// Remembers DXT1 textures under the requested and the resolved name; the material
 	/// classification turns them solid when the material colour is opaque.
 	/// </summary>
-	private void MarkDxt1(string requestedName, string resolvedName, ZenKit.TextureFormat format)
+	private void MarkDxt1(string requestedName, string resolvedName, TextureFormat format)
 	{
-		if (format != ZenKit.TextureFormat.Dxt1)
+		if (format != TextureFormat.Dxt1)
 		{
 			return;
 		}

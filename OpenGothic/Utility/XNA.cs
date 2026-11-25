@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using OpenGothic.Graphics.Vertices;
+using OpenGothic.ZenKit;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,17 +35,17 @@ internal static class XNA
 		return result;
 	}
 
-	public static SurfaceFormat ToXNA(this ZenKit.TextureFormat textureFormat)
+	public static SurfaceFormat ToXNA(this TextureFormat textureFormat)
 	{
 		switch (textureFormat)
 		{
-			case ZenKit.TextureFormat.Dxt1:
+			case TextureFormat.Dxt1:
 				return SurfaceFormat.Dxt1;
 
-			case ZenKit.TextureFormat.Dxt3:
+			case TextureFormat.Dxt3:
 				return SurfaceFormat.Dxt3;
 
-			case ZenKit.TextureFormat.Dxt5:
+			case TextureFormat.Dxt5:
 				return SurfaceFormat.Dxt5;
 		}
 
@@ -53,12 +54,12 @@ internal static class XNA
 
 	/// <summary>
 	/// Whether the format can be uploaded to the GPU as-is. Formats that cannot are
-	/// decoded to RGBA by ZenKit instead. See <see cref="ToXNA"/>.
+	/// decoded to RGBA by the managed texture reader instead. See <see cref="ToXNA"/>.
 	/// </summary>
-	public static bool IsCompressed(this ZenKit.TextureFormat textureFormat) =>
-		textureFormat == ZenKit.TextureFormat.Dxt1 ||
-		textureFormat == ZenKit.TextureFormat.Dxt3 ||
-		textureFormat == ZenKit.TextureFormat.Dxt5;
+	public static bool IsCompressed(this TextureFormat textureFormat) =>
+		textureFormat == TextureFormat.Dxt1 ||
+		textureFormat == TextureFormat.Dxt3 ||
+		textureFormat == TextureFormat.Dxt5;
 
 	public static Color ToXna(this System.Drawing.Color color) => new Color(color.R, color.G, color.B, color.A);
 

@@ -133,10 +133,11 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   clock, walks NPCs between grounded routine points, and is complete. Cut-out foliage
   materials render with `AlphaTestEffect`. F3.1 (script AI states), F3.2 (AI queries/actions,
   sitting and sleeping), F3.3 (engine perception), F3.4 (process policies), F3.5 (movement
-  parity) and F3.6 (mob placement) are complete. **Next: Milestone N вЂ” the managed ZenKit port
-  in `OpenGothic/ZenKit/`** (N1 IO/VFS/textures, N2 world/waynet/vobs, N3 models/animation,
-  N4 Daedalus VM, N5 animated `ZS_POS` seat alignment, N6 remove ZenKitCS). After N, resume
-  Milestone G at G4; F3.7 (visible perception reaction) still needs K1/H1.
+  parity) and F3.6 (mob placement) are complete. **Milestone N is underway: N1 (managed
+  IO/VFS/textures) is done; N2 (world, waynet and vobs) is next.** The port lives in
+  `OpenGothic/ZenKit/`; N3 models/animation, N4 Daedalus VM, N5 animated `ZS_POS` seat
+  alignment and N6 (remove ZenKitCS) follow. After N, resume Milestone G at G4; F3.7 (visible
+  perception reaction) still needs K1/H1.
 
 ---
 
@@ -934,11 +935,19 @@ Daedalus VM errors (`pop_reference`/`SELF`) that are hard to diagnose from C#.
 
 Order: N1 в†’ N2 в†’ N3 в†’ N4 в†’ N5 в†’ N6, then resume Milestone G at G4.
 
-### N1. IO, VFS and texture readers
+### N1. IO, VFS and texture readers — DONE
 Port `Read`, VDF mount/record lookup and the texture reader, including the alpha/DXT format
 information the renderer needs.
-**Done when:** record enumeration and texture loading run through `OpenGothic.ZenKit` and match
-the current startup counts.
+
+**Implemented:** `ZenKit/IO` holds `Read`/`MemoryRead`, memory-mapped and in-memory
+archive sources, and `Vfs`/`VfsNode` with the reference's mount/overwrite rules.
+`ZenKit/Material` holds the ZTEX `Texture` reader with all shipped pixel formats and a
+DXT1/3/5 decoder. `Assets` enumerates every record and loads every texture through the
+managed readers; parsers that are not ported yet go through `LoadNativeRecord`, which copies
+the record and pins it for the native call. On the reference install the managed VFS matches
+ZenKitCS for all 21 archives, all 2,543 textures match its metadata and raw mipmaps, and startup
+reports 31,205 records under 30,998 unique names. Format notes:
+`Specifications/vdf-format.md` and `Specifications/texture-format.md`.
 
 ### N2. World, waynet and vob readers
 Port ZEN (mesh, materials, waynet with edges, BSP, vobs), including the mob scheme/state and
@@ -946,17 +955,22 @@ vob visual data.
 **Done when:** `NEWWORLD.ZEN` loads through the managed reader; waynet pathfinding uses real
 edges, and `WLD_IsMobAvailable`/`AI_UseMob` read the mob's scheme instead of matching visual
 names.
+**Uses N1:** parse from `VfsNode.OpenRead()`. The waynet must expose the edges the native
+wrapper omits, so waypoint pathfinding can use the graph instead of direct targets.
 
 ### N3. Model and animation readers
 Port MDL/MDM/MDH/MDS/MRM/MMB/MAN: skeletons, skin weights, animations and their `Next`/alias
 data, morph meshes and model attach points (`ZS_POS*`).
 **Done when:** human and monster bodies and animations load through the managed readers,
 including the model that currently hits `std::bad_alloc`.
+**Uses N1:** model records load through `Read`; the hierarchy must expose the `ZS_POS*` nodes
+and their animated transforms for N5.
 
 ### N4. Daedalus reader and VM
 Port the DAT reader, symbol/instance storage, the VM and the external-call ABI, removing the
 native handle/finalizer workarounds.
 **Done when:** startup, script objects and dialogs pass from the managed VM.
+**Uses N1:** DAT records load through `VfsNode.OpenRead()`.
 
 ### N5. Mob attach points and seat alignment
 Use the managed model reader to implement the reference's `Interactive::attach` placement:
@@ -975,6 +989,8 @@ Switch `Assets` and every reader consumer to `OpenGothic.ZenKit/`, delete the pa
 and the native runtime files, and verify the full test suite and a game run.
 **Done when:** no ZenKitCS package namespace remains and the client runs from the managed port
 only.
+**Includes:** deleting `LoadNativeRecord`, the `NativeOwners` list and the ZenKitCS package
+reference.
 
 ---
 

@@ -9,7 +9,8 @@
 - **DigitalRiseModel** — models, skeletons, animations
 - **Myra** — UI
 - **BepuPhysics2** — physics and collision
-- **ZenKit** — VDF/ZEN/MDL/DAT file formats
+- **ZenKit** — VDF/ZEN/MDL/DAT file formats; the native package is being replaced by the
+  managed port in `OpenGothic/ZenKit/`
 
 ## Requirements
 
@@ -35,27 +36,28 @@ Flags: `-g <path>`, `-game:<modfile.ini>`, `-w <world.zen>`, `-nomenu`, `-devmod
 
 ## Source metrics
 
-Measured on 2026-11-24 from the working tree. C# files under `OpenGothic/` and
+Measured on 2026-11-25 from the working tree. C# files under `OpenGothic/` and
 `OpenGothic.Tests/` only; `bin/`, `obj/` and IDE folders are excluded. "Code" excludes blank
 and comment-only lines; inline comments count as code.
 
 | Area | C# files | Size | Physical lines | Code | Comments | Blank |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| All source | 92 | 517.4 KiB | 18,406 | 13,578 | 1,920 | 2,908 |
-| `OpenGothic/` | 70 | 456.8 KiB | 15,832 | 11,512 | 1,906 | 2,414 |
-| `OpenGothic.Tests/` | 22 | 60.5 KiB | 2,574 | 2,066 | 14 | 494 |
+| All source | 102 | 568.6 KiB | 20,599 | 15,320 | 2,004 | 3,275 |
+| `OpenGothic/` | 75 | 493.0 KiB | 17,422 | 12,761 | 1,984 | 2,677 |
+| `OpenGothic.Tests/` | 27 | 75.5 KiB | 3,177 | 2,559 | 20 | 598 |
 
 Main project by folder:
 
 | Folder | Files | Physical lines | Code | Size |
 | --- | ---: | ---: | ---: | ---: |
-| `(root)` | 20 | 6,025 | 4,384 | 177.5 KiB |
+| `(root)` | 20 | 6,031 | 4,390 | 178.0 KiB |
 | `Graphics` | 16 | 2,217 | 1,427 | 66.1 KiB |
 | `Physics` | 4 | 1,691 | 1,243 | 49.0 KiB |
 | `Scripts` | 3 | 1,475 | 1,189 | 39.0 KiB |
 | `World` | 14 | 3,298 | 2,398 | 94.6 KiB |
-| `Utility` | 4 | 495 | 357 | 14.9 KiB |
+| `Utility` | 4 | 496 | 358 | 14.9 KiB |
 | `UI` | 9 | 631 | 514 | 15.7 KiB |
+| `ZenKit` | 5 | 1,583 | 1,242 | 35.7 KiB |
 
 The totals include four Myra-generated `*.Generated.cs` UI files: 293 physical lines,
 245 code lines, 8.0 KiB.

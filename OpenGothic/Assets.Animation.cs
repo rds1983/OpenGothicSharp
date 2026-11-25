@@ -57,7 +57,7 @@ partial class Assets
 			IModelScript script;
 			try
 			{
-				script = LoadRecord(GetLastRecord(name).Node, r => new ModelScript(r));
+				script = LoadNativeRecord(GetLastRecord(name).Node, r => new ModelScript(r));
 			}
 			catch (Exception ex)
 			{
@@ -145,9 +145,9 @@ partial class Assets
 
 			try
 			{
-				return LoadRecord(GetLastRecord(candidate).Node, r =>
+				return LoadNativeRecord(GetLastRecord(candidate).Node, r =>
 					candidate.EndsWith(".MDL", StringComparison.OrdinalIgnoreCase)
-						? KeepNativeOwner(new ZenKit.Model(r)).Hierarchy
+						? KeepNativeOwner(new global::ZenKit.Model(r)).Hierarchy
 						: new ModelHierarchy(r));
 			}
 			catch (Exception ex)
@@ -326,7 +326,7 @@ partial class Assets
 			scriptName = scriptStem + ".MDS";
 		}
 
-		var script = LoadRecord(GetLastRecord(scriptName).Node, r => new ModelScript(r));
+		var script = LoadNativeRecord(GetLastRecord(scriptName).Node, r => new ModelScript(r));
 		var skeleton = LoadScriptSkeleton(script, scriptStem);
 
 		var result = new ModelAnimationSet(scriptStem, script.SkeletonName, skeleton?.Nodes.Count ?? 0, boneNames);
@@ -376,7 +376,7 @@ partial class Assets
 			ModelAnimation man;
 			try
 			{
-				man = LoadRecord(GetLastRecord(manName).Node, r => new ModelAnimation(r));
+				man = LoadNativeRecord(GetLastRecord(manName).Node, r => new ModelAnimation(r));
 			}
 			catch (Exception ex)
 			{
@@ -580,7 +580,7 @@ partial class Assets
 			return;
 		}
 
-		var script = LoadRecord(GetLastRecord(record).Node, r => new ModelScript(r));
+		var script = LoadNativeRecord(GetLastRecord(record).Node, r => new ModelScript(r));
 		var skeleton = LoadScriptSkeleton(script, scriptStem);
 
 		Log.Info($"Animation dump for script '{scriptStem}':");
@@ -601,7 +601,7 @@ partial class Assets
 				continue;
 			}
 
-			var man = LoadRecord(GetLastRecord(manName).Node, r => new ModelAnimation(r));
+			var man = LoadNativeRecord(GetLastRecord(manName).Node, r => new ModelAnimation(r));
 			var fps = man.Fps > 0f ? man.Fps : entry.Fps;
 			var duration = fps > 0f ? man.FrameCount / fps : 0f;
 
@@ -624,7 +624,7 @@ partial class Assets
 		}
 
 		var clipManName = scriptStem + "-" + clipEntry.Name + ".MAN";
-		var data = LoadRecord(GetLastRecord(clipManName).Node, r => new ModelAnimation(r));
+		var data = LoadNativeRecord(GetLastRecord(clipManName).Node, r => new ModelAnimation(r));
 		var nodeCount = data.NodeIndices.Count;
 
 		Log.Info($"  first frame of '{clipEntry.Name}' ({nodeCount} channels):");

@@ -93,7 +93,7 @@ partial class Assets
 		{
 			var group = zkMaterial.Group;
 			friction = Physics.PhysicsMaterials.GetFriction(group);
-			sensor = group == ZenKit.MaterialGroup.Water;
+			sensor = group == global::ZenKit.MaterialGroup.Water;
 		}
 
 		result.Tag = new DrMeshPartTag(material)
@@ -548,13 +548,13 @@ partial class Assets
 
 		if (_allRecords.ContainsKey(mdlName))
 		{
-			var mdl = LoadRecord(GetLastRecord(mdlName).Node, r => new ZenKit.Model(r));
+			var mdl = LoadNativeRecord(GetLastRecord(mdlName).Node, r => new global::ZenKit.Model(r));
 			hierarchy = mdl.Hierarchy;
 			hierarchyOwner = mdl;
 		}
 		else if (_allRecords.ContainsKey(mdhName))
 		{
-			hierarchy = LoadRecord(GetLastRecord(mdhName).Node, r => new ModelHierarchy(r));
+			hierarchy = LoadNativeRecord(GetLastRecord(mdhName).Node, r => new ModelHierarchy(r));
 		}
 		else
 		{
@@ -588,7 +588,7 @@ partial class Assets
 		var mdlName = stem + ".MDL";
 		if (preferMdl && _allRecords.ContainsKey(mdlName))
 		{
-			var mdl = LoadRecord(GetLastRecord(mdlName).Node, r => new ZenKit.Model(r));
+			var mdl = LoadNativeRecord(GetLastRecord(mdlName).Node, r => new global::ZenKit.Model(r));
 			return new ModelMeshSource(stem, mdl.Mesh, mdl.Hierarchy, mdl);
 		}
 
@@ -597,17 +597,17 @@ partial class Assets
 		{
 			var mdhName = stem + ".MDH";
 			IModelHierarchy hierarchy = _allRecords.ContainsKey(mdhName)
-				? LoadRecord(GetLastRecord(mdhName).Node, r => new ModelHierarchy(r))
+				? LoadNativeRecord(GetLastRecord(mdhName).Node, r => new ModelHierarchy(r))
 				: null;
 
-			return new ModelMeshSource(stem, LoadRecord(GetLastRecord(mdmName).Node, r => new ZenKit.ModelMesh(r)), hierarchy);
+			return new ModelMeshSource(stem, LoadNativeRecord(GetLastRecord(mdmName).Node, r => new global::ZenKit.ModelMesh(r)), hierarchy);
 		}
 
 		// An actor mesh is normally a bare .MDM, but accept a self-contained .MDL when no
 		// mesh file exists.
 		if (_allRecords.ContainsKey(mdlName))
 		{
-			var mdl = LoadRecord(GetLastRecord(mdlName).Node, r => new ZenKit.Model(r));
+			var mdl = LoadNativeRecord(GetLastRecord(mdlName).Node, r => new global::ZenKit.Model(r));
 			return new ModelMeshSource(stem, mdl.Mesh, mdl.Hierarchy, mdl);
 		}
 
@@ -634,7 +634,7 @@ partial class Assets
 	private DrMesh LoadMultiMesh(GraphicsDevice device, string name)
 	{
 		var record = GetLastRecord(name);
-		var zkMesh = LoadRecord(record.Node, r => new MultiResolutionMesh(r));
+		var zkMesh = LoadNativeRecord(record.Node, r => new MultiResolutionMesh(r));
 
 		return CreateMesh(device, null, zkMesh);
 	}
@@ -642,7 +642,7 @@ partial class Assets
 	private DrMesh LoadMorphMesh(GraphicsDevice device, string name)
 	{
 		var record = GetLastRecord(name);
-		var zkMorph = LoadRecord(record.Node, r => new MorphMesh(r));
+		var zkMorph = LoadNativeRecord(record.Node, r => new MorphMesh(r));
 
 		return CreateMesh(device, null, zkMorph.Mesh);
 	}

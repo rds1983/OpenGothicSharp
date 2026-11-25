@@ -6,6 +6,9 @@
     <OutputPath>bin\MonoGame\$(Configuration)</OutputPath>
     <DefineConstants>$(DefineConstants);MONOGAME</DefineConstants>
     <RuntimeIdentifiers>linux-x64;win-x64;osx-x64;android-arm64</RuntimeIdentifiers>
+    <!-- The managed VFS reads the game's multi-gigabyte VDFs through memory-mapped views.
+         Pointer reads avoid copying every primitive through a scratch array. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="ZenKit" Version="$(ZenKitVersion)" />

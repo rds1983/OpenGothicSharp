@@ -25,14 +25,14 @@ namespace OpenGothic
 
 		private class MaterialInfo
 		{
-			public ZenKit.IMaterial Material { get; }
+			public global::ZenKit.IMaterial Material { get; }
 
-			public MaterialInfo(ZenKit.IMaterial material)
+			public MaterialInfo(global::ZenKit.IMaterial material)
 			{
 				Material = material ?? throw new ArgumentNullException(nameof(material));
 			}
 
-			public bool EqualsTo(ZenKit.IMaterial material)
+			public bool EqualsTo(global::ZenKit.IMaterial material)
 			{
 				return Material.Texture == material.Texture;
 			}
@@ -44,7 +44,7 @@ namespace OpenGothic
 		{
 			var record = GetLastRecord(name);
 
-			var zkWorld = LoadRecord(record.Node, r => new World(r));
+			var zkWorld = LoadNativeRecord(record.Node, r => new World(r));
 
 			var waypoints = new Dictionary<string, Waypoint>(StringComparer.OrdinalIgnoreCase);
 			var waypointList = new List<Waypoint>();
