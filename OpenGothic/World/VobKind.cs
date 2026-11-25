@@ -2,7 +2,7 @@ namespace OpenGothic.Vobs;
 
 /// <summary>
 /// Behavioural category of a ZEN virtual object, derived from its file type and visual type.
-/// The tree keeps the raw <see cref="ZenKit.Vobs.VirtualObjectType"/> as well; this enum is
+/// The tree keeps the raw <see cref="OpenGothic.ZenKit.VirtualObjectType"/> as well; this enum is
 /// what focus, interactions and the diagnostics filter on.
 /// </summary>
 public enum VobKind

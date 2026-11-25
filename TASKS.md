@@ -134,8 +134,8 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   materials render with `AlphaTestEffect`. F3.1 (script AI states), F3.2 (AI queries/actions,
   sitting and sleeping), F3.3 (engine perception), F3.4 (process policies), F3.5 (movement
   parity) and F3.6 (mob placement) are complete. **Milestone N is underway: N1 (managed
-  IO/VFS/textures) is done; N2 (world, waynet and vobs) is next.** The port lives in
-  `OpenGothic/ZenKit/`; N3 models/animation, N4 Daedalus VM, N5 animated `ZS_POS` seat
+  IO/VFS/textures) and N2 (world, waynet and vobs) are done; N3 (models/animation) is next.**
+  The port lives in `OpenGothic/ZenKit/`; N4 Daedalus VM, N5 animated `ZS_POS` seat
   alignment and N6 (remove ZenKitCS) follow. After N, resume Milestone G at G4; F3.7 (visible
   perception reaction) still needs K1/H1.
 
@@ -949,14 +949,19 @@ ZenKitCS for all 21 archives, all 2,543 textures match its metadata and raw mipm
 reports 31,205 records under 30,998 unique names. Format notes:
 `Specifications/vdf-format.md` and `Specifications/texture-format.md`.
 
-### N2. World, waynet and vob readers
+### N2. World, waynet and vob readers — DONE
 Port ZEN (mesh, materials, waynet with edges, BSP, vobs), including the mob scheme/state and
 vob visual data.
-**Done when:** `NEWWORLD.ZEN` loads through the managed reader; waynet pathfinding uses real
-edges, and `WLD_IsMobAvailable`/`AI_UseMob` read the mob's scheme instead of matching visual
-names.
-**Uses N1:** parse from `VfsNode.OpenRead()`. The waynet must expose the edges the native
-wrapper omits, so waypoint pathfinding can use the graph instead of direct targets.
+
+**Implemented:** `ZenKit/World` reads BIN_SAFE archives, the mesh/BSP block, the embedded
+binary material archive, the flat `VobTree` stream with its `childsN` hierarchy, packed vob
+transforms, visuals and mob/item/interactive fields, and the waynet with edges. `Assets.World`,
+the vob categories and `ScriptRuntime` now build only managed objects; synthetic script NPCs
+are managed `NpcObject`s. Both shipped `NEWWORLD.ZEN` variants match ZenKitCS on mesh, BSP,
+waynet and the full vob tree; mob schemes come from the visual name prefix, like the reference's
+`ProtoMesh::setupScheme`. `Mesh` keeps the source n-gons and the renderer fan-triangulates
+them, so draw calls and triangles are unchanged. Format notes:
+`Specifications/zen-world-format.md`.
 
 ### N3. Model and animation readers
 Port MDL/MDM/MDH/MDS/MRM/MMB/MAN: skeletons, skin weights, animations and their `Next`/alias
@@ -965,6 +970,8 @@ data, morph meshes and model attach points (`ZS_POS*`).
 including the model that currently hits `std::bad_alloc`.
 **Uses N1:** model records load through `Read`; the hierarchy must expose the `ZS_POS*` nodes
 and their animated transforms for N5.
+**Split:** (a) hierarchy, MRM, MDL/MDM/MDB geometry and materials; (b) MAN/MDS animations,
+aliases and `Next` chains; (c) morph meshes and `ZS_POS*` attach nodes.
 
 ### N4. Daedalus reader and VM
 Port the DAT reader, symbol/instance storage, the VM and the external-call ABI, removing the

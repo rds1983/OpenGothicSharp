@@ -153,6 +153,16 @@ RGBA decodes match as well. Startup reports 31,205 records under 30,998 unique n
 renders `NEWWORLD.ZEN` with the managed paths (2,461 draw calls, 429k triangles in the
 verification frame).
 
+**N2 is in place.** `OpenGothic/ZenKit/World/` reads BIN_SAFE ZenGin archives, the mesh/BSP
+block, the waynet with edges, and the flat vob stream (including the `childsN` hierarchy and
+packed vob transforms). `Assets.World` builds the grid, collision, waypoints and vobs from it;
+no native world, mesh or vob objects remain. Both shipped `NEWWORLD.ZEN` variants match
+ZenKitCS on the mesh, BSP, waynet and the full vob tree; the addon world has 461,283 polygons,
+260,696 positions, 23 root vobs, 2,959 waypoints and 3,402 edges. Mob schemes now come from the
+visual name prefix, like the reference's `ProtoMesh::setupScheme`
+(`BENCH_3_OC.ASC` -> `BENCH`). Format notes:
+[Specifications/zen-world-format.md](Specifications/zen-world-format.md).
+
 ## Testing
 
 Unit tests live in `OpenGothic.Tests` (xunit). Run them with:

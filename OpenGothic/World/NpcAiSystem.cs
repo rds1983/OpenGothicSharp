@@ -233,9 +233,9 @@ internal sealed class NpcAiSystem
 
 	/// <summary>
 	/// Finds the nearest interactive vob for a script "scheme" (e.g. <c>CHAIR</c>, <c>BEDHIGH</c>),
-	/// like the reference's <c>WorldObjects::availableMob</c>. ZenKitCS does not expose the mob's
-	/// scheme, so the vob's visual name is matched by prefix: <c>CHAIR_NW_NORMAL_01.ASC</c> is a
-	/// <c>CHAIR</c>.
+	/// like the reference's <c>WorldObjects::availableMob</c>. The reference derives the scheme
+	/// from the visual file name (<c>ProtoMesh::setupScheme</c>), so the vob's visual name is
+	/// matched by prefix: <c>CHAIR_NW_NORMAL_01.ASC</c> is a <c>CHAIR</c>.
 	/// </summary>
 	private VobNode FindMob(NpcInstance npc, string scheme)
 	{
@@ -249,14 +249,15 @@ internal sealed class NpcAiSystem
 		var bestDistance = MobSearchDistanceSquared;
 		foreach (var vob in _world.Vobs.All)
 		{
-			// Beds are serialized as oCMobDoor by this data (ZenKitCS reports that type), so the
-			// kind filter only excludes things the scheme prefix cannot name.
+			// Some authored sleep spots use an oCMobDoor visual, so the kind filter keeps beds,
+			// interactive vobs and doors; the scheme prefix cannot name a real door.
 			if (vob.Kind != VobKind.Bed && vob.Kind != VobKind.Interactive && vob.Kind != VobKind.Door)
 			{
 				continue;
 			}
 
-			if (!MatchesScheme(vob.Name, scheme))
+			var visualName = vob.VisualName;
+			if (!MatchesScheme(string.IsNullOrEmpty(visualName) ? vob.Name : visualName, scheme))
 			{
 				continue;
 			}
@@ -291,8 +292,8 @@ internal sealed class NpcAiSystem
 
 	/// <summary>
 	/// Whether a vob visual name belongs to a mob scheme: <c>CHAIR_NW_NORMAL_01.ASC</c> is a
-	/// <c>CHAIR</c>, while <c>CHAIRMAN.ASC</c> is not. ZenKitCS does not expose the mob's own
-	/// scheme string, so this prefix rule stands in for it.
+	/// <c>CHAIR</c>, while <c>CHAIRMAN.ASC</c> is not. The reference derives the scheme from the
+	/// visual file name (<c>ProtoMesh::setupScheme</c>), so this prefix rule stands in for it.
 	/// </summary>
 	internal static bool MatchesMobScheme(string name, string scheme)
 	{

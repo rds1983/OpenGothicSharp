@@ -87,11 +87,9 @@ overlap until F2 routines move them.
   kinematic capsule. Path targets use the grounded `WorldGrid.WaypointGroundY`, so a walk
   ends on the floor instead of at the authored height; the Y between two points is
   interpolated. The routine's `action` callback is stored for F3, not invoked yet.
-- **Waynet edges are not available through the installed ZenKitCS native export**
-  (`ZkWayNet_getEdges` is missing; the DLL exposes `getEdgeCount`/`getEdge` with a different
-  ABI). Way points are parsed and `WorldGrid.FindWaypointPath` is tested, but routine
-  movement currently falls back to the direct target. The managed ZenKit port (N1) removes
-  this limitation.
+- **Waynet edges** are read by the managed VFS (N1/N2); `WorldGrid.FindWaypointPath` follows
+  them, and routines fall back to the direct target only when the start and goal are in
+  different components.
 - Verified: Matteo changes from `NW_CITY_MATTEO` to `NW_CITY_BED_MATTEO` at 22:00 and logs
   the arrival; Citizen/Rupert routines change on the same clock.
 
@@ -138,17 +136,17 @@ shipped scripts with it instead of guessed.
   `AI_PlayAni`, `AI_SetWalkMode` (weapon bit stripped), `AI_RemoveWeapon` (no-op until combat).
   Script movement pauses while the routine walker owns the body and is cancelled when the
   state ends.
-- **Mobs:** ZenKitCS does not expose an `oCMobInter`'s scheme, so `WLD_IsMobAvailable` and
-  `AI_UseMob` match the scheme against the vob visual name prefix: `CHAIR_NW_NORMAL_01.ASC` is
-  a `CHAIR`, `BEDHIGH_PSI.ASC` a `BEDHIGH`. With that, the scripts call
-  `AI_UseMob(self, "CHAIR", 1)` to sit and `AI_UseMob(self, "CHAIR", -1)` to release.
+- **Mobs:** the reference derives a mobsi's scheme from its visual file name
+  (`ProtoMesh::setupScheme`): `CHAIR_NW_NORMAL_01.ASC` is a `CHAIR`, `BEDHIGH_PSI.ASC` a
+  `BEDHIGH`. The managed vob exposes that visual name, so `WLD_IsMobAvailable` and
+  `AI_UseMob` match the scheme against it.
 - **Sitting works:** the human set's `S_CHAIR_S0` is a one-frame placeholder that looks
   standing; the seated pose is `S_CHAIR_S1`. State 1 therefore plays the `T_CHAIR_S0_2_S1`
   transition (the same shape for `BENCH`), which ends in the seated idle. Verified: Rupert
   sits on his chair at `NW_CITY_SHOP02_SIT`.
-- **Sleeping works:** the shipped data stores beds as `oCMobDoor`, so the mob search accepts
-  doors as well as `Bed`/`Interactive` vobs (the scheme prefix keeps real doors out). With
-  that, `WLD_IsMobAvailable(self, "BEDHIGH")` is true at the bed and the scripts call
+- **Sleeping works:** some authored sleep spots use an `oCMobDoor` visual, so the mob search
+  accepts beds and doors as well as `Interactive` vobs (the scheme prefix keeps real doors
+  out). With that, `WLD_IsMobAvailable(self, "BEDHIGH")` is true at the bed and the scripts call
   `AI_UseMob(self, "BEDHIGH", 1)`; the body plays `T_BEDHIGH_FRONT_S0_2_S1` (or `_BACK_`, or
   `T_STAND_2_SLEEPGROUND`) and lies down. Verified: Matteo lies at `NW_CITY_BED_MATTEO`.
 - **Release:** the human set has no `..._2_STAND` clip, so the entry transition is played

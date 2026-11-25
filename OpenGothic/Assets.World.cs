@@ -5,11 +5,10 @@ using OpenGothic.Physics;
 using OpenGothic.Graphics;
 using OpenGothic.Utility;
 using OpenGothic.Vobs;
+using OpenGothic.ZenKit;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using ZenKit;
-using ZenKit.Vobs;
 
 using Material = OpenGothic.Graphics.Material;
 
@@ -25,14 +24,14 @@ namespace OpenGothic
 
 		private class MaterialInfo
 		{
-			public global::ZenKit.IMaterial Material { get; }
+			public ZenKit.Material Material { get; }
 
-			public MaterialInfo(global::ZenKit.IMaterial material)
+			public MaterialInfo(ZenKit.Material material)
 			{
 				Material = material ?? throw new ArgumentNullException(nameof(material));
 			}
 
-			public bool EqualsTo(global::ZenKit.IMaterial material)
+			public bool EqualsTo(ZenKit.Material material)
 			{
 				return Material.Texture == material.Texture;
 			}
@@ -44,7 +43,12 @@ namespace OpenGothic
 		{
 			var record = GetLastRecord(name);
 
-			var zkWorld = LoadNativeRecord(record.Node, r => new World(r));
+			var zkWorld = LoadRecord(record.Node, r => WorldReader.Load(r));
+
+			Log.Info($"World '{name}': {zkWorld.Mesh?.Polygons.Count ?? 0} polygons, " +
+			         $"{zkWorld.RootObjects.Count} root vobs, " +
+			         $"{zkWorld.WayNet?.Points.Count ?? 0} waypoints, " +
+			         $"{zkWorld.WayNet?.Edges.Count ?? 0} edges.");
 
 			var waypoints = new Dictionary<string, Waypoint>(StringComparer.OrdinalIgnoreCase);
 			var waypointList = new List<Waypoint>();
@@ -77,27 +81,16 @@ namespace OpenGothic
 					waypointNeighbors[i] = new List<int>();
 				}
 
-				try
+				foreach (var edge in zkWorld.WayNet.Edges)
 				{
-					foreach (var edge in zkWorld.WayNet.Edges)
+					if (edge.A < 0 || edge.B < 0 ||
+					    edge.A >= waypointNeighbors.Length || edge.B >= waypointNeighbors.Length)
 					{
-						if (edge.A < 0 || edge.B < 0 ||
-						    edge.A >= waypointNeighbors.Length || edge.B >= waypointNeighbors.Length)
-						{
-							continue;
-						}
-
-						waypointNeighbors[edge.A].Add(edge.B);
-						waypointNeighbors[edge.B].Add(edge.A);
+						continue;
 					}
-				}
-				catch (Exception ex)
-				{
-					// The installed ZenKitCS/native pair does not expose the edge ABI the
-					// wrapper expects. Points are usable; routines fall back to direct
-					// targets until the managed ZenKit port (N1) reads the edges itself.
-					waypointNeighbors = null;
-					Log.Warning($"Waynet edges are unavailable; NPC routines use direct targets. {ex.Message}");
+
+					waypointNeighbors[edge.A].Add(edge.B);
+					waypointNeighbors[edge.B].Add(edge.A);
 				}
 			}
 
@@ -109,7 +102,7 @@ namespace OpenGothic
 			// Group materials
 			var materialsGroups = new List<MaterialInfo>();
 			var materialsMap = new Dictionary<int, int>();
-			for (var i = 0; i < materials.Count; ++i)
+			for (var i = 0; i < materials.Length; ++i)
 			{
 				var mat = materials[i];
 				if (string.IsNullOrEmpty(mat.Texture))
@@ -144,7 +137,7 @@ namespace OpenGothic
 				var polygon = polygons[i];
 
 				var positionIndices = polygon.PositionIndices;
-				for (var j = 0; j < positionIndices.Count; ++j)
+				for (var j = 0; j < positionIndices.Length; ++j)
 				{
 					var pos = positions[positionIndices[j]].ToXna();
 					allPositions.Add(pos);
@@ -178,7 +171,7 @@ namespace OpenGothic
 				var positionIndices = polygon.PositionIndices;
 
 				ps.Clear();
-				for (var j = 0; j < positionIndices.Count; ++j)
+				for (var j = 0; j < positionIndices.Length; ++j)
 				{
 					ps.Add(positions[positionIndices[j]].ToXna());
 				}
@@ -221,7 +214,7 @@ namespace OpenGothic
 					var cellData = cellsData[i, j];
 
 					// Group polygons by materials
-					var groupedPolygons = new Dictionary<int, Tuple<Material, List<IPolygon>>>();
+					var groupedPolygons = new Dictionary<int, Tuple<Material, List<MeshPolygon>>>();
 					for (var k = 0; k < cellData.Polygons.Count; ++k)
 					{
 						var polygon = polygons[cellData.Polygons[k]];
@@ -233,7 +226,7 @@ namespace OpenGothic
 						}
 
 						var materialIndex = materialsMap[polygon.MaterialIndex];
-						Tuple<Material, List<IPolygon>> p;
+						Tuple<Material, List<MeshPolygon>> p;
 						if (!groupedPolygons.TryGetValue(materialIndex, out p))
 						{
 							var zkMaterial = materialsGroups[materialIndex].Material;
@@ -273,7 +266,7 @@ namespace OpenGothic
 									break;
 							}
 
-							p = new Tuple<Material, List<IPolygon>>(mat, new List<IPolygon>());
+							p = new Tuple<Material, List<MeshPolygon>>(mat, new List<MeshPolygon>());
 							groupedPolygons[materialIndex] = p;
 						}
 
@@ -296,13 +289,13 @@ namespace OpenGothic
 							var featureIndices = polygon.FeatureIndices;
 							var positionIndices = polygon.PositionIndices;
 
-							if (featureIndices.Count != positionIndices.Count)
+							if (featureIndices.Length != positionIndices.Length)
 							{
-								throw new Exception($"featureIndices.Count != positionIndices.Count");
+								throw new Exception($"featureIndices.Length != positionIndices.Length");
 							}
 
 							// Convert polygon to triangles
-							for (var t = 2; t < featureIndices.Count; ++t)
+							for (var t = 2; t < featureIndices.Length; ++t)
 							{
 								for (var r = 0; r < 3; ++r)
 								{
@@ -558,7 +551,7 @@ namespace OpenGothic
 		/// and bucketed into collision chunks. The polygons are fan-triangulated exactly like
 		/// the render path, but every material is kept regardless of whether it has a texture.
 		/// </summary>
-		private static void BuildTerrainCollision(IMesh mesh, WorldGrid result)
+		private static void BuildTerrainCollision(Mesh mesh, WorldGrid result)
 		{
 			var positions = mesh.Positions;
 			var materials = mesh.Materials;
@@ -575,7 +568,7 @@ namespace OpenGothic
 				}
 
 				var indices = polygon.PositionIndices;
-				if (indices.Count < 3)
+				if (indices.Length < 3)
 				{
 					continue;
 				}
@@ -584,7 +577,7 @@ namespace OpenGothic
 				var friction = PhysicsMaterials.GetFriction(material.Group);
 				var first = positions[indices[0]].ToXna();
 
-				for (var i = 2; i < indices.Count; ++i)
+				for (var i = 2; i < indices.Length; ++i)
 				{
 					var second = positions[indices[i - 1]].ToXna();
 					var third = positions[indices[i]].ToXna();

@@ -3,10 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using Microsoft.Xna.Framework;
 using OpenGothic.Vobs;
+using OpenGothic.ZenKit;
 using ZenKit;
 using ZenKit.Daedalus;
-using ZenKit.Util;
-using ZenKit.Vobs;
 
 namespace OpenGothic.Scripts;
 
@@ -496,15 +495,16 @@ public sealed class ScriptRuntime
 
 		var maxHp = Math.Max(1, instance.GetAttribute(NpcAttribute.HitPointsMax));
 		var hp = Math.Max(1, instance.GetAttribute(NpcAttribute.HitPoints));
-		var source = new Npc
+		var source = new NpcObject
 		{
-			Name = name,
+			Type = VirtualObjectType.oCNpc,
+			VobName = name,
 			NpcInstance = symbolName,
 			Guild = instance.Guild,
 			Level = instance.Level,
 			ShowVisual = false,
 			Position = System.Numerics.Vector3.Zero,
-			Rotation = new Matrix3x3(1, 0, 0, 0, 1, 0, 0, 0, 1),
+			Rotation = Matrix3x3.Identity,
 			Attributes = new List<int> { hp, maxHp }
 		};
 

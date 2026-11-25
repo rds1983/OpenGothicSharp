@@ -2,7 +2,7 @@ using Microsoft.Xna.Framework;
 using OpenGothic.Graphics;
 using System;
 using System.Collections.Generic;
-using ZenKit.Vobs;
+using OpenGothic.ZenKit;
 
 namespace OpenGothic.Vobs;
 
@@ -33,6 +33,7 @@ public class VobNode
 		// Many vobs have an empty instance/preset name; the visual name is the useful tag
 		// for querying and diagnostics (e.g. BOOK_NW_CITY_CUPBOARD_01.ASC).
 		var visualName = visual?.Name;
+		VisualName = visualName ?? string.Empty;
 		Name = !string.IsNullOrEmpty(source.Name) ? source.Name : visualName ?? string.Empty;
 		Tag = !string.IsNullOrEmpty(source.PresetName) ? source.PresetName :
 			!string.IsNullOrEmpty(source.Name) ? source.Name : visualName ?? string.Empty;
@@ -54,6 +55,7 @@ public class VobNode
 		Type = VirtualObjectType.Unknown;
 		Id = -1;
 		VisualType = null;
+		VisualName = string.Empty;
 
 		parent?._children.Add(this);
 	}
@@ -67,6 +69,9 @@ public class VobNode
 	public int Id { get; }
 
 	public string Name { get; }
+
+	/// <summary>The vob's visual/source file name (for a mobsi, its scheme is its prefix).</summary>
+	public string VisualName { get; }
 
 	/// <summary>Prototype/preset name when the file has one, otherwise <see cref="Name"/>.</summary>
 	public string Tag { get; }

@@ -1,6 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
+using OpenGothic.ZenKit;
 using System;
-using ZenKit.Util;
 
 namespace OpenGothic.Utility;
 

@@ -1,7 +1,7 @@
 using Microsoft.Xna.Framework;
 using OpenGothic.Utility;
 using System;
-using ZenKit.Vobs;
+using OpenGothic.ZenKit;
 
 namespace OpenGothic.Vobs;
 

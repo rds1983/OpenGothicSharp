@@ -207,6 +207,52 @@ public partial class Assets
 		return IsAlphaTested(material.AlphaFunction, material.Group, material.Color.A, hasTexture, dxt1);
 	}
 
+	/// <summary>The managed-material counterpart of the native overload above.</summary>
+	internal static bool IsAlphaTested(AlphaFunction alpha, MaterialGroup group, byte colorAlpha,
+		bool hasTexture, bool dxt1)
+	{
+		switch (alpha)
+		{
+			case AlphaFunction.Blend:
+			case AlphaFunction.Add:
+			case AlphaFunction.Subtract:
+			case AlphaFunction.Multiply:
+			case AlphaFunction.MultiplyAlt:
+				return false;
+		}
+
+		if (group == MaterialGroup.Water)
+		{
+			return false;
+		}
+
+		if (dxt1 && colorAlpha == 255)
+		{
+			return false;
+		}
+
+		if (!hasTexture)
+		{
+			return colorAlpha != 255;
+		}
+
+		return true;
+	}
+
+	/// <summary>Applies the cut-out rule to a managed world material.</summary>
+	internal bool IsAlphaTested(Material material)
+	{
+		if (material == null)
+		{
+			return false;
+		}
+
+		var hasTexture = !string.IsNullOrEmpty(material.Texture);
+		var dxt1 = hasTexture && _dxt1Textures.Contains(material.Texture);
+
+		return IsAlphaTested(material.AlphaFunction, material.Group, material.Color.A, hasTexture, dxt1);
+	}
+
 	/// <summary>Whether the installed data contains a record with this exact name.</summary>
 	public bool HasRecord(string name)
 	{

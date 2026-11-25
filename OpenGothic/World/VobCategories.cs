@@ -4,7 +4,7 @@ using Microsoft.Xna.Framework;
 using OpenGothic.Graphics;
 using System;
 using System.Collections.Generic;
-using ZenKit.Vobs;
+using OpenGothic.ZenKit;
 
 namespace OpenGothic.Vobs;
 
