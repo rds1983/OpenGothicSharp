@@ -26,8 +26,8 @@ namespace OpenGothic.UI
 			NumberGroupSizes = new[] { 3 }
 		};
 
-		public void Update(GameTime gameTime, Camera camera, Renderer renderer, DebugDraw debug = null,
-			FocusTarget focus = null)
+		public void Update(GameTime gameTime, Camera camera, Renderer renderer, float playerYaw,
+			DebugDraw debug = null, FocusTarget focus = null)
 		{
 			_elapsed += (float)gameTime.ElapsedGameTime.TotalSeconds;
 			++_frames;
@@ -42,7 +42,9 @@ namespace OpenGothic.UI
 			var position = camera.Position;
 
 			_labelFps.Text = Format("FPS: {0}", _fps);
+			_labelTime.Text = Format("Time: {0:N0} ms", gameTime.TotalGameTime.TotalMilliseconds);
 			_labelPosition.Text = Format("Position: {0:0.0}, {1:0.0}, {2:0.0}", position.X, position.Y, position.Z);
+			_labelYaw.Text = Format("Yaw: {0:0.0}°", MathHelper.ToDegrees(playerYaw));
 			_labelDrawCalls.Text = Format("Draw calls: {0:N0}", renderer.DrawCalls);
 			_labelTriangles.Text = Format("Triangles: {0:N0}", renderer.Triangles);
 

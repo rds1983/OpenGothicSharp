@@ -717,31 +717,37 @@ internal sealed class NpcAiSystem
 		var mob = FindMob(actor.Instance, scheme);
 		var hasAttach = FindAttachPoint(actor, mob, out var attach);
 		var tag = hasAttach ? attach.Tag : string.Empty;
+		var authoredState = Math.Max(0, (mob as InteractiveVob)?.StateCount ?? state);
+
+		actor.MobNextClip = string.Empty;
 
 		string played;
 		if (bed)
 		{
-			// The bed's front/back variant comes from the authored ZS_POS node; try that
-			// variant first, then the other, then fall back to sleeping on the ground.
-			played = tag == "FRONT"
-				? PlayFirst(actor,
-					$"T_{scheme}_FRONT_S0_2_S{state}", $"T_{scheme}_FRONT_STAND_2_S0",
-					$"T_{scheme}_BACK_S0_2_S{state}", $"T_{scheme}_BACK_STAND_2_S0",
-					"T_STAND_2_SLEEPGROUND", $"S_{scheme}_S{state}")
-				: PlayFirst(actor,
-					$"T_{scheme}_BACK_S0_2_S{state}", $"T_{scheme}_BACK_STAND_2_S0",
-					$"T_{scheme}_FRONT_S0_2_S{state}", $"T_{scheme}_FRONT_STAND_2_S0",
-					"T_STAND_2_SLEEPGROUND", $"S_{scheme}_S{state}");
+			// The bed's front/back variant comes from the authored ZS_POS node. The stand ->
+			// S0 clip carries the body from the use point to the mattress; the S0 -> S1 clip
+			// then lies it down.
+			var frontStand = $"T_{scheme}_FRONT_STAND_2_S0";
+			var frontSit = authoredState > 0 ? $"T_{scheme}_FRONT_S0_2_S{authoredState}" : null;
+			var backStand = $"T_{scheme}_BACK_STAND_2_S0";
+			var backSit = authoredState > 0 ? $"T_{scheme}_BACK_S0_2_S{authoredState}" : null;
+			played = tag == "BACK"
+				? PlayMobEntry(actor, (backStand, backSit), (frontStand, frontSit))
+				: PlayMobEntry(actor, (frontStand, frontSit), (backStand, backSit));
+			if (played == null)
+			{
+				played = PlayFirst(actor, "T_STAND_2_SLEEPGROUND", $"S_{scheme}_S{authoredState}");
+			}
+
 			actor.BodyState = NpcActor.BodyStateLie;
 		}
 		else if (seat)
 		{
-			// S_<scheme>_S0 is a one-frame placeholder (it looks standing); the seated pose is
-			// S1, so state 1 plays the S0 -> S1 transition directly.
-			played = PlayFirst(actor,
-				$"T_{scheme}_S0_2_S{state}",
-				$"T_{scheme}_STAND_2_S0",
-				"T_STAND_2_SIT");
+			// S_<scheme>_S0 is the one-frame placeholder; the stand -> S0 clip first moves
+			// the body onto the seat, then S0 -> S1 reaches the seated pose.
+			played = PlayMobEntry(actor,
+				($"T_{scheme}_STAND_2_S0", authoredState > 0 ? $"T_{scheme}_S0_2_S{authoredState}" : null),
+				("T_STAND_2_SIT", null));
 			actor.BodyState = NpcActor.BodyStateSit;
 		}
 		else
@@ -773,10 +779,12 @@ internal sealed class NpcAiSystem
 			_walker.PlaceAt(actor, attach.Position, attach.Yaw, mob.Position.Y);
 			if (DebugSettings.AiTrace)
 			{
-				Log.Info($"AI trace: '{actor.Vob.Name}' mob '{scheme}' attach '{attach.Name}' " +
+				Log.Info($"AI trace: '{actor.Vob.Name}' mob '{scheme}' '{mob.VisualName}' " +
+					$"mob ({mob.Position.X:0},{mob.Position.Y:0},{mob.Position.Z:0}) " +
+					$"attach '{attach.Name}' " +
 					$"point ({attach.Position.X:0},{attach.Position.Y:0},{attach.Position.Z:0}) " +
 					$"pos ({actor.Position.X:0},{actor.Position.Y:0},{actor.Position.Z:0}) " +
-					$"yaw {attach.Yaw:0} clip '{played}'.");
+					$"yaw {MathHelper.ToDegrees(attach.Yaw):0} clip '{played}' st {authoredState}.");
 			}
 		}
 
@@ -860,7 +868,10 @@ internal sealed class NpcAiSystem
 			else
 			{
 				position = world.Translation;
-				var forward = Vector3.TransformNormal(Vector3.UnitZ, world);
+
+				// Gothic's model local +Z is the facing axis. The XNA conversion mirrors Z, so
+				// that axis is local -Z here; using +Z would face the NPC backwards.
+				var forward = -Vector3.TransformNormal(Vector3.UnitZ, world);
 				yaw = MathF.Atan2(forward.X, -forward.Z);
 			}
 
@@ -883,6 +894,32 @@ internal sealed class NpcAiSystem
 		}
 
 		return found;
+	}
+
+	/// <summary>
+	/// Plays the first available stand -> S0 clip and queues its S0 -> state follow-up, or the
+	/// first available state clip when no stand transition exists.
+	/// </summary>
+	private static string PlayMobEntry(NpcActor actor, params (string Stand, string Sit)[] pairs)
+	{
+		foreach (var pair in pairs)
+		{
+			if (!string.IsNullOrEmpty(pair.Stand) && actor.PlayClip(pair.Stand))
+			{
+				actor.MobNextClip = pair.Sit ?? string.Empty;
+				return pair.Stand;
+			}
+		}
+
+		foreach (var pair in pairs)
+		{
+			if (!string.IsNullOrEmpty(pair.Sit) && actor.PlayClip(pair.Sit))
+			{
+				return pair.Sit;
+			}
+		}
+
+		return null;
 	}
 
 	/// <summary>Plays the first clip the body has and returns its name, or null.</summary>
@@ -924,6 +961,7 @@ internal sealed class NpcAiSystem
 		actor.MobScheme = string.Empty;
 		actor.MobState = -1;
 		actor.MobClip = string.Empty;
+		actor.MobNextClip = string.Empty;
 		actor.BodyState = NpcActor.BodyStateStand;
 
 		if (!hadMob)
@@ -957,6 +995,19 @@ internal sealed class NpcAiSystem
 		if (actor != null && _reported.Add($"item:{item}:{state}"))
 		{
 			Log.Info($"NPC '{actor.Vob.Name}' uses item {item} to state {state} (not animated yet).");
+		}
+	}
+
+	/// <summary>
+	/// Applies the current mob clip's root-motion step to an actor and keeps its vob, cell and
+	/// capsule in sync. Called by the animation pass after the clip is advanced, mirroring the
+	/// reference's <c>MoveAlgo::tickMobsi</c>.
+	/// </summary>
+	public void AdvanceMobRootMotion(NpcActor actor)
+	{
+		if (actor != null && actor.AdvanceMobRootMotion())
+		{
+			_walker.Apply(actor);
 		}
 	}
 

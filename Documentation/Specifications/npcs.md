@@ -156,10 +156,26 @@ shipped scripts with it instead of guessed.
   `Interactive::findNearest` does. A `_DIST` node is synthesized at its authored distance on
   the side the NPC approaches from; other nodes use the animated bone transform. The actor
   origin is ground-snapped with a physics ray (dynamic NPC bodies ignored) or the terrain,
-  with the mob's floor as fallback, and faces along the node's local +Z axis. Mob clips keep
-  their root motion, so the seated/lying pose carries the body from the use point onto the
-  furniture. Attach points are claimed per NPC, so two NPCs cannot share one seat or bed side.
-  Releasing frees the point and restores the waypoint position before the stand-up clip plays.
+  with the mob's floor as fallback, and faces along the node's local +Z axis. The loader mirrors
+  Z, so Gothic's local +Z is XNA's local -Z here; using +Z would turn every NPC backwards. The
+  target animation state comes from the mob's authored state count, not the script's
+  `AI_UseMob` argument. Entry follows the reference's `Interactive::implTick`:
+  `T_<scheme>_STAND_2_S0` (front/back for beds) moves the body from the use point onto the
+  furniture, then `T_<scheme>_S0_2_S1` reaches the seated or lying pose. Attach points are
+  claimed per NPC, so two NPCs cannot share one seat or bed side. Releasing frees the point and
+  restores the waypoint position before the stand-up clip plays.
+- **Mob root motion:** the mob clips are authored around the use point; the transition is what
+  slides the body onto the furniture. The reference splits that translation: `MoveAlgo::tickMobsi`
+  advances the NPC by the clip's per-frame root step (rotated by the body yaw, vertical part
+  dropped), while `Pose::mkBaseTranslation` removes the same root from the object matrix so it is
+  not drawn twice. The managed client does the same: `NpcActor.AdvanceMobRootMotion` samples the
+  base clip's raw root channel (not the blended pose), accumulates its XZ delta into the actor
+  position each frame, and `UpdateTransform` cancels the root's XZ so the body is drawn at the
+  actor position. A clip hand-over starts a new baseline instead of integrating the jump between
+  two clips. The root's Y translation stays visible; that is what seats or lays the body at the
+  right height. Verified against the reference at the harbour bench: Jack reaches Gothic
+  `(-243.2, 169.4)` against the reference's `(-243.3, 168.2)`, and chairs and beds follow the
+  same path.
 - **Idempotence:** `AI_UseMob` does nothing while the NPC already uses that mob at the same
   state, like the reference's `currentInteract->stateId()==act.i0` early-out. Work states call
   it every loop; without this the mob was released and re-entered every tick, teleporting the

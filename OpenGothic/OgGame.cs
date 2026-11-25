@@ -1146,6 +1146,26 @@ public class OgGame : Game
 					actor.Node.AnimationData.Update(elapsed);
 				}
 
+				// Mob entry is two-stage like Interactive::implTick: the stand -> S0 clip moves
+				// the body onto the furniture and hands over to its S0 loop; only then does the
+				// S0 -> S1 clip start the seated/lying pose.
+				if (!string.IsNullOrEmpty(actor.MobNextClip) &&
+				    !string.IsNullOrEmpty(actor.Node.AnimationData.CurrentClip) &&
+				    !actor.Node.AnimationData.CurrentClip.StartsWith("T_", StringComparison.OrdinalIgnoreCase))
+				{
+					var next = actor.MobNextClip;
+					actor.MobNextClip = string.Empty;
+					if (actor.Node.AnimationData.Play(next, blend: false))
+					{
+						actor.MobClip = next;
+					}
+				}
+
+				// Mob clips carry the body from the use point onto the furniture through their
+				// root translation. The reference moves the NPC by that delta each frame and
+				// cancels the same translation from the object matrix.
+				_ai?.AdvanceMobRootMotion(actor);
+
 				actor.UpdateTransform();
 			}
 		}
@@ -1162,7 +1182,7 @@ public class OgGame : Game
 		if (_hud.DebugOverlay.Visible)
 		{
 			// Read the counters after the world draw: BeginFrame resets them per frame.
-			_hud.DebugOverlay.Update(gameTime, Camera, _renderer, DebugDraw, _focus.Target);
+			_hud.DebugOverlay.Update(gameTime, Camera, _renderer, _mouseYaw, DebugDraw, _focus.Target);
 		}
 
 		_desktop.Render();

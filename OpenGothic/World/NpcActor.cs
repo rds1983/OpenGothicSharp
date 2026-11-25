@@ -78,6 +78,9 @@ public sealed class NpcActor
 	/// <summary>Clip played when the mob was entered, reversed to stand up again.</summary>
 	public string MobClip { get; set; } = string.Empty;
 
+	/// <summary>Follow-up clip to play once the current mob transitions into its S0 loop.</summary>
+	public string MobNextClip { get; set; } = string.Empty;
+
 	/// <summary>Mob vob the actor is attached to, or null when standing.</summary>
 	public VobNode MobVob { get; set; }
 
@@ -120,6 +123,10 @@ public sealed class NpcActor
 	}
 
 	public NpcVisual Visual { get; }
+
+	private Vector3 _mobRoot;
+	private string _mobRootClip;
+	private bool _mobRootValid;
 
 	public Vector3 Position { get; private set; }
 
@@ -184,7 +191,63 @@ public sealed class NpcActor
 	{
 		Position = position;
 		Yaw = yaw;
+		_mobRootValid = false;
 		UpdateTransform();
+	}
+
+	/// <summary>
+	/// Turns the current clip's root translation into world movement while the actor is on a
+	/// mob. The reference's <c>MoveAlgo::tickMobsi</c> moves the NPC by the same per-frame
+	/// delta that <c>Pose::mkBaseTranslation</c> removes from the object matrix, so the body
+	/// slides from the use point onto the furniture without rendering the root offset twice.
+	/// Returns true when the actor position changed.
+	/// </summary>
+	public bool AdvanceMobRootMotion()
+	{
+		if (Node == null || Node.AnimationData == null || string.IsNullOrEmpty(MobScheme))
+		{
+			_mobRootValid = false;
+			return false;
+		}
+
+		if (!Node.AnimationData.TryGetBaseRootTranslation(RootBoneIndex, out var root))
+		{
+			_mobRootValid = false;
+			return false;
+		}
+
+		var clip = Node.AnimationData.CurrentClip;
+
+		// The reference measures the delta within one sequence. A hand-over to the next clip
+		// starts a new baseline instead of integrating the jump between two clips.
+		if (!_mobRootValid || !string.Equals(clip, _mobRootClip, System.StringComparison.OrdinalIgnoreCase))
+		{
+			_mobRoot = root;
+			_mobRootClip = clip;
+			_mobRootValid = true;
+			return false;
+		}
+
+		var delta = root - _mobRoot;
+		_mobRoot = root;
+
+		if (Node.AnimationData.IsBaseClipReversed)
+		{
+			delta = -delta;
+		}
+
+		// The reference drops the vertical part and rotates the model-space step into the
+		// world, which is the same rotation this actor's render transform applies. The step
+		// is not scaled: MoveAlgo applies the raw sequence speed with a unit multiplier.
+		var step = Vector3.TransformNormal(new Vector3(delta.X, 0f, delta.Z),
+			Matrix.CreateRotationY(-Yaw));
+		if (step.X == 0f && step.Z == 0f)
+		{
+			return false;
+		}
+
+		Position += step;
+		return true;
 	}
 
 	/// <summary>Applies the current bone pose to the model node.</summary>
@@ -197,14 +260,16 @@ public sealed class NpcActor
 
 		var root = Node.Instance.GetBoneGlobalTransform(RootBoneIndex).Translation;
 
-		// Walk/idle clips repeat their root stride, so the actor position owns X/Z and the
-		// root translation is cancelled. Mob clips are authored relative to the use point and
-		// carry the body onto the seat or bed, so their root motion must survive.
-		var rootX = string.IsNullOrEmpty(MobScheme) ? -root.X : 0f;
-		var rootZ = string.IsNullOrEmpty(MobScheme) ? -root.Z : 0f;
+		// The object matrix cancels the animated root on the horizontal plane, like
+		// Pose::mkBaseTranslation. Horizontal motion is carried by Position instead (walking
+		// from the path, mob entry from AdvanceMobRootMotion). The vertical root translation
+		// stays visible: it is what lifts the body onto a seat or lowers it onto a bed. For
+		// mob clips the animated root already supplies that height, so the idle-derived feet
+		// offset must not be added on top of it.
+		var rootY = string.IsNullOrEmpty(MobScheme) ? FeetOffset : 0f;
 
 		Node.Transform =
-			Matrix.CreateTranslation(rootX, FeetOffset, rootZ) *
+			Matrix.CreateTranslation(-root.X, rootY, -root.Z) *
 			Matrix.CreateScale(Scale) *
 			Matrix.CreateRotationY(-Yaw) *
 			Matrix.CreateTranslation(Position);

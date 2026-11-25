@@ -65,6 +65,98 @@ public sealed class AnimationData
 	/// <summary>Name of the base clip, or null when idle.</summary>
 	public string CurrentClip => _base?.Clip.Name;
 
+	/// <summary>
+	/// Raw root translation of the base clip at its current time, before blending. The reference
+	/// measures mob root motion from the sequence itself (<c>Sequence::speed</c>), not from the
+	/// blended pose, so an entry cross-fade cannot drag the actor along.
+	/// </summary>
+	public bool TryGetBaseRootTranslation(int boneIndex, out Vector3 translation)
+	{
+		translation = Vector3.Zero;
+		if (_base == null || boneIndex < 0)
+		{
+			return false;
+		}
+
+		var duration = _base.Info.Duration.TotalSeconds;
+		if (duration <= 0)
+		{
+			return false;
+		}
+
+		var local = _elapsed - _base.Start;
+		if (_base.Info.Loop)
+		{
+			local %= duration;
+			if (local < 0)
+			{
+				local += duration;
+			}
+		}
+		else
+		{
+			local = Math.Clamp(local, 0, duration);
+		}
+
+		var time = TimeSpan.FromSeconds(local);
+		foreach (var channel in _base.Clip.Channels)
+		{
+			if (channel.BoneIndex != boneIndex)
+			{
+				continue;
+			}
+
+			translation = SampleTranslation(channel, time);
+			return true;
+		}
+
+		return false;
+	}
+
+	private static Vector3 SampleTranslation(AnimationChannel channel, TimeSpan time)
+	{
+		var keys = channel.Keyframes;
+		if (keys.Length == 0)
+		{
+			return Vector3.Zero;
+		}
+
+		if (time <= keys[0].Time)
+		{
+			return keys[0].Pose.Translation;
+		}
+
+		var last = keys[keys.Length - 1];
+		if (time >= last.Time)
+		{
+			return last.Pose.Translation;
+		}
+
+		for (var i = 1; i < keys.Length; ++i)
+		{
+			var b = keys[i];
+			if (time > b.Time)
+			{
+				continue;
+			}
+
+			var a = keys[i - 1];
+			var span = (b.Time - a.Time).TotalSeconds;
+			var t = span > 0
+				? (float)((time - a.Time).TotalSeconds / span)
+				: 0f;
+			return Vector3.Lerp(a.Pose.Translation, b.Pose.Translation, t);
+		}
+
+		return last.Pose.Translation;
+	}
+
+	/// <summary>
+	/// Whether the base clip is being played backwards. <c>Sequence::speed</c> negates the
+	/// forward delta for a reversed sequence instead of mirroring the sampled time.
+	/// </summary>
+	public bool IsBaseClipReversed => _base != null && (_base.Reverse || _base.Info.Reverse);
+
 	/// <summary>Playback parameters of the base clip, or null when idle.</summary>
 	public ModelClipInfo CurrentInfo => _base?.Info;
 
@@ -111,6 +203,7 @@ public sealed class AnimationData
 		_base.Clip = clip;
 		_base.Info = info;
 		_base.Start = _elapsed;
+		_base.Reverse = reverse;
 		_base.Node = BuildNode(clip, info, reverse);
 
 		_layers.Sort((a, b) =>
@@ -495,5 +588,6 @@ public sealed class AnimationData
 		public AnimationTreeNode Node;
 		public AnimationBlendLayer Blend;
 		public int Sequence;
+		public bool Reverse;
 	}
 }

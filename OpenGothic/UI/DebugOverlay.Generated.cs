@@ -37,10 +37,20 @@ namespace OpenGothic.UI
 			_labelFps.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
 			_labelFps.Id = "_labelFps";
 
+			_labelTime = new Label();
+			_labelTime.Text = "Time: 0 ms";
+			_labelTime.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
+			_labelTime.Id = "_labelTime";
+
 			_labelPosition = new Label();
 			_labelPosition.Text = "Position: 0.0, 0.0, 0.0";
 			_labelPosition.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
 			_labelPosition.Id = "_labelPosition";
+
+			_labelYaw = new Label();
+			_labelYaw.Text = "Yaw: 0.0°";
+			_labelYaw.TextColor = ColorStorage.CreateColor(232, 232, 232, 255);
+			_labelYaw.Id = "_labelYaw";
 
 			_labelDrawCalls = new Label();
 			_labelDrawCalls.Text = "Draw calls: 0";
@@ -69,7 +79,9 @@ namespace OpenGothic.UI
 			Id = "_panelRoot";
 			Widgets.Add(_labelHeader);
 			Widgets.Add(_labelFps);
+			Widgets.Add(_labelTime);
 			Widgets.Add(_labelPosition);
+			Widgets.Add(_labelYaw);
 			Widgets.Add(_labelDrawCalls);
 			Widgets.Add(_labelTriangles);
 			Widgets.Add(_labelDebugViews);
@@ -79,7 +91,9 @@ namespace OpenGothic.UI
 		
 		private Label _labelHeader;
 		private Label _labelFps;
+		private Label _labelTime;
 		private Label _labelPosition;
+		private Label _labelYaw;
 		private Label _labelDrawCalls;
 		private Label _labelTriangles;
 		private Label _labelDebugViews;

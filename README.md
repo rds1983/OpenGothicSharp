@@ -35,27 +35,27 @@ Flags: `-g <path>`, `-game:<modfile.ini>`, `-w <world.zen>`, `-nomenu`, `-devmod
 
 ## Source metrics
 
-Measured on 2026-11-25 from the working tree. C# files under `OpenGothic/` and
+Measured on 2026-11-26 from the working tree. C# files under `OpenGothic/` and
 `OpenGothic.Tests/` only; `bin/`, `obj/` and IDE folders are excluded. "Code" excludes blank
 and comment-only lines; inline comments count as code.
 
 | Area | C# files | Size | Physical lines | Code | Comments | Blank |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| All source | 126 | 754.8 KiB | 28,393 | 21,767 | 2,083 | 4,543 |
-| `OpenGothic/` | 92 | 649.6 KiB | 24,146 | 18,268 | 2,057 | 3,821 |
-| `OpenGothic.Tests/` | 34 | 105.2 KiB | 4,247 | 3,499 | 26 | 722 |
+| All source | 127 | 764.8 KiB | 28,742 | 22,022 | 2,127 | 4,593 |
+| `OpenGothic/` | 92 | 657.0 KiB | 24,392 | 18,437 | 2,100 | 3,855 |
+| `OpenGothic.Tests/` | 35 | 107.8 KiB | 4,350 | 3,585 | 27 | 738 |
 
 Main project by folder:
 
 | Folder | Files | Physical lines | Code | Size |
 | --- | ---: | ---: | ---: | ---: |
-| `(root)` | 20 | 5,923 | 4,351 | 173.7 KiB |
-| `Graphics` | 16 | 2,217 | 1,427 | 66.1 KiB |
+| `(root)` | 20 | 5,943 | 4,363 | 174.6 KiB |
+| `Graphics` | 16 | 2,311 | 1,499 | 68.1 KiB |
 | `Physics` | 4 | 1,698 | 1,249 | 49.3 KiB |
 | `Scripts` | 3 | 1,479 | 1,193 | 39.3 KiB |
-| `World` | 14 | 3,457 | 2,526 | 99.2 KiB |
+| `World` | 14 | 3,573 | 2,597 | 103.1 KiB |
 | `Utility` | 4 | 496 | 358 | 14.9 KiB |
-| `UI` | 9 | 631 | 514 | 15.7 KiB |
+| `UI` | 9 | 647 | 528 | 16.3 KiB |
 | `ZenKit` | 22 | 8,245 | 6,650 | 191.5 KiB |
 
 The totals include four Myra-generated `*.Generated.cs` UI files: 293 physical lines,
