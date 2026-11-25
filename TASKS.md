@@ -136,7 +136,7 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   parity) and F3.6 (mob placement) are complete. **Milestone N is underway: N1 (managed
   IO/VFS/textures), N2 (world, waynet and vobs) and N3 (models and animation) are done.**
   N4 is underway: N4a (DAT reader) and N4b (managed VM and typed instances) are done;
-  N4c (cutscene/output units) is next. The port lives in `OpenGothic/ZenKit/`; N5 animated
+  N4c (cutscene/output units) is done. The port lives in `OpenGothic/ZenKit/`; N5 animated
   `ZS_POS` seat alignment and N6 (remove ZenKitCS) follow.
   After N, resume Milestone G at G4; F3.7 (visible perception reaction) still needs K1/H1.
 
@@ -982,7 +982,7 @@ its first `.MAN`, and `FLAG_MESH.MMB`; the animation-set audit is unchanged and 
 avatar renders and runs with managed meshes and clips. Animated `ZS_POS` evaluation remains
 N5.
 
-### N4. Daedalus reader and VM - N4a/N4b DONE; N4c next
+### N4. Daedalus reader and VM - DONE
 Port the DAT reader, symbol/instance storage, the VM and the external-call ABI, removing the
 native handle/finalizer workarounds.
 **Done when:** startup, script objects and dialogs pass from the managed VM.
@@ -998,8 +998,12 @@ the typed `NpcInstance`/`ItemInstance`/`InfoInstance` views over per-class stora
 Startup call order and 5,228 external calls match ZenKitCS, sampled instance fields match, and
 the game boots 406 script NPCs and runs a diagnostic dialog with no errors. `CutsceneLibrary`
 (`Ou.dat`) and the `Log` bridge are the remaining native uses.
-**N4c - NEXT:** port the cutscene/output-unit library (`Ou.dat`) so `AI_Output` text and
-the dialog voice hook no longer need ZenKitCS.
+**N4c - DONE:** `ZenKit/Assets/CutsceneLibrary.cs` maps the BIN_SAFE `zCCSLib` tree of `Ou.dat`
+to typed blocks and messages through the shared `ZenArchive` reader. It matches ZenKitCS for
+all 20,826 blocks, including names, text, audio names and message types; nested block chains
+are followed. A hermetic fixture covers the root count, nested blocks and lookup. The ASCII
+`.lsc` export is not read because the game loads `Ou.dat`. N5 (animated `ZS_POS` seating)
+is next.
 **Uses N1:** DAT records load through `VfsNode.OpenRead()`.
 
 ### N5. Mob attach points and seat alignment
@@ -1015,12 +1019,12 @@ Use the managed model reader to implement the reference's `Interactive::attach` 
 the reference, with no per-scheme offsets.
 
 ### N6. Remove ZenKitCS
-Switch `Assets` and every reader consumer to `OpenGothic.ZenKit/`, delete the package reference
-and the native runtime files, and verify the full test suite and a game run.
+Switch the remaining logger bridge and every consumer to `OpenGothic.ZenKit/`, delete the
+package reference and the native runtime files, and verify the full test suite and a game run.
 **Done when:** no ZenKitCS package namespace remains and the client runs from the managed port
 only.
-**Includes:** completing N4c, moving the logger bridge into the managed port, and deleting the
-ZenKitCS package reference.
+**Includes:** moving the logger bridge into the managed port and deleting the ZenKitCS package
+reference.
 
 ---
 

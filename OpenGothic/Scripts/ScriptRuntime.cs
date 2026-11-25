@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using Microsoft.Xna.Framework;
 using OpenGothic.Vobs;
-using ZenKit;
 using OpenGothic.ZenKit;
 using DaedalusInstance = OpenGothic.ZenKit.DaedalusInstance;
 using DaedalusSymbol = OpenGothic.ZenKit.DaedalusSymbol;
@@ -1204,7 +1203,7 @@ public sealed class ScriptRuntime
 
 		try
 		{
-			Cutscenes = new CutsceneLibrary(path);
+			Cutscenes = CutsceneLibrary.Load(path);
 			_dialogText = new Dictionary<string, string>(Cutscenes.Blocks.Count, StringComparer.OrdinalIgnoreCase);
 			foreach (var block in Cutscenes.Blocks)
 			{

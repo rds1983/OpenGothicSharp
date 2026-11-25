@@ -8,7 +8,7 @@ _work/Data/Scripts/CONTENT/CUTSCENE/Ou.dat
 ```
 
 `GOTHIC.DAT` is the Daedalus symbol/instruction file. `Ou.dat` is the output-unit /
-cutscene library used for dialogs; it is loaded with ZenKit `CutsceneLibrary` and supplies
+cutscene library used for dialogs; it is read by the managed `CutsceneLibrary` and supplies
 the text of every `AI_Output` line. In the tested NotR installation the game script has
 **74,649 symbols** and the cutscene library **20,826 blocks**.
 
@@ -44,8 +44,18 @@ points: the same **5,228** external calls in the same order, and identical name,
 level, attributes, daily-routine pointer, senses, item visual and dialog-info fields for
 sampled instances. A hermetic fixture in `OpenGothic.Tests/ZenKit/DaedalusVmTests.cs`
 covers parameters, globals, members, instance initialization, registered externals and the
-default external. `CutsceneLibrary` (`Ou.dat`) is the remaining native script dependency
-until N4c.
+default external.
+
+## Cutscene library (N4c)
+
+`OpenGothic/ZenKit/Assets/CutsceneLibrary.cs` maps the BIN_SAFE `zCCSLib` tree of `Ou.dat`
+to typed blocks and messages through the shared `ZenArchive` reader. It matches ZenKitCS for
+all **20,826** blocks of the reference file: block names, message text, audio names and
+message types. Nested `zCCSBlock` chains are followed to the atomic message. The ASCII
+`.lsc` export is not read because the game loads `Ou.dat`; the reader accepts BIN_SAFE only.
+A hermetic fixture in `OpenGothic.Tests/ZenKit/CutsceneLibraryTests.cs` covers the root
+count, message fields, nested blocks and name lookup. The `Log` bridge is now the only
+native ZenKit dependency (N6).
 
 ## Boot
 

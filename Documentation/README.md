@@ -175,15 +175,16 @@ samples. Format notes:
 [Specifications/gothic-model-format.md](Specifications/gothic-model-format.md) and
 [Specifications/gothic-animation-format.md](Specifications/gothic-animation-format.md).
 
-**N4a and N4b are in place.** `OpenGothic/ZenKit/Script/DaedalusScript.cs` reads the
+**N4a, N4b and N4c are in place.** `OpenGothic/ZenKit/Script/DaedalusScript.cs` reads the
 `GOTHIC.DAT` symbol table and instruction text: types, flags, values, parents, addresses,
 class/member layout and decoded instructions. `DaedalusVm.cs` runs the instructions with the
 managed stack, call frames, globals, temporary strings and external ABI.
 `DaedalusInstance.cs` provides the typed `NpcInstance`, `ItemInstance` and `InfoInstance`
 views over per-class member storage. The managed VM matches ZenKitCS on the reference install
-for the whole symbol table and for the 5,228 startup external calls; `ScriptRuntime`,
-`NpcBinding`, `Dialog`, `NpcActor` and `NpcAiSystem` now use it. The cutscene/output-unit
-library (`Ou.dat`) is the remaining native script dependency until N4c.
+for the whole symbol table and for the 5,228 startup external calls, and the managed cutscene
+library matches it for all 20,826 `Ou.dat` blocks. `ScriptRuntime`, `NpcBinding`,
+`Dialog`, `NpcActor` and `NpcAiSystem` use only the managed port; the `Log` bridge is the
+remaining native ZenKit dependency until N6.
 Format note: [Specifications/daedalus.md](Specifications/daedalus.md).
 
 ## Testing
