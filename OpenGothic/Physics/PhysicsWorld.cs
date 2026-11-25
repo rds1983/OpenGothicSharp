@@ -45,7 +45,7 @@ public struct PhysicsRayHit
 
 /// <summary>
 /// The static world as Bepu sees it: triangle meshes for the level and for static vobs, plus
-/// the bodies the game adds later. Units are the game's centimetres, so gravity is 9.81 m/s²
+/// the bodies the game adds later. Units are the game's centimetres, so gravity is 9.81 m/sВІ
 /// expressed in those units.
 /// </summary>
 public sealed class PhysicsWorld : IDisposable
@@ -538,14 +538,15 @@ public sealed class PhysicsWorld : IDisposable
 	/// Casts a ray against the statics and returns the closest hit. Sensors are skipped
 	/// unless <paramref name="includeSensors"/> asks for them.
 	/// </summary>
-	public bool RayCast(Vector3 origin, Vector3 direction, float maxDistance, bool includeSensors, out PhysicsRayHit hit, BodyHandle? ignoreBody = null)
+	public bool RayCast(Vector3 origin, Vector3 direction, float maxDistance, bool includeSensors, out PhysicsRayHit hit, BodyHandle? ignoreBody = null, bool ignoreDynamic = false)
 	{
 		var handler = new RayHitHandler
 		{
 			Surfaces = Surfaces,
 			IncludeSensors = includeSensors,
 			IgnoreBody = ignoreBody ?? default,
-			HasBodyToIgnore = ignoreBody.HasValue
+			HasBodyToIgnore = ignoreBody.HasValue,
+			IgnoreDynamic = ignoreDynamic
 		};
 
 		Simulation.RayCast(ToNumerics(origin), Num.Vector3.Normalize(ToNumerics(direction)), maxDistance, ref handler, 0);
@@ -708,7 +709,7 @@ public sealed class PhysicsWorld : IDisposable
 			$"Physics walk: {seconds:0.0} s toward ({wish.X:0.##}, {wish.Z:0.##}) with {openDistance:0} units open, " +
 			$"{distanceWalked:N0} units walked, grounded {grounded:0.#}%, " +
 			$"clearance {minClearance:0.##}..{maxClearance:0.##}, max rise {maxRise:0.##}, " +
-			$"fall-throughs {fallThroughs} → {(walks ? "walks" : "FAILED")}.");
+			$"fall-throughs {fallThroughs} в†’ {(walks ? "walks" : "FAILED")}.");
 	}
 
 	/// <summary>
@@ -742,14 +743,14 @@ public sealed class PhysicsWorld : IDisposable
 		var stepped = controller.Grounded && climbed >= 25f && climbed <= 40f;
 
 		Log.Info(
-			$"Physics step: walked over a 30-unit block, feet climbed {climbed:0.#} → " +
+			$"Physics step: walked over a 30-unit block, feet climbed {climbed:0.#} в†’ " +
 			$"{(stepped ? "steps" : "FAILED")}.");
 	}
 
 	/// <summary>
 	/// Walks into a wall, then reverses. The reference stops at a blocked substep instead of
 	/// projecting the move along the surface, so the capsule must not drift sideways when it
-	/// backs away — the bug reported at the harbour wall.
+	/// backs away вЂ” the bug reported at the harbour wall.
 	/// </summary>
 	public void RunWallTest()
 	{
@@ -785,7 +786,7 @@ public sealed class PhysicsWorld : IDisposable
 
 		Log.Info(
 			$"Physics wall: held {wallGap:0.#} from the face (radius {CharacterController.DefaultRadius:0}), " +
-			$"backed {start.Z - controller.FeetPosition.Z:0.#} units with {sideways:0.##} sideways drift → " +
+			$"backed {start.Z - controller.FeetPosition.Z:0.#} units with {sideways:0.##} sideways drift в†’ " +
 			$"{(passes ? "stops without sliding" : "FAILED")}.");
 	}
 
@@ -848,7 +849,7 @@ public sealed class PhysicsWorld : IDisposable
 			$"rested at ({rested.X:0.#}, {rested.Y:0.#}, {rested.Z:0.#}) on " +
 			$"{(hasSupport ? support.Kind.ToString() : "nothing")} at y={supportY:0.#}; " +
 			$"center {aboveSupport:0.##} above it (radius {CapsuleRadius:0.#}, upright {halfHeight:0.#}), " +
-			$"speed {speed:0.##} → {(rests ? "rests" : "FAILED")}.");
+			$"speed {speed:0.##} в†’ {(rests ? "rests" : "FAILED")}.");
 
 		// Find a wall around the resting point, preferring a static vob over sloped terrain.
 		PhysicsRayHit wall = default;
@@ -937,7 +938,7 @@ public sealed class PhysicsWorld : IDisposable
 		Log.Info(
 			$"Physics test: pushed into a {wall.Kind} wall {wallDistance:0.#} units away at " +
 			$"{wall.Position}; final center {separation:0.#} from the surface " +
-			$"(capsule radius {CapsuleRadius:0.#}) → {(blocked ? "blocked" : "PASSED THROUGH")}.");
+			$"(capsule radius {CapsuleRadius:0.#}) в†’ {(blocked ? "blocked" : "PASSED THROUGH")}.");
 	}
 
 	private static Num.Vector3 ToNumerics(Vector3 value) => new(value.X, value.Y, value.Z);
@@ -1110,6 +1111,7 @@ public sealed class PhysicsWorld : IDisposable
 		public CollidableProperty<PhysicsSurface> Surfaces;
 		public bool IncludeSensors;
 		public bool HasBodyToIgnore;
+		public bool IgnoreDynamic;
 		public BodyHandle IgnoreBody;
 
 		public bool HasHit;
@@ -1120,6 +1122,11 @@ public sealed class PhysicsWorld : IDisposable
 		public bool AllowTest(CollidableReference collidable)
 		{
 			if (!IncludeSensors && Surfaces[collidable].Kind == PhysicsSurfaceKind.Sensor)
+			{
+				return false;
+			}
+
+			if (IgnoreDynamic && Surfaces[collidable].Kind == PhysicsSurfaceKind.Dynamic)
 			{
 				return false;
 			}

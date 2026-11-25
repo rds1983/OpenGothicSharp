@@ -124,6 +124,37 @@ internal sealed class NpcWalker
 		return position.Y;
 	}
 
+	/// <summary>
+	/// Places an actor at an authored use point and snaps it onto the floor, then updates its
+	/// vob, cell and capsule. This is the reference's <c>Interactive::setPos</c> without the
+	/// radial collision search: the score points sit beside the furniture, so the direct
+	/// ground ray is enough.
+	/// </summary>
+	public void PlaceAt(NpcActor actor, Vector3 position, float yaw, float fallbackY)
+	{
+		var snapped = false;
+		if (_physics != null &&
+		    _physics.RayCast(position + Vector3.UnitY * 100f, -Vector3.UnitY, 300f, false,
+			    out var hit, actor.Vob.PhysicsBody, ignoreDynamic: true))
+		{
+			position.Y = hit.Position.Y;
+			snapped = true;
+		}
+		else if (_world != null && _world.TryGetGround(position + Vector3.UnitY * 100f, 400f, out var ground))
+		{
+			position.Y = ground.Y;
+			snapped = true;
+		}
+
+		if (!snapped)
+		{
+			position.Y = fallbackY;
+		}
+
+		actor.SetPosition(position, yaw);
+		Apply(actor);
+	}
+
 	/// <summary>Writes the actor's transform into its vob, grid cell and capsule.</summary>
 	public void Apply(NpcActor actor)
 	{

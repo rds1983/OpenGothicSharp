@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using OpenGothic.Graphics;
 using OpenGothic.Physics;
 using OpenGothic.Scripts;
 using OpenGothic.Vobs;
@@ -29,24 +30,6 @@ internal sealed class NpcAiSystem
 	private const float MobSearchDistanceSquared = 1000f * 1000f;
 	private const double RoutineRestartSeconds = 1.0;
 
-	/// <summary>Height of the seated human pelvis (BIP01) above the body origin, in model units.</summary>
-	private const float SeatedPelvisOffset = 66f;
-
-	/// <summary>
-	/// Height of the seat surface under a mob, from the physics ray through the rendered mesh.
-	/// The vob box top can include a backrest, so it is only the fallback.
-	/// </summary>
-	private float SeatSurface(VobNode mob, float fallback)
-	{
-		if (_physics != null &&
-		    _physics.RayCast(mob.Position + Vector3.UnitY * 100f, -Vector3.UnitY, 300f, false,
-			    out var hit))
-		{
-			return hit.Position.Y;
-		}
-
-		return fallback;
-	}
 	private const int PercAssessPlayer = 1;
 	private const int SenseSee = 1;
 	private const int MaxPerceptionLogs = 20;
@@ -69,6 +52,8 @@ internal sealed class NpcAiSystem
 	private readonly GameClock _clock;
 	private readonly int[] _perceptionRanges = new int[NpcActor.PerceptionCount];
 	private readonly HashSet<string> _reported = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+	private readonly Dictionary<(VobNode Mob, string Point), NpcActor> _mobPoints =
+		new Dictionary<(VobNode, string), NpcActor>();
 
 	// AI_StartState is called from inside a state function, so the request is queued instead of
 	// re-entering the VM mid-call. Both lists are drained at the start of the next update.
@@ -262,6 +247,11 @@ internal sealed class NpcAiSystem
 				continue;
 			}
 
+			if (!IsMobFree(actor, vob))
+			{
+				continue;
+			}
+
 			var distance = Vector3.DistanceSquared(actor.Position, vob.Position);
 			if (distance < bestDistance)
 			{
@@ -271,6 +261,30 @@ internal sealed class NpcAiSystem
 		}
 
 		return best;
+	}
+
+	/// <summary>
+	/// Whether a mob still has a free attach point for this actor. Mobs whose model has no
+	/// <c>ZS_POS</c> nodes fall back to the authored waypoint and stay available.
+	/// </summary>
+	private bool IsMobFree(NpcActor actor, VobNode vob)
+	{
+		if (vob.SceneNode is not ModelNode node || node.Instance?.Model == null)
+		{
+			return true;
+		}
+
+		var hasAttachPos = false;
+		foreach (var bone in node.Instance.Model.Bones)
+		{
+			if (bone.Name.StartsWith("ZS_POS", StringComparison.OrdinalIgnoreCase))
+			{
+				hasAttachPos = true;
+				break;
+			}
+		}
+
+		return !hasAttachPos || FindAttachPoint(actor, vob, out _);
 	}
 
 	private static bool MatchesScheme(string name, string scheme)
@@ -700,19 +714,24 @@ internal sealed class NpcAiSystem
 		           scheme.StartsWith("BENCH", StringComparison.OrdinalIgnoreCase) ||
 		           scheme.StartsWith("SIT", StringComparison.OrdinalIgnoreCase);
 
+		var mob = FindMob(actor.Instance, scheme);
+		var hasAttach = FindAttachPoint(actor, mob, out var attach);
+		var tag = hasAttach ? attach.Tag : string.Empty;
+
 		string played;
 		if (bed)
 		{
-			// ZenKitCS does not expose the mob's scheme, so the bed's front/back variant is
-			// unknown; try both, then fall back to sleeping on the ground. State 1 is the
-			// lying pose the scripts use.
-			played = PlayFirst(actor,
-				$"T_{scheme}_FRONT_S0_2_S{state}",
-				$"T_{scheme}_BACK_S0_2_S{state}",
-				$"T_{scheme}_FRONT_STAND_2_S0",
-				$"T_{scheme}_BACK_STAND_2_S0",
-				"T_STAND_2_SLEEPGROUND",
-				$"S_{scheme}_S{state}");
+			// The bed's front/back variant comes from the authored ZS_POS node; try that
+			// variant first, then the other, then fall back to sleeping on the ground.
+			played = tag == "FRONT"
+				? PlayFirst(actor,
+					$"T_{scheme}_FRONT_S0_2_S{state}", $"T_{scheme}_FRONT_STAND_2_S0",
+					$"T_{scheme}_BACK_S0_2_S{state}", $"T_{scheme}_BACK_STAND_2_S0",
+					"T_STAND_2_SLEEPGROUND", $"S_{scheme}_S{state}")
+				: PlayFirst(actor,
+					$"T_{scheme}_BACK_S0_2_S{state}", $"T_{scheme}_BACK_STAND_2_S0",
+					$"T_{scheme}_FRONT_S0_2_S{state}", $"T_{scheme}_FRONT_STAND_2_S0",
+					"T_STAND_2_SLEEPGROUND", $"S_{scheme}_S{state}");
 			actor.BodyState = NpcActor.BodyStateLie;
 		}
 		else if (seat)
@@ -738,43 +757,26 @@ internal sealed class NpcAiSystem
 		actor.MobState = state;
 		actor.MobClip = played;
 		actor.HasAiMove = false;
+		ReleaseMobPoint(actor);
 
-		// Sit/lie poses need the body on the furniture; for work mobs the routine waypoint is
-		// already the authored use point beside the bench/log, so moving to the vob origin would
-		// put the NPC on top of it. The vob origin is at floor level (the reference's attach
-		// point): the animation lifts the pelvis onto the seat itself, so using the seat surface
-		// here would make the body hover above the bench.
-		if (bed || seat)
+		// The authored ZS_POS* node is the use point. It sits on the floor beside the seat or
+		// bed; the seated/lying clip supplies the body's own rise onto the furniture.
+		if (hasAttach)
 		{
-			var mob = FindMob(actor.Instance, scheme);
-			if (mob != null)
+			_mobPoints[(mob, attach.Name)] = actor;
+			actor.MobVob = mob;
+			actor.MobPoint = attach.Name;
+			actor.MobReturnPosition = actor.Position;
+			actor.MobReturnYaw = actor.Yaw;
+			actor.HasMobReturn = true;
+
+			_walker.PlaceAt(actor, attach.Position, attach.Yaw, mob.Position.Y);
+			if (DebugSettings.AiTrace)
 			{
-				actor.MobReturnPosition = actor.Position;
-				actor.MobReturnYaw = actor.Yaw;
-				actor.HasMobReturn = true;
-
-				// Seats: put the pelvis on the seat. The ray finds the rendered bench/chair
-				// surface (the ZEN box top includes the backrest and is too high); the human
-				// seated pose keeps BIP01 about 66 units above the body origin, so the origin
-				// goes below the seat by that much. Beds keep the vob origin.
-				var seatTop = mob.Source?.BoundingBox.Max.Y ?? mob.Bounds.Max.Y;
-				if (!bed)
-				{
-					seatTop = SeatSurface(mob, seatTop);
-				}
-
-				var y = bed
-					? mob.Position.Y
-					: seatTop - SeatedPelvisOffset;
-
-				var position = new Vector3(mob.Position.X, y, mob.Position.Z);
-				actor.SetPosition(position, actor.Yaw);
-				_walker.Apply(actor);
-				if (DebugSettings.AiTrace)
-				{
-					Log.Info($"AI trace: '{actor.Vob.Name}' mob '{scheme}' boxTop {mob.Bounds.Max.Y:0} " +
-						$"seatTop {seatTop:0} posY {actor.Position.Y:0}.");
-				}
+				Log.Info($"AI trace: '{actor.Vob.Name}' mob '{scheme}' attach '{attach.Name}' " +
+					$"point ({attach.Position.X:0},{attach.Position.Y:0},{attach.Position.Z:0}) " +
+					$"pos ({actor.Position.X:0},{actor.Position.Y:0},{actor.Position.Z:0}) " +
+					$"yaw {attach.Yaw:0} clip '{played}'.");
 			}
 		}
 
@@ -787,6 +789,100 @@ internal sealed class NpcAiSystem
 		{
 			Log.Info($"NPC '{actor.Vob.Name}' uses '{scheme}' state {state}.");
 		}
+	}
+
+	private struct MobAttachPoint
+	{
+		public string Name;
+		public string Tag;
+		public Vector3 Position;
+		public float Yaw;
+	}
+
+	/// <summary>
+	/// Finds the nearest free <c>ZS_POS*</c> node of a mob, like the reference's
+	/// <c>Interactive::findNearest</c>. A <c>_DIST</c> point is synthesized at the node's
+	/// authored distance on the side the NPC approaches from.
+	/// </summary>
+	private bool FindAttachPoint(NpcActor actor, VobNode mob, out MobAttachPoint result)
+	{
+		result = default;
+		if (mob?.SceneNode is not ModelNode modelNode || modelNode.Instance == null)
+		{
+			return false;
+		}
+
+		var model = modelNode.Instance.Model;
+		if (model == null)
+		{
+			return false;
+		}
+
+		var toNpc = actor.Position - mob.Position;
+		toNpc.Y = 0f;
+		if (toNpc.LengthSquared() < 0.0001f)
+		{
+			toNpc = Vector3.UnitZ;
+		}
+		else
+		{
+			toNpc.Normalize();
+		}
+
+		var found = false;
+		var best = float.MaxValue;
+		foreach (var bone in model.Bones)
+		{
+			var name = bone.Name;
+			if (!name.StartsWith("ZS_POS", StringComparison.OrdinalIgnoreCase))
+			{
+				continue;
+			}
+
+			if (_mobPoints.TryGetValue((mob, name), out var user) && !ReferenceEquals(user, actor))
+			{
+				continue;
+			}
+
+			var boneMatrix = modelNode.Instance.GetBoneGlobalTransform(bone.Index);
+			var world = boneMatrix * modelNode.Transform;
+			var delta = world.Translation - mob.Position;
+
+			Vector3 position;
+			float yaw;
+			if (name.EndsWith("_DIST", StringComparison.OrdinalIgnoreCase))
+			{
+				var distance = MathF.Sqrt(delta.X * delta.X + delta.Z * delta.Z);
+				position = mob.Position + toNpc * distance;
+				position.Y = mob.Position.Y + delta.Y;
+				yaw = MathF.Atan2(-toNpc.X, toNpc.Z);
+			}
+			else
+			{
+				position = world.Translation;
+				var forward = Vector3.TransformNormal(Vector3.UnitZ, world);
+				yaw = MathF.Atan2(forward.X, -forward.Z);
+			}
+
+			var distanceSquared = Vector3.DistanceSquared(actor.Position, position);
+			if (found && distanceSquared >= best)
+			{
+				continue;
+			}
+
+			best = distanceSquared;
+			found = true;
+			result = new MobAttachPoint
+			{
+				Name = name,
+				Tag = name.EndsWith("_FRONT", StringComparison.OrdinalIgnoreCase) ? "FRONT" :
+					name.EndsWith("_BACK", StringComparison.OrdinalIgnoreCase) ? "BACK" : string.Empty,
+				Position = position,
+				Yaw = yaw
+			};
+		}
+
+		return found;
 	}
 
 	/// <summary>Plays the first clip the body has and returns its name, or null.</summary>
@@ -803,6 +899,18 @@ internal sealed class NpcAiSystem
 		return null;
 	}
 
+	/// <summary>Removes the actor's claim on a mob attach point, if any.</summary>
+	private void ReleaseMobPoint(NpcActor actor)
+	{
+		if (actor.MobVob != null && !string.IsNullOrEmpty(actor.MobPoint))
+		{
+			_mobPoints.Remove((actor.MobVob, actor.MobPoint));
+		}
+
+		actor.MobVob = null;
+		actor.MobPoint = string.Empty;
+	}
+
 	/// <summary>
 	/// Releases a mob and puts the body back on its feet. The entry transition is played
 	/// backwards (the human set has no sit-down counterpart clip); when that fails the body
@@ -812,6 +920,7 @@ internal sealed class NpcAiSystem
 	{
 		var hadMob = !string.IsNullOrEmpty(actor.MobScheme);
 		var clip = actor.MobClip;
+		ReleaseMobPoint(actor);
 		actor.MobScheme = string.Empty;
 		actor.MobState = -1;
 		actor.MobClip = string.Empty;

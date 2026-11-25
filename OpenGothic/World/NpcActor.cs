@@ -78,6 +78,12 @@ public sealed class NpcActor
 	/// <summary>Clip played when the mob was entered, reversed to stand up again.</summary>
 	public string MobClip { get; set; } = string.Empty;
 
+	/// <summary>Mob vob the actor is attached to, or null when standing.</summary>
+	public VobNode MobVob { get; set; }
+
+	/// <summary>Attach point on <see cref="MobVob"/>, or empty when none was found.</summary>
+	public string MobPoint { get; set; } = string.Empty;
+
 	/// <summary>Position/yaw to return to when the mob is released.</summary>
 	public Vector3 MobReturnPosition { get; set; }
 
@@ -190,8 +196,15 @@ public sealed class NpcActor
 		}
 
 		var root = Node.Instance.GetBoneGlobalTransform(RootBoneIndex).Translation;
+
+		// Walk/idle clips repeat their root stride, so the actor position owns X/Z and the
+		// root translation is cancelled. Mob clips are authored relative to the use point and
+		// carry the body onto the seat or bed, so their root motion must survive.
+		var rootX = string.IsNullOrEmpty(MobScheme) ? -root.X : 0f;
+		var rootZ = string.IsNullOrEmpty(MobScheme) ? -root.Z : 0f;
+
 		Node.Transform =
-			Matrix.CreateTranslation(-root.X, FeetOffset, -root.Z) *
+			Matrix.CreateTranslation(rootX, FeetOffset, rootZ) *
 			Matrix.CreateScale(Scale) *
 			Matrix.CreateRotationY(-Yaw) *
 			Matrix.CreateTranslation(Position);

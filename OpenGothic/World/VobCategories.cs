@@ -257,7 +257,7 @@ public sealed class InteractiveVob : VobNode
 	/// </summary>
 	public void PrepareVisual(ModelNode node)
 	{
-		if (!IsStateAnimated || node?.Instance == null)
+		if (node?.Instance == null)
 		{
 			return;
 		}

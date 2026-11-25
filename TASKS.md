@@ -135,9 +135,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   sitting and sleeping), F3.3 (engine perception), F3.4 (process policies), F3.5 (movement
   parity) and F3.6 (mob placement) are complete. **Milestone N is underway: N1 (managed
   IO/VFS/textures), N2 (world, waynet and vobs) and N3 (models and animation) are done.**
-  N4 is underway: N4a (DAT reader) and N4b (managed VM and typed instances) are done;
-  N4c (cutscene/output units) is done. The port lives in `OpenGothic/ZenKit/`; N5 animated
-  `ZS_POS` seat alignment and N6 (remove ZenKitCS) follow.
+  N4 is underway: N4a (DAT reader), N4b (managed VM and typed instances) and N4c
+  (cutscene/output units) are done; N5 (animated `ZS_POS` seat alignment) is also done.
+  The port lives in `OpenGothic/ZenKit/`; N6 (remove ZenKitCS) is next.
   After N, resume Milestone G at G4; F3.7 (visible perception reaction) still needs K1/H1.
 
 ---
@@ -889,9 +889,9 @@ mob every loop, teleporting the body between the waypoint and the furniture (the
 up/down jitter). Releasing restores the waypoint position before the stand-up clip. NPC spawn
 grounding went back to the terrain ray: the physics ray could hit a beam/table above the point
 and spawn a body on top of it.
-- **Exact seat alignment is scheduled in N3.** OpenGothic reads the mob's animated `ZS_POS*`
-  attach nodes (`visual.bone(nodeId)`), whose static transforms are zero in the shipped MDLs;
-  ZenKitCS exposes no MDL animation evaluation, so the seat surface ray is the fallback.
+- **Exact seat alignment is resolved in N5.** Mobs use their animated `ZS_POS*` attach nodes
+  (`Interactive::findNearest`/`nodeTranform`), ground-snap the use point, face along the node
+  and claim a free point per NPC; the seat-surface ray is gone.
 - **Item animations moved to I3:** `AI_UseItemToState` (brooms) still only logs; it needs NPC
   inventories and item visuals, which I3 provides.
 
@@ -1006,7 +1006,7 @@ are followed. A hermetic fixture covers the root count, nested blocks and lookup
 is next.
 **Uses N1:** DAT records load through `VfsNode.OpenRead()`.
 
-### N5. Mob attach points and seat alignment
+### N5. Mob attach points and seat alignment - DONE
 Use the managed model reader to implement the reference's `Interactive::attach` placement:
 - read the `ZS_POS*` nodes (`ZS_POS0..3` on benches, `ZS_POS0_DIST` on chairs,
   `ZS_POS0_FRONT`/`ZS_POS1_BACK` on beds) and evaluate the mob's active clip,
@@ -1014,10 +1014,14 @@ Use the managed model reader to implement the reference's `Interactive::attach` 
 - place with `setPos`, ground-snap like `fixNpcPosition`, and face along the node (`setDir`),
 - remove the seat-surface/`SeatedPelvisOffset` heuristic in `AI_UseMob` and the approximation
   note in `Specifications/npcs.md`.
-**Depends on N3.**
-**Done when:** Jack sits on the harbour bench, Rupert on his chair and Matteo on his bed as in
-the reference, with no per-scheme offsets.
-
+**Implemented:** `NpcAiSystem` finds the nearest free `ZS_POS*` bone on the mob model
+(`Interactive::findNearest`), synthesizes a `_DIST` point on the NPC's approach side, uses the
+animated bone transform for the others, ground-snaps with a physics ray that ignores other NPC
+bodies, and faces along the node. Mob clips keep their root motion, so the seated/lying pose
+carries the body onto the furniture; `InteractiveVob` prepares `S_S0` for every animated mob.
+Attach points are claimed per NPC, and the chosen front/back bed node selects the matching clip.
+The seat-surface ray and the 66-unit pelvis offset are gone. Verified in-game on benches, chairs
+(`ZS_POS0_DIST`) and double beds (front/back sides), with 309 tests passing.
 ### N6. Remove ZenKitCS
 Switch the remaining logger bridge and every consumer to `OpenGothic.ZenKit/`, delete the
 package reference and the native runtime files, and verify the full test suite and a game run.
