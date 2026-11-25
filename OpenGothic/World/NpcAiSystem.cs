@@ -5,7 +5,7 @@ using OpenGothic.Vobs;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using ZenKit.Daedalus;
+using OpenGothic.ZenKit;
 
 namespace OpenGothic;
 

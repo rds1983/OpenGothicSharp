@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Text;
 
@@ -124,6 +125,13 @@ public sealed class DaedalusSymbol
 	internal float[] Floats;
 	internal int[] Ints;
 	internal string[] Strings;
+	internal DaedalusInstance InstanceValue;
+
+	internal DaedalusClassLayout Layout;
+	internal int IntSlot = -1;
+	internal int FloatSlot = -1;
+	internal int StringSlot = -1;
+	internal int InstanceSlot = -1;
 
 	internal void Load(Read reader)
 	{
@@ -273,6 +281,158 @@ public sealed class DaedalusSymbol
 		return Ints[index];
 	}
 
+	public string GetString(int index, DaedalusInstance context)
+	{
+		if (Type != DaedalusDataType.String || index < 0 || index >= Count)
+		{
+			throw new DaedalusScriptException($"Illegal string access on '{Name}'.");
+		}
+
+		if (IsMember)
+		{
+			if (context == null)
+			{
+				throw new DaedalusScriptException($"Member '{Name}' is accessed without an instance.");
+			}
+
+			return context.GetString(this, index);
+		}
+
+		return GetString(index);
+	}
+
+	public float GetFloat(int index, DaedalusInstance context)
+	{
+		if (Type != DaedalusDataType.Float || index < 0 || index >= Count)
+		{
+			throw new DaedalusScriptException($"Illegal float access on '{Name}'.");
+		}
+
+		if (IsMember)
+		{
+			if (context == null)
+			{
+				throw new DaedalusScriptException($"Member '{Name}' is accessed without an instance.");
+			}
+
+			return context.GetFloat(this, index);
+		}
+
+		return GetFloat(index);
+	}
+
+	public int GetInt(int index, DaedalusInstance context)
+	{
+		if ((Type != DaedalusDataType.Int && Type != DaedalusDataType.Function) || index < 0 || index >= Count)
+		{
+			throw new DaedalusScriptException($"Illegal int access on '{Name}'.");
+		}
+
+		if (IsMember)
+		{
+			if (context == null)
+			{
+				throw new DaedalusScriptException($"Member '{Name}' is accessed without an instance.");
+			}
+
+			return context.GetInt(this, index);
+		}
+
+		return GetInt(index);
+	}
+
+	public void SetString(string value, int index = 0, DaedalusInstance context = null)
+	{
+		if (Type != DaedalusDataType.String || index < 0 || index >= Count)
+		{
+			throw new DaedalusScriptException($"Illegal string access on '{Name}'.");
+		}
+
+		if (IsMember)
+		{
+			if (context == null)
+			{
+				throw new DaedalusScriptException($"Member '{Name}' is accessed without an instance.");
+			}
+
+			context.SetString(this, index, value);
+			return;
+		}
+
+		Strings[index] = value ?? string.Empty;
+	}
+
+	public void SetFloat(float value, int index = 0, DaedalusInstance context = null)
+	{
+		if (Type != DaedalusDataType.Float || index < 0 || index >= Count)
+		{
+			throw new DaedalusScriptException($"Illegal float access on '{Name}'.");
+		}
+
+		if (IsMember)
+		{
+			if (context == null)
+			{
+				throw new DaedalusScriptException($"Member '{Name}' is accessed without an instance.");
+			}
+
+			context.SetFloat(this, index, value);
+			return;
+		}
+
+		Floats[index] = value;
+	}
+
+	public void SetInt(int value, int index = 0, DaedalusInstance context = null)
+	{
+		if ((Type != DaedalusDataType.Int && Type != DaedalusDataType.Function) || index < 0 || index >= Count)
+		{
+			throw new DaedalusScriptException($"Illegal int access on '{Name}'.");
+		}
+
+		if (IsMember)
+		{
+			if (context == null)
+			{
+				throw new DaedalusScriptException($"Member '{Name}' is accessed without an instance.");
+			}
+
+			context.SetInt(this, index, value);
+			return;
+		}
+
+		Ints[index] = value;
+	}
+
+	internal DaedalusInstance GetInstance()
+	{
+		if (Type != DaedalusDataType.Instance)
+		{
+			throw new DaedalusScriptException($"Illegal instance access on '{Name}'.");
+		}
+
+		return InstanceValue;
+	}
+
+	internal void SetInstance(DaedalusInstance value)
+	{
+		if (Type != DaedalusDataType.Instance)
+		{
+			throw new DaedalusScriptException($"Illegal instance access on '{Name}'.");
+		}
+
+		InstanceValue = value;
+	}
+
+	internal void GrowStrings(int extra)
+	{
+		var old = Strings ?? Array.Empty<string>();
+		var grown = new string[old.Length + extra];
+		Array.Copy(old, grown, old.Length);
+		Strings = grown;
+		Count = (uint)grown.Length;
+	}
+
 	private static string Unescape(string value)
 	{
 		if (value.IndexOf('\\') < 0)
@@ -316,15 +476,17 @@ public sealed class DaedalusScriptException : Exception
 /// Managed Daedalus DAT reader. Ported from ZenKit's <c>DaedalusScript</c>; the VM and the
 /// typed instance bindings are built on this symbol table.
 /// </summary>
-public sealed class DaedalusScript
+public class DaedalusScript
 {
-	private readonly Dictionary<string, uint> _byName = new Dictionary<string, uint>(StringComparer.Ordinal);
-	private readonly Dictionary<uint, uint> _byAddress = new Dictionary<uint, uint>();
-	private byte[] _text = Array.Empty<byte>();
+	protected readonly Dictionary<string, uint> _byName = new Dictionary<string, uint>(StringComparer.Ordinal);
+	protected readonly Dictionary<uint, uint> _byAddress = new Dictionary<uint, uint>();
+	protected byte[] _text = Array.Empty<byte>();
 
 	public List<DaedalusSymbol> Symbols { get; } = new List<DaedalusSymbol>();
 
 	public uint Version { get; private set; }
+
+	public int SymbolCount => Symbols.Count;
 
 	public int TextSize => _text.Length;
 
@@ -337,7 +499,7 @@ public sealed class DaedalusScript
 		return script;
 	}
 
-	private void Read(Read reader)
+	protected virtual void Read(Read reader)
 	{
 		Version = reader.ReadUByte();
 		var symbolCount = reader.ReadUInt();
@@ -387,6 +549,19 @@ public sealed class DaedalusScript
 		return _byAddress.TryGetValue(address, out var index) ? Symbols[(int)index] : null;
 	}
 
+	public DaedalusSymbol GetSymbolByIndex(int index) => FindSymbolByIndex((uint)index);
+
+	public DaedalusSymbol GetSymbolByName(string name) => FindSymbolByName(name);
+
+	public DaedalusSymbol GetSymbolByAddress(int address) => FindSymbolByAddress((uint)address);
+
+	public List<DaedalusSymbol> GetInstanceSymbols(string className)
+	{
+		var result = new List<DaedalusSymbol>();
+		EnumerateInstancesByClassName(className, result.Add);
+		return result;
+	}
+
 	public DaedalusInstruction InstructionAt(uint address)
 	{
 		if (address >= _text.Length)
@@ -394,8 +569,9 @@ public sealed class DaedalusScript
 			throw new DaedalusScriptException($"Instruction address {address} is outside the text.");
 		}
 
-		var reader = new MemoryRead(_text, (int)address, _text.Length - (int)address);
-		var op = (DaedalusOpcode)reader.ReadUByte();
+		var text = _text;
+		var offset = (int)address;
+		var op = (DaedalusOpcode)text[offset];
 		var size = 1;
 		uint target = 0;
 		int immediate = 0;
@@ -407,23 +583,23 @@ public sealed class DaedalusScript
 			case DaedalusOpcode.Bl:
 			case DaedalusOpcode.Bz:
 			case DaedalusOpcode.B:
-				target = reader.ReadUInt();
+				target = BinaryPrimitives.ReadUInt32LittleEndian(text.AsSpan(offset + 1, 4));
 				size += 4;
 				break;
 			case DaedalusOpcode.PushI:
-				immediate = reader.ReadInt();
+				immediate = BinaryPrimitives.ReadInt32LittleEndian(text.AsSpan(offset + 1, 4));
 				size += 4;
 				break;
 			case DaedalusOpcode.Be:
 			case DaedalusOpcode.PushV:
 			case DaedalusOpcode.PushVI:
 			case DaedalusOpcode.GMovI:
-				symbol = reader.ReadUInt();
+				symbol = BinaryPrimitives.ReadUInt32LittleEndian(text.AsSpan(offset + 1, 4));
 				size += 4;
 				break;
 			case DaedalusOpcode.PushVV:
-				symbol = reader.ReadUInt();
-				index = reader.ReadUByte();
+				symbol = BinaryPrimitives.ReadUInt32LittleEndian(text.AsSpan(offset + 1, 4));
+				index = text[offset + 5];
 				size += 5;
 				break;
 		}
@@ -460,19 +636,24 @@ public sealed class DaedalusScript
 	public List<DaedalusSymbol> FindLocalsForFunction(DaedalusSymbol parent)
 	{
 		var first = parent.Index + 1 + parent.Count;
-		for (var i = first; i < Symbols.Count; ++i)
+		if (first >= Symbols.Count)
 		{
-			var name = Symbols[(int)i].Name;
+			return new List<DaedalusSymbol>();
+		}
+
+		for (var i = (int)first; i < Symbols.Count; ++i)
+		{
+			var name = Symbols[i].Name;
 			if (name.StartsWith(parent.Name, StringComparison.Ordinal) &&
 			    name.Length > parent.Name.Length && name[parent.Name.Length] == '.')
 			{
 				continue;
 			}
 
-			return Symbols.GetRange((int)first, (int)(i - first));
+			return Symbols.GetRange((int)first, i - (int)first);
 		}
 
-		return new List<DaedalusSymbol>();
+		return Symbols.GetRange((int)first, Symbols.Count - (int)first);
 	}
 
 	public void EnumerateInstancesByClassName(string name, Action<DaedalusSymbol> callback)
@@ -483,15 +664,15 @@ public sealed class DaedalusScript
 			return;
 		}
 
-		var prototypes = new List<uint>();
+		var prototypes = new HashSet<int>();
 		foreach (var symbol in Symbols)
 		{
 			if (symbol.Type == DaedalusDataType.Prototype && symbol.Parent == cls.Index)
 			{
-				prototypes.Add(symbol.Index);
+				prototypes.Add((int)symbol.Index);
 			}
 			else if (symbol.Type == DaedalusDataType.Instance && symbol.IsConst &&
-			         (prototypes.Contains((uint)symbol.Parent) || symbol.Parent == cls.Index))
+			         (prototypes.Contains(symbol.Parent) || symbol.Parent == cls.Index))
 			{
 				callback(symbol);
 			}

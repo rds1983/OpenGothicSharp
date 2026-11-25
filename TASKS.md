@@ -135,8 +135,9 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   sitting and sleeping), F3.3 (engine perception), F3.4 (process policies), F3.5 (movement
   parity) and F3.6 (mob placement) are complete. **Milestone N is underway: N1 (managed
   IO/VFS/textures), N2 (world, waynet and vobs) and N3 (models and animation) are done.**
-  N4 is underway: N4a (DAT reader) is done; N4b (managed VM) is next. The port lives
-  in `OpenGothic/ZenKit/`; N5 animated `ZS_POS` seat alignment and N6 (remove ZenKitCS) follow.
+  N4 is underway: N4a (DAT reader) and N4b (managed VM and typed instances) are done;
+  N4c (cutscene/output units) is next. The port lives in `OpenGothic/ZenKit/`; N5 animated
+  `ZS_POS` seat alignment and N6 (remove ZenKitCS) follow.
   After N, resume Milestone G at G4; F3.7 (visible perception reaction) still needs K1/H1.
 
 ---
@@ -981,15 +982,24 @@ its first `.MAN`, and `FLAG_MESH.MMB`; the animation-set audit is unchanged and 
 avatar renders and runs with managed meshes and clips. Animated `ZS_POS` evaluation remains
 N5.
 
-### N4. Daedalus reader and VM
+### N4. Daedalus reader and VM - N4a/N4b DONE; N4c next
 Port the DAT reader, symbol/instance storage, the VM and the external-call ABI, removing the
 native handle/finalizer workarounds.
 **Done when:** startup, script objects and dialogs pass from the managed VM.
-**Split:** (a) DAT symbol/instruction reader; (b) VM stack, calls and external ABI; (c) typed
-instance bindings for NPC/item/info and the cutscene/output-unit data.
-**N4a — DONE:** `ZenKit/Script/DaedalusScript.cs` reads the symbol table, address map and instruction
+**Split:** (a) DAT symbol/instruction reader; (b) VM stack, calls and external ABI; (c) the
+cutscene/output-unit data. The typed NPC/item/info bindings landed in N4b.
+**N4a - DONE:** `ZenKit/Script/DaedalusScript.cs` reads the symbol table, address map and instruction
 text, including the string-parent heuristic. It matches ZenKitCS for all 74,648 symbols and
-decoded non-external function instructions. N4b (VM) is next.
+decoded non-external function instructions.
+**N4b - DONE:** `ZenKit/Script/DaedalusVm.cs` runs the instructions with the managed stack,
+call frames, globals, temporary strings and external ABI, and `DaedalusInstance.cs` provides
+the typed `NpcInstance`/`ItemInstance`/`InfoInstance` views over per-class storage.
+`ScriptRuntime`, `NpcBinding`, `Dialog`, `NpcActor` and `NpcAiSystem` use them.
+Startup call order and 5,228 external calls match ZenKitCS, sampled instance fields match, and
+the game boots 406 script NPCs and runs a diagnostic dialog with no errors. `CutsceneLibrary`
+(`Ou.dat`) and the `Log` bridge are the remaining native uses.
+**N4c - NEXT:** port the cutscene/output-unit library (`Ou.dat`) so `AI_Output` text and
+the dialog voice hook no longer need ZenKitCS.
 **Uses N1:** DAT records load through `VfsNode.OpenRead()`.
 
 ### N5. Mob attach points and seat alignment
@@ -1009,8 +1019,8 @@ Switch `Assets` and every reader consumer to `OpenGothic.ZenKit/`, delete the pa
 and the native runtime files, and verify the full test suite and a game run.
 **Done when:** no ZenKitCS package namespace remains and the client runs from the managed port
 only.
-**Includes:** deleting `LoadNativeRecord`, the `NativeOwners` list and the ZenKitCS package
-reference.
+**Includes:** completing N4c, moving the logger bridge into the managed port, and deleting the
+ZenKitCS package reference.
 
 ---
 

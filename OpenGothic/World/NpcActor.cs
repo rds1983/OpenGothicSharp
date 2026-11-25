@@ -3,7 +3,7 @@ using OpenGothic.Graphics;
 using OpenGothic.Utility;
 using OpenGothic.Vobs;
 using System.Collections.Generic;
-using ZenKit.Daedalus;
+using OpenGothic.ZenKit;
 
 namespace OpenGothic;
 

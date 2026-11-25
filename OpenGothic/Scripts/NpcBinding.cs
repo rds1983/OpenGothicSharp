@@ -1,5 +1,5 @@
 using OpenGothic.Vobs;
-using ZenKit.Daedalus;
+using OpenGothic.ZenKit;
 
 namespace OpenGothic.Scripts;
 

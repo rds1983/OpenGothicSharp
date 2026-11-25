@@ -22,14 +22,35 @@ heuristic; function addresses in the text are relative to the text section (exte
 addresses are not code addresses).
 
 On the tested installation the managed symbol table matches ZenKitCS for the whole file
-(74,648 symbols; a VM adds the temporary string symbol), including names, types, flags,
-parents, addresses, values and decoded instructions for non-external functions. The VM itself
-and the typed instance bindings still use ZenKitCS until N4b.
+(74,648 symbols), including names, types, flags, parents, addresses, values and decoded
+instructions for non-external functions.
+
+## Managed VM (N4b)
+
+`OpenGothic/ZenKit/Script/DaedalusVm.cs` is the managed VM: a 2,048-frame stack, call
+frames, every opcode the game script uses, `SELF`/`OTHER`/`VICTIM`/`HERO`/`ITEM` globals,
+temporary strings (`$PHOENIX_FAKE_STRINGS`), and the external-call ABI. The external
+parameter order follows the reference: arguments are pushed in source order and popped in
+reverse. An unbound external pops its parameters and receives the script's default return
+value, so a missing binding cannot corrupt the stack.
+
+`OpenGothic/ZenKit/Script/DaedalusInstance.cs` stores instance values in per-class slot
+arrays. `NpcInstance`, `ItemInstance` and `InfoInstance` are typed views over that storage,
+so scripts and the C# game code read and write the same values. Member names follow the
+compiled symbol table (for example `C_NPC.GUILD`, `C_ITEM.VISUAL_CHANGE`).
+
+On the reference installation the managed VM matches ZenKitCS for the four startup entry
+points: the same **5,228** external calls in the same order, and identical name, guild,
+level, attributes, daily-routine pointer, senses, item visual and dialog-info fields for
+sampled instances. A hermetic fixture in `OpenGothic.Tests/ZenKit/DaedalusVmTests.cs`
+covers parameters, globals, members, instance initialization, registered externals and the
+default external. `CutsceneLibrary` (`Ou.dat`) is the remaining native script dependency
+until N4c.
 
 ## Boot
 
-`OpenGothic/Scripts/ScriptRuntime.cs` builds a `ZenKit.Daedalus.DaedalusVm` and follows the
-reference's `GameSession::initScripts` order:
+`OpenGothic/Scripts/ScriptRuntime.cs` builds an `OpenGothic.ZenKit.DaedalusVm` and follows
+the reference's `GameSession::initScripts` order:
 
 ```
 startup_global

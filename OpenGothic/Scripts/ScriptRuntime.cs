@@ -4,7 +4,10 @@ using System.IO;
 using Microsoft.Xna.Framework;
 using OpenGothic.Vobs;
 using ZenKit;
-using ZenKit.Daedalus;
+using OpenGothic.ZenKit;
+using DaedalusInstance = OpenGothic.ZenKit.DaedalusInstance;
+using DaedalusSymbol = OpenGothic.ZenKit.DaedalusSymbol;
+using DaedalusVm = OpenGothic.ZenKit.DaedalusVm;
 using Matrix3x3 = OpenGothic.ZenKit.Matrix3x3;
 using NpcObject = OpenGothic.ZenKit.NpcObject;
 using VirtualObjectType = OpenGothic.ZenKit.VirtualObjectType;
@@ -645,13 +648,13 @@ public sealed class ScriptRuntime
 		var loopSymbol = Vm.GetSymbolByName(name + "_Loop");
 		if (loopSymbol != null)
 		{
-			loop = loopSymbol.Index;
+			loop = (int)loopSymbol.Index;
 		}
 
 		var endSymbol = Vm.GetSymbolByName(name + "_End");
 		if (endSymbol != null)
 		{
-			end = endSymbol.Index;
+			end = (int)endSymbol.Index;
 		}
 
 		return true;
