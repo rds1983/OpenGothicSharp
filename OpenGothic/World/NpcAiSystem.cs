@@ -4,6 +4,7 @@ using OpenGothic.Scripts;
 using OpenGothic.Vobs;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ZenKit.Daedalus;
 
 namespace OpenGothic;
@@ -27,6 +28,25 @@ internal sealed class NpcAiSystem
 	private const float WaypointReach = 165f;
 	private const float MobSearchDistanceSquared = 1000f * 1000f;
 	private const double RoutineRestartSeconds = 1.0;
+
+	/// <summary>Height of the seated human pelvis (BIP01) above the body origin, in model units.</summary>
+	private const float SeatedPelvisOffset = 66f;
+
+	/// <summary>
+	/// Height of the seat surface under a mob, from the physics ray through the rendered mesh.
+	/// The vob box top can include a backrest, so it is only the fallback.
+	/// </summary>
+	private float SeatSurface(VobNode mob, float fallback)
+	{
+		if (_physics != null &&
+		    _physics.RayCast(mob.Position + Vector3.UnitY * 100f, -Vector3.UnitY, 300f, false,
+			    out var hit))
+		{
+			return hit.Position.Y;
+		}
+
+		return fallback;
+	}
 	private const int PercAssessPlayer = 1;
 	private const int SenseSee = 1;
 	private const int MaxPerceptionLogs = 20;
@@ -572,6 +592,11 @@ internal sealed class NpcAiSystem
 			return;
 		}
 
+		if (DebugSettings.AiTrace)
+		{
+			Log.Info($"AI trace: '{actor.Vob.Name}' StandUp (mob '{actor.MobScheme}').");
+		}
+
 		LeaveMob(actor);
 		actor.HasAiMove = false;
 		actor.PlayClip(actor.IdleClip);
@@ -643,9 +668,23 @@ internal sealed class NpcAiSystem
 			return;
 		}
 
+		if (DebugSettings.AiTrace)
+		{
+			Log.Info($"AI trace: '{actor.Vob.Name}' UseMob '{target}' state {state} " +
+				$"(current '{actor.MobScheme}' {actor.MobState}).");
+		}
+
 		if (state < 0)
 		{
 			LeaveMob(actor);
+			return;
+		}
+
+		if (actor.MobState == state &&
+		    string.Equals(actor.MobScheme, target, StringComparison.OrdinalIgnoreCase))
+		{
+			// The reference's AI_UseMob is idempotent: being on the mob at the same state means
+			// there is nothing to do.
 			return;
 		}
 
@@ -687,15 +726,56 @@ internal sealed class NpcAiSystem
 		}
 		else
 		{
-			// Work mobs (stoves, anvils, ...) may have no NPC-side animation; leave the body
-			// standing rather than forcing a chair pose.
+			// Work mobs (stoves, anvils, repair benches, ...): the body is interacting with the
+			// object even when the human set has no matching clip, which is what the state's
+			// loop checks before releasing the mob again.
 			played = PlayFirst(actor, $"T_{scheme}_STAND_2_S0");
+			actor.BodyState = NpcActor.BodyStateMobInteract;
 		}
 
 		actor.MobScheme = scheme;
 		actor.MobState = state;
 		actor.MobClip = played;
 		actor.HasAiMove = false;
+
+		// Sit/lie poses need the body on the furniture; for work mobs the routine waypoint is
+		// already the authored use point beside the bench/log, so moving to the vob origin would
+		// put the NPC on top of it. The vob origin is at floor level (the reference's attach
+		// point): the animation lifts the pelvis onto the seat itself, so using the seat surface
+		// here would make the body hover above the bench.
+		if (bed || seat)
+		{
+			var mob = FindMob(actor.Instance, scheme);
+			if (mob != null)
+			{
+				actor.MobReturnPosition = actor.Position;
+				actor.MobReturnYaw = actor.Yaw;
+				actor.HasMobReturn = true;
+
+				// Seats: put the pelvis on the seat. The ray finds the rendered bench/chair
+				// surface (the ZEN box top includes the backrest and is too high); the human
+				// seated pose keeps BIP01 about 66 units above the body origin, so the origin
+				// goes below the seat by that much. Beds keep the vob origin.
+				var seatTop = mob.Source?.BoundingBox.Max.Y ?? mob.Bounds.Max.Y;
+				if (!bed)
+				{
+					seatTop = SeatSurface(mob, seatTop);
+				}
+
+				var y = bed
+					? mob.Position.Y
+					: seatTop - SeatedPelvisOffset;
+
+				var position = new Vector3(mob.Position.X, y, mob.Position.Z);
+				actor.SetPosition(position, actor.Yaw);
+				_walker.Apply(actor);
+				if (DebugSettings.AiTrace)
+				{
+					Log.Info($"AI trace: '{actor.Vob.Name}' mob '{scheme}' boxTop {mob.Bounds.Max.Y:0} " +
+						$"seatTop {seatTop:0} posY {actor.Position.Y:0}.");
+				}
+			}
+		}
 
 		if (string.IsNullOrEmpty(played) && _reported.Add($"mobclip:{scheme}"))
 		{
@@ -739,6 +819,13 @@ internal sealed class NpcAiSystem
 		if (!hadMob)
 		{
 			return;
+		}
+
+		if (actor.HasMobReturn)
+		{
+			actor.SetPosition(actor.MobReturnPosition, actor.MobReturnYaw);
+			actor.HasMobReturn = false;
+			_walker.Apply(actor);
 		}
 
 		var reversed = !string.IsNullOrEmpty(clip) && actor.PlayClipReverse(clip);

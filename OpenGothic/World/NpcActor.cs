@@ -52,6 +52,9 @@ public sealed class NpcActor
 	/// <summary>Reference <c>BS_LIE</c>.</summary>
 	public const int BodyStateLie = 12;
 
+	/// <summary>Reference <c>BS_MOBINTERACT</c>: using a workbench, anvil or similar mob.</summary>
+	public const int BodyStateMobInteract = 15;
+
 	/// <summary>Body state reported to <c>NPC_GetBodyState</c>; standing until a state changes it.</summary>
 	public int BodyState { get; set; } = BodyStateStand;
 
@@ -74,6 +77,13 @@ public sealed class NpcActor
 
 	/// <summary>Clip played when the mob was entered, reversed to stand up again.</summary>
 	public string MobClip { get; set; } = string.Empty;
+
+	/// <summary>Position/yaw to return to when the mob is released.</summary>
+	public Vector3 MobReturnPosition { get; set; }
+
+	public float MobReturnYaw { get; set; }
+
+	public bool HasMobReturn { get; set; }
 
 	/// <summary>AI time before which an ended routine state is not restarted, in seconds.</summary>
 	public double NextRoutineStateAt { get; set; }

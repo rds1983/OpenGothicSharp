@@ -154,8 +154,23 @@ shipped scripts with it instead of guessed.
 - **Release:** the human set has no `..._2_STAND` clip, so the entry transition is played
   backwards (`T_CHAIR_S0_2_S1` reversed) to stand up; verified for chairs, beds and stoves.
   When no clip was stored the body falls back to the idle clip.
-- **Placement is still the waypoint:** the body lies/sits where the routine point is, not on
-  the mattress or seat; the reference uses the mob's own use point and orientation.
+- **Placement:** only beds and seats move the body onto the furniture. Seats use the **seat
+  surface under the mob** (physics ray, box top as fallback) minus the seated pelvis height
+  (BIP01 sits ~66 units above the body origin); beds keep the vob origin, where the lying pose
+  lands on the mattress. **Work mobs keep the routine waypoint**, the authored use point beside
+  the bench or sawing log, so the NPC no longer stands on top of it. Releasing restores the
+  waypoint position before the stand-up clip plays.
+- **Exact seat alignment is N3:** OpenGothic uses the mob's animated `ZS_POS*` attach nodes
+  (`Interactive::nodeTranform` calls `visual.bone(nodeId)`); their static transforms are zero in
+  the shipped MDLs and ZenKitCS exposes no MDL animation evaluation. The seat-surface ray is the
+  fallback until the managed model reader (N1/N3) supplies the animated use point.
+- **Idempotence:** `AI_UseMob` does nothing while the NPC already uses that mob at the same
+  state, like the reference's `currentInteract->stateId()==act.i0` early-out. Work states call
+  it every loop; without this the mob was released and re-entered every tick, teleporting the
+  body between the waypoint and the bench (the reported up/down jitter). Work mobs also set
+  `BS_MOBINTERACT`, which the state loops check.
+- **Item animations:** `AI_UseItemToState` (brooms) still logs only; the animation needs NPC
+  inventories and item visuals, tracked in I3.
 - The routine callback restarts when a state ends on its own (the reference's
   `Npc::tickRoutine`), guarded to once a second and only when the actor is already at its
   routine point, so a sleep state returning `LOOP_END` at dawn re-enters `ZS_GOTOBED` instead

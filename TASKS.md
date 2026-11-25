@@ -132,8 +132,10 @@ work on next. See [AGENTS.md](AGENTS.md) for the workflow that consumes it.
   non-human bodies lazily from their model scripts. F2 drives daily routines from a game
   clock, walks NPCs between grounded routine points, and is complete. Cut-out foliage
   materials render with `AlphaTestEffect`. F3.1 (script AI states), F3.2 (AI queries/actions,
-  sitting and sleeping), F3.3 (engine perception), F3.4 (process policies) and F3.5 (movement
-  parity) are complete; F3.6 (mob placement) is next.
+  sitting and sleeping), F3.3 (engine perception), F3.4 (process policies), F3.5 (movement
+  parity) and F3.6 (mob placement) are complete. F3.7 (visible perception reaction) needs K1/H1.
+  Exact mob seat alignment (the reference's animated `ZS_POS` nodes) is scheduled as N3 because
+  ZenKitCS does not expose MDL animations.
 
 ---
 
@@ -866,15 +868,29 @@ Done at the movement scope: walking is capsule-swept and ground-followed everywh
 world is streamed, with the terrain fallback beyond it. The insertion spiral and climb handling
 land with the systems that need them.
 
-#### F3.6 Mob placement and item animations
+#### F3.6 Mob placement — DONE
 Follow-up from F3.2.
-- Place the body on the mob's use point and orientation instead of at the routine waypoint,
-  so a sitting NPC is on the seat and a sleeping one is on the mattress (the reference's
-  `Interactive::nearestPoint`/`setPos`).
-- `AI_UseItemToState` (brooms and similar) plays the item animations and body state instead of
-  logging; depends on NPC inventories (I3) for the item itself.
-**Depends on F3.2.**
-**Done when:** an NPC sits on the chair mesh and sweeps with the broom animation.
+- Place the body on the mob's use point instead of at the routine waypoint, so a sitting NPC
+  is on the seat and a sleeping one on the mattress.
+
+**Implemented:** `AI_UseMob` finds the mob vob (same scheme match as availability). Only beds
+and seats move the body onto the furniture. Seats use the **seat surface under the mob**
+(physics ray, box top as fallback) minus the seated pelvis height (BIP01 sits ~66 units above
+the body origin), so the pelvis lands on the bench/chair; beds keep the vob origin, where the
+lying pose lands on the mattress. Work mobs keep the routine waypoint, the authored use point
+beside the bench/log, so the NPC no longer stands on top of the sawing log. Work mobs set
+`BS_MOBINTERACT`, beds `BS_LIE` and chairs/benches `BS_SIT`. `AI_UseMob` is idempotent while the
+NPC is already on that mob and state, like the reference
+(`currentInteract->stateId()==act.i0`); without it the work states released and re-entered the
+mob every loop, teleporting the body between the waypoint and the furniture (the reported
+up/down jitter). Releasing restores the waypoint position before the stand-up clip. NPC spawn
+grounding went back to the terrain ray: the physics ray could hit a beam/table above the point
+and spawn a body on top of it.
+- **Exact seat alignment is scheduled in N3.** OpenGothic reads the mob's animated `ZS_POS*`
+  attach nodes (`visual.bone(nodeId)`), whose static transforms are zero in the shipped MDLs;
+  ZenKitCS exposes no MDL animation evaluation, so the seat surface ray is the fallback.
+- **Item animations moved to I3:** `AI_UseItemToState` (brooms) still only logs; it needs NPC
+  inventories and item visuals, which I3 provides.
 
 #### F3.7 Visible reaction to perception
 Follow-up from F3.3.
@@ -985,8 +1001,9 @@ Main menu, pause, options, save/load screens.
 **Done when:** the game can be started and paused from Myra UI.
 
 ### I3. Inventory & trade
-Grid inventory with equip/use, and trader UI.
-**Done when:** items can be equipped and traded through UI.
+Grid inventory with equip/use, and trader UI. Also plays the item state animations
+(`AI_UseItemToState`, e.g. sweeping with a broom) once NPC inventories exist.
+**Done when:** items can be equipped and traded through UI, and an NPC sweeps with the broom.
 
 ---
 
@@ -1068,3 +1085,19 @@ Port the Daedalus script/VM execution layer, including the external-call ABI and
 storage, and remove the native handle/finalizer workarounds.
 **Done when:** startup, script objects and dialogs pass from the managed VM, and no native
 ZenKit symbols remain in the process.
+
+### N3. Mob attach points and seat alignment
+Use the managed model reader to implement the reference's `Interactive::attach` placement
+exactly:
+- Read the `ZS_POS*` nodes of a mob model (`ZS_POS0..3` on benches, `ZS_POS0_DIST` on chairs,
+  `ZS_POS0_FRONT`/`ZS_POS1_BACK` on beds). Their static hierarchy transforms are zero in the
+  shipped MDLs; the position comes from the mob's own animation.
+- Evaluate the mob's active state clip (the reference plays `S<state>`/`T_<a>_2_<b>` on the mob)
+  and take `visual.bone(nodeId)` — the animated world transform — as the use point.
+- Place the NPC there (`setPos`), ground-snap like `fixNpcPosition`, and face it along the node
+  (`setDir`).
+- Replace the seat-surface/box-offset heuristic in `AI_UseMob` (currently `SeatSurface` minus
+  `SeatedPelvisOffset`) and the approximation note in `Specifications/npcs.md`.
+**Depends on N1.**
+**Done when:** Jack sits on the harbour bench, Rupert on his chair and Matteo on his bed
+exactly as in the reference, with no per-scheme offsets.
